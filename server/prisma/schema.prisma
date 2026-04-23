@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USUARIOS ───────────────────────────────────────────────
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  password  String
+  role      Role     @default(CLIENT)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  ordersAsClient     Order[]        @relation("ClientOrders")
+  ordersAsTechnician Order[]        @relation("TechnicianOrders")
+  notifications      Notification[]
+}
+
+enum Role {
+  ADMIN
+  TECHNICIAN
+  CLIENT
+  MANAGER
+  SELLER
+}
+
+// ─── EQUIPOS ────────────────────────────────────────────────
+model Device {
+  id           String     @id @default(uuid())
+  type         DeviceType
+  brand        String
+  model        String
+  serialNumber String?
+  color        String?
+  accessories  String?
+  photoUrl     String?
+  createdAt    DateTime   @default(now())
+
+  // Relaciones
+  orders Order[]
+}
+
+enum DeviceType {
+  CELLPHONE
+  TABLET
+  LAPTOP
+  PC
+  OTHER
+}
+
+// ─── ÓRDENES DE REPARACIÓN ──────────────────────────────────
+model Order {
+  id             String      @id @default(uuid())
+  orderNumber    String      @unique
+  status         OrderStatus @default(RECEIVED)
+  problem        String      @db.Text
+  diagnosis      String?     @db.Text
+  budget         Decimal?    @db.Decimal(10, 2)
+  budgetApproved Boolean?
+  qrCode         String?
+  observations   String?     @db.Text
+  receivedAt     DateTime    @default(now())
+  deliveredAt    DateTime?
+  updatedAt      DateTime    @updatedAt
+
+  // Relaciones
+  clientId     String
+  client       User   @relation("ClientOrders", fields: [clientId], references: [id])
+
+  technicianId String?
+  technician   User?  @relation("TechnicianOrders", fields: [technicianId], references: [id])
+
+  deviceId     String
+  device       Device @relation(fields: [deviceId], references: [id])
+
+  statusHistory  OrderStatusHistory[]
+  notifications  Notification[]
+  documents      ServiceDocument[]
+}
+
+enum OrderStatus {
+  RECEIVED
+  DIAGNOSING
+  WAITING_APPROVAL
+  APPROVED
+  REPAIRING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+// ─── HISTORIAL DE ESTADOS ───────────────────────────────────
+model OrderStatusHistory {
+  id        String      @id @default(uuid())
+  status    OrderStatus
+  comment   String?
+  createdAt DateTime    @default(now())
+
+  // Relaciones
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
+}
+
+// ─── DOCUMENTOS DE SERVICIO ─────────────────────────────────
+// Nota de recibimiento y nota de entrega
+model ServiceDocument {
+  id           String       @id @default(uuid())
+  type         DocumentType
+  pdfUrl       String?
+  printed      Boolean      @default(false)
+  generatedAt  DateTime     @default(now())
+
+  // Relaciones
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
+}
+
+enum DocumentType {
+  RECEIPT_NOTE
+  DELIVERY_NOTE
+}
+
+// ─── NOTIFICACIONES ─────────────────────────────────────────
+model Notification {
+  id        String           @id @default(uuid())
+  type      NotificationType
+  channel   Channel
+  message   String           @db.Text
+  sent      Boolean          @default(false)
+  sentAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  // Relaciones
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+enum NotificationType {
+  STATUS_CHANGE
+  BUDGET_REQUEST
+  READY_FOR_PICKUP
+  GENERAL
+}
+
+enum Channel {
+  SMS
+  EMAIL
+  PUSH
+}
