@@ -1,6 +1,7 @@
 import express from 'express'
 import dotenv from 'dotenv'
 import ordersRouter from './modules/orders/orders.routes'
+import authRouter from './modules/auth/auth.routes'
 
 dotenv.config()
 
@@ -17,6 +18,7 @@ app.get('/', (req, res) => {
   })
 })
 
+app.use('/api/auth', authRouter)
 app.use('/api/orders', ordersRouter)
 
 app.listen(PORT, () => {
