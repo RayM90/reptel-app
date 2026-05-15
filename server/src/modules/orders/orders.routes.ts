@@ -1,18 +1,20 @@
-import { Router } from 'express'
-import * as ordersController from './orders.controller'
+import { Router } from 'express';
+import {
+  getOrders,
+  getOrder,
+  createOrder,
+  updateStatus,
+} from './orders.controller';
+import { authenticate, authorize } from '../../middleware/auth.middleware';
 
-const router = Router()
+const router = Router();
 
-// Obtener todas las órdenes
-router.get('/', ordersController.getOrders)
+router.get('/', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN'), getOrders);
 
-// Obtener una orden por ID
-router.get('/:id', ordersController.getOrder)
+router.get('/:id', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', 'SELLER', 'CLIENT'), getOrder);
 
-// Crear una nueva orden
-router.post('/', ordersController.createOrder)
+router.post('/', authenticate, authorize('ADMIN', 'MANAGER', 'SELLER'), createOrder);
 
-// Actualizar el estado de una orden
-router.patch('/:id/status', ordersController.updateStatus)
+router.patch('/:id/status', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN'), updateStatus);
 
-export default router
+export default router;
