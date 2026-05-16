@@ -10,6 +10,7 @@ datasource db {
 // ─── USUARIOS ───────────────────────────────────────────────
 model User {
   id        String   @id @default(uuid())
+  cognitoId  String   @unique
   name      String
   email     String   @unique
   phone     String?
@@ -23,6 +24,7 @@ model User {
   ordersAsClient     Order[]        @relation("ClientOrders")
   ordersAsTechnician Order[]        @relation("TechnicianOrders")
   notifications      Notification[]
+  devices Device[] @relation("ClientDevices")
 }
 
 enum Role {
@@ -46,7 +48,9 @@ model Device {
   createdAt    DateTime   @default(now())
 
   // Relaciones
-  orders Order[]
+  clientId     String
+  client       User       @relation("ClientDevices", fields: [clientId], references: [id])
+  orders       Order[]
 }
 
 enum DeviceType {
