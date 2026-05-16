@@ -1,20 +1,38 @@
+/**
+ * @file auth.middleware.ts
+ * @description Middleware de autenticación y autorización para RepTel API.
+ * Verifica tokens JWT emitidos por AWS Cognito y controla el acceso
+ * a los endpoints según el rol del usuario.
+ * @module Middleware
+ */
+
 import { Request, Response, NextFunction } from 'express';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 
+/**
+ * Verificador de tokens JWT configurado con el User Pool de Cognito
+ */
 const verifier = CognitoJwtVerifier.create({
   userPoolId: process.env.COGNITO_USER_POOL_ID!,
   tokenUse: 'access',
   clientId: process.env.COGNITO_CLIENT_ID!,
 });
 
+/**
+ * Extensión de Request para incluir datos del usuario autenticado
+ */
 export interface AuthRequest extends Request {
   user?: {
-    sub: string;
-    email: string;
-    groups: string[];
+    sub: string;      // ID único del usuario en Cognito
+    email: string;    // Email del usuario
+    groups: string[]; // Roles asignados (ADMIN, TECHNICIAN, etc.)
   };
 }
 
+/**
+ * Middleware de autenticación — verifica el token Bearer JWT
+ * Si el token es válido, adjunta los datos del usuario al request
+ */
 export const authenticate = async (
   req: AuthRequest,
   res: Response,
@@ -43,6 +61,10 @@ export const authenticate = async (
   }
 };
 
+/**
+ * Middleware de autorización — verifica que el usuario tenga el rol requerido
+ * @param roles - Lista de roles permitidos para acceder al endpoint
+ */
 export const authorize = (...roles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     const userGroups = req.user?.groups || [];
