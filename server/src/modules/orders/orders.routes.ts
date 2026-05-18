@@ -1,20 +1,24 @@
-import { Router } from 'express';
-import {
-  getOrders,
-  getOrder,
-  createOrder,
-  updateStatus,
-} from './orders.controller';
-import { authenticate, authorize } from '../../middleware/auth.middleware';
+import { Router } from 'express'
+import * as ordersController from './orders.controller'
 
-const router = Router();
+const router = Router()
 
-router.get('/', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN'), getOrders);
+// Ruta pública — tracking por número de orden (sin autenticación)
+router.get('/track/:orderNumber', ordersController.trackOrder)
 
-router.get('/:id', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', 'SELLER', 'CLIENT'), getOrder);
+// Obtener todas las órdenes
+router.get('/', ordersController.getOrders)
 
-router.post('/', authenticate, authorize('ADMIN', 'MANAGER', 'SELLER'), createOrder);
+// Obtener una orden por ID
+router.get('/:id', ordersController.getOrder)
 
-router.patch('/:id/status', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN'), updateStatus);
+// Crear una nueva orden
+router.post('/', ordersController.createOrder)
 
-export default router;
+// Actualizar el estado de una orden
+router.patch('/:id/status', ordersController.updateStatus)
+
+// Actualizar presupuesto de una orden
+router.patch('/:id/budget', ordersController.updateBudget)
+
+export default router

@@ -70,7 +70,7 @@ model Order {
   diagnosis      String?     @db.Text
   budget         Decimal?    @db.Decimal(10, 2)
   budgetApproved Boolean?
-  qrCode         String?
+  qrCode         String?     @db.Text
   observations   String?     @db.Text
   receivedAt     DateTime    @default(now())
   deliveredAt    DateTime?
