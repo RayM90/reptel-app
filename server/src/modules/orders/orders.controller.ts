@@ -6,7 +6,8 @@ export const getOrders = async (req: Request, res: Response): Promise<void> => {
     const orders = await ordersService.getAllOrders()
     res.json({ success: true, data: orders })
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al obtener órdenes' })
+    console.error('ERROR GET ORDERS:', error)
+    res.status(500).json({ success: false, message: 'Error al obtener órdenes', error: String(error) })
   }
 }
 
@@ -20,7 +21,8 @@ export const getOrder = async (req: Request, res: Response): Promise<void> => {
     }
     res.json({ success: true, data: order })
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al obtener la orden' })
+    console.error('ERROR GET ORDER:', error)
+    res.status(500).json({ success: false, message: 'Error al obtener la orden', error: String(error) })
   }
 }
 
@@ -34,7 +36,8 @@ export const trackOrder = async (req: Request, res: Response): Promise<void> => 
     }
     res.json({ success: true, data: order })
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al rastrear la orden' })
+    console.error('ERROR TRACK ORDER:', error)
+    res.status(500).json({ success: false, message: 'Error al rastrear la orden', error: String(error) })
   }
 }
 
@@ -57,7 +60,8 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
     })
     res.status(201).json({ success: true, data: order })
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al crear la orden' })
+    console.error('ERROR CREAR ORDEN:', error)
+    res.status(500).json({ success: false, message: 'Error al crear la orden', error: String(error) })
   }
 }
 
@@ -72,7 +76,8 @@ export const updateStatus = async (req: Request, res: Response): Promise<void> =
     const order = await ordersService.updateOrderStatus(id, status, comment, technicianId)
     res.json({ success: true, data: order })
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al actualizar el estado' })
+    console.error('ERROR UPDATE STATUS:', error)
+    res.status(500).json({ success: false, message: 'Error al actualizar el estado', error: String(error) })
   }
 }
 
@@ -90,6 +95,7 @@ export const updateBudget = async (req: Request, res: Response): Promise<void> =
     const order = await ordersService.updateOrderBudget(id, budget, approved)
     res.json({ success: true, data: order })
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al actualizar el presupuesto' })
+    console.error('ERROR UPDATE BUDGET:', error)
+    res.status(500).json({ success: false, message: 'Error al actualizar el presupuesto', error: String(error) })
   }
 }
