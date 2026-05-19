@@ -16,7 +16,7 @@ import devicesRouter from './modules/devices/devices.routes'
 dotenv.config()
 
 const app = express()
-const PORT = process.env.PORT || 3000
+const PORT = Number(process.env.PORT) || 3000
 
 app.use(express.json())
 
@@ -44,8 +44,8 @@ app.use('/api/orders', ordersRouter)
 
 // ─── Servidor ─────────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor RepTel corriendo en http://localhost:${PORT}`)
+  console.log(`Red local: http://192.168.0.107:${PORT}`)
 })
-
 export default app
