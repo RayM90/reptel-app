@@ -8,6 +8,7 @@
 
 import express from 'express'
 import dotenv from 'dotenv'
+import path from 'path'
 import ordersRouter from './modules/orders/orders.routes'
 import authRouter from './modules/auth/auth.routes'
 import usersRouter from './modules/users/users.routes'
@@ -19,6 +20,7 @@ const app = express()
 const PORT = Number(process.env.PORT) || 3000
 
 app.use(express.json())
+app.use(express.static(path.join(__dirname, 'public')))
 
 // ─── Rutas ────────────────────────────────────────────────────────────────────
 
