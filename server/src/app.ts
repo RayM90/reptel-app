@@ -1,0 +1,31 @@
+import express from 'express'
+import dotenv from 'dotenv'
+import path from 'path'
+import ordersRouter from './modules/orders/orders.routes'
+import authRouter from './modules/auth/auth.routes'
+import usersRouter from './modules/users/users.routes'
+import devicesRouter from './modules/devices/devices.routes'
+import chatbotRouter from './modules/chatbot/chatbot.routes'
+
+dotenv.config()
+
+const app = express()
+
+app.use(express.json())
+app.use(express.static(path.join(__dirname, 'public')))
+
+// ─── Rutas ────────────────────────────────────────────────────────────────────
+app.get('/', (req, res) => {
+  res.json({
+    message: 'RepTel API funcionando correctamente',
+    version: '1.0.0'
+  })
+})
+
+app.use('/api/auth', authRouter)
+app.use('/api/users', usersRouter)
+app.use('/api/devices', devicesRouter)
+app.use('/api/orders', ordersRouter)
+app.use('/api/chatbot', chatbotRouter)
+
+export default app
