@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import * as ordersService from './orders.service'
-import { broadcastOrderUpdate } from '../../index'
+import { broadcastOrderUpdate } from '../../websocket'
 
 export const getOrders = async (req: Request, res: Response): Promise<void> => {
   try {
