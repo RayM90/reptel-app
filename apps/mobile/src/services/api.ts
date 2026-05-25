@@ -32,3 +32,8 @@ export const ordersAPI = {
   updateBudget: (id: string, budget: number, approved: boolean) =>
     api.patch(`/api/orders/${id}/budget`, { budget, approved }),
 }
+
+export const chatbotAPI = {
+  sendMessage: (sessionId: string, message: string) =>
+    api.post('/api/chatbot/message', { sessionId, message }),
+}

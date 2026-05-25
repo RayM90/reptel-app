@@ -1,18 +1,13 @@
-/**
- * @file index.ts
- * @description Punto de entrada principal del servidor RepTel API.
- * Configura Express, middlewares globales y registra todas las rutas
- * de la aplicación.
- * @module Server
- */
-
 import express from 'express'
 import dotenv from 'dotenv'
 import path from 'path'
+import http from 'http'
+import { WebSocketServer, WebSocket } from 'ws'
 import ordersRouter from './modules/orders/orders.routes'
 import authRouter from './modules/auth/auth.routes'
 import usersRouter from './modules/users/users.routes'
 import devicesRouter from './modules/devices/devices.routes'
+import chatbotRouter from './modules/chatbot/chatbot.routes'
 
 dotenv.config()
 
@@ -23,8 +18,6 @@ app.use(express.json())
 app.use(express.static(path.join(__dirname, 'public')))
 
 // ─── Rutas ────────────────────────────────────────────────────────────────────
-
-/** Ruta raíz — verificación de estado del servidor */
 app.get('/', (req, res) => {
   res.json({ 
     message: 'RepTel API funcionando correctamente',
@@ -32,22 +25,35 @@ app.get('/', (req, res) => {
   })
 })
 
-/** Rutas de autenticación — registro y login */
 app.use('/api/auth', authRouter)
-
-/** Rutas de usuarios — gestión de usuarios del sistema */
 app.use('/api/users', usersRouter)
-
-/** Rutas de dispositivos — gestión de equipos del taller */
 app.use('/api/devices', devicesRouter)
-
-/** Rutas de órdenes — gestión de órdenes de reparación */
 app.use('/api/orders', ordersRouter)
+app.use('/api/chatbot', chatbotRouter)
+
+// ─── WebSocket Server ─────────────────────────────────────────────────────────
+const server = http.createServer(app)
+const wss = new WebSocketServer({ server })
+
+export const broadcastOrderUpdate = (data: any) => {
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(data))
+    }
+  })
+}
+
+wss.on('connection', (ws) => {
+  console.log('Cliente conectado a WebSocket')
+  ws.send(JSON.stringify({ type: 'CONNECTED', message: 'Conectado a RepTel en tiempo real' }))
+  ws.on('close', () => console.log('Cliente desconectado de WebSocket'))
+})
 
 // ─── Servidor ─────────────────────────────────────────────────────────────────
-
-app.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor RepTel corriendo en http://localhost:${PORT}`)
   console.log(`Red local: http://192.168.0.107:${PORT}`)
+  console.log(`WebSocket corriendo en ws://192.168.0.107:${PORT}`)
 })
+
 export default app
