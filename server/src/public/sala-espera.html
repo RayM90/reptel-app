@@ -124,8 +124,7 @@
     <div id="last-update">Última actualización: --</div>
     <div>RepTel Servicio Técnico</div>
   </footer>
-
-  <script>
+<script>
     const STATUS_LABELS = {
       RECEIVED: 'Recibido',
       DIAGNOSING: 'Diagnosticando',
@@ -204,10 +203,42 @@
       `).join('')
     }
 
+    // ── WebSocket conexión en tiempo real ──
+    function connectWebSocket() {
+      const ws = new WebSocket(`ws://${window.location.host}`)
+
+      ws.onopen = () => {
+        console.log('WebSocket conectado')
+        document.getElementById('last-update').textContent =
+          'Conectado en tiempo real: ' + new Date().toLocaleTimeString('es-VE')
+      }
+
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data)
+        if (
+          message.type === 'ORDER_CREATED' ||
+          message.type === 'ORDER_STATUS_UPDATED' ||
+          message.type === 'ORDER_BUDGET_UPDATED'
+        ) {
+          loadOrders()
+        }
+      }
+
+      ws.onclose = () => {
+        console.log('WebSocket desconectado, reconectando en 3s...')
+        setTimeout(connectWebSocket, 3000)
+      }
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error)
+      }
+    }
+
     setInterval(updateClock, 1000)
     setInterval(loadOrders, 30000)
     updateClock()
     loadOrders()
-  </script>
+    connectWebSocket()
+</script>
 </body>
 </html>

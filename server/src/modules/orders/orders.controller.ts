@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import * as ordersService from './orders.service'
+import { broadcastOrderUpdate } from '../../index'
 
 export const getOrders = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -58,6 +59,12 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       observations,
       technicianId,
     })
+
+    broadcastOrderUpdate({
+      type: 'ORDER_CREATED',
+      data: order
+    })
+
     res.status(201).json({ success: true, data: order })
   } catch (error) {
     console.error('ERROR CREAR ORDEN:', error)
@@ -74,6 +81,12 @@ export const updateStatus = async (req: Request, res: Response): Promise<void> =
       return
     }
     const order = await ordersService.updateOrderStatus(id, status, comment, technicianId)
+
+    broadcastOrderUpdate({
+      type: 'ORDER_STATUS_UPDATED',
+      data: order
+    })
+
     res.json({ success: true, data: order })
   } catch (error) {
     console.error('ERROR UPDATE STATUS:', error)
@@ -93,6 +106,12 @@ export const updateBudget = async (req: Request, res: Response): Promise<void> =
       return
     }
     const order = await ordersService.updateOrderBudget(id, budget, approved)
+
+    broadcastOrderUpdate({
+      type: 'ORDER_BUDGET_UPDATED',
+      data: order
+    })
+
     res.json({ success: true, data: order })
   } catch (error) {
     console.error('ERROR UPDATE BUDGET:', error)
