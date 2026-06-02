@@ -7,10 +7,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── USUARIOS ───────────────────────────────────────────────
+// ─── ROLES ──────────────────────────────────────────────────────────────────
+enum Role {
+  ADMIN
+  CASHIER
+  TECHNICIAN
+  DELIVERY
+  CLIENT
+  MANAGER
+  SELLER
+}
+
+// ─── USUARIOS DEL SISTEMA (empleados) ───────────────────────────────────────
 model User {
   id        String   @id @default(uuid())
-  cognitoId  String   @unique
   name      String
   email     String   @unique
   phone     String?
@@ -20,22 +30,30 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relaciones
-  ordersAsClient     Order[]        @relation("ClientOrders")
-  ordersAsTechnician Order[]        @relation("TechnicianOrders")
-  notifications      Notification[]
-  devices Device[] @relation("ClientDevices")
+  ordersAsTechnician  Order[]           @relation("TechnicianOrders")
+  notifications       Notification[]
+  deliveryAssignments DeliveryTracking[] @relation("DeliveryUser")
 }
 
-enum Role {
-  ADMIN
-  TECHNICIAN
-  CLIENT
-  MANAGER
-  SELLER
+// ─── CLIENTES ────────────────────────────────────────────────────────────────
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  lastName  String
+  idNumber  String   @unique
+  phone     String
+  email     String?
+  address   String?
+  password  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders          Order[]
+  serviceRequests ServiceRequest[]
 }
 
-// ─── EQUIPOS ────────────────────────────────────────────────
+// ─── EQUIPOS ─────────────────────────────────────────────────────────────────
 model Device {
   id           String     @id @default(uuid())
   type         DeviceType
@@ -47,21 +65,16 @@ model Device {
   photoUrl     String?
   createdAt    DateTime   @default(now())
 
-  // Relaciones
-  clientId     String
-  client       User       @relation("ClientDevices", fields: [clientId], references: [id])
-  orders       Order[]
+  orders Order[]
 }
 
 enum DeviceType {
-  CELLPHONE
-  TABLET
   LAPTOP
   PC
   OTHER
 }
 
-// ─── ÓRDENES DE REPARACIÓN ──────────────────────────────────
+// ─── ÓRDENES DE REPARACIÓN ───────────────────────────────────────────────────
 model Order {
   id             String      @id @default(uuid())
   orderNumber    String      @unique
@@ -76,15 +89,17 @@ model Order {
   deliveredAt    DateTime?
   updatedAt      DateTime    @updatedAt
 
-  // Relaciones
   clientId     String
-  client       User   @relation("ClientOrders", fields: [clientId], references: [id])
+  client       Client @relation(fields: [clientId], references: [id])
 
   technicianId String?
   technician   User?  @relation("TechnicianOrders", fields: [technicianId], references: [id])
 
   deviceId     String
   device       Device @relation(fields: [deviceId], references: [id])
+
+  serviceRequestId String?        @unique
+  serviceRequest   ServiceRequest? @relation(fields: [serviceRequestId], references: [id])
 
   statusHistory  OrderStatusHistory[]
   notifications  Notification[]
@@ -102,28 +117,111 @@ enum OrderStatus {
   CANCELLED
 }
 
-// ─── HISTORIAL DE ESTADOS ───────────────────────────────────
+// ─── HISTORIAL DE ESTADOS ────────────────────────────────────────────────────
 model OrderStatusHistory {
   id        String      @id @default(uuid())
   status    OrderStatus
   comment   String?
   createdAt DateTime    @default(now())
 
-  // Relaciones
   orderId String
   order   Order  @relation(fields: [orderId], references: [id])
 }
 
-// ─── DOCUMENTOS DE SERVICIO ─────────────────────────────────
-// Nota de recibimiento y nota de entrega
-model ServiceDocument {
-  id           String       @id @default(uuid())
-  type         DocumentType
-  pdfUrl       String?
-  printed      Boolean      @default(false)
-  generatedAt  DateTime     @default(now())
+// ─── SOLICITUD DE SERVICIO ───────────────────────────────────────────────────
+model ServiceRequest {
+  id          String          @id @default(uuid())
+  type        ServiceType
+  status      RequestStatus   @default(PENDING)
+  deviceType  DeviceType
+  brand       String
+  description String          @db.Text
+  address     String?
+  paymentMethod PaymentMethod
+  deliveryCost  Decimal?      @db.Decimal(10, 2)
+  tip           Decimal?      @db.Decimal(10, 2)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
-  // Relaciones
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
+
+  order           Order?
+  deliveryTracking DeliveryTracking?
+}
+
+enum ServiceType {
+  PRESENCIAL
+  DELIVERY
+}
+
+enum RequestStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  POINT_OF_SALE
+}
+
+// ─── DELIVERY TRACKING ───────────────────────────────────────────────────────
+model DeliveryTracking {
+  id        String         @id @default(uuid())
+  status    DeliveryStatus @default(ASSIGNED)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  serviceRequestId String         @unique
+  serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id])
+
+  deliveryUserId String
+  deliveryUser   User   @relation("DeliveryUser", fields: [deliveryUserId], references: [id])
+
+  photos DeliveryPhoto[]
+}
+
+enum DeliveryStatus {
+  ASSIGNED
+  LEAVING_STORE
+  ON_THE_WAY
+  EQUIPMENT_PICKED_UP
+  AT_THE_SHOP
+  RETURNING
+  DELIVERED
+  CANCELLED
+}
+
+// ─── FOTOS DEL DELIVERY ──────────────────────────────────────────────────────
+model DeliveryPhoto {
+  id               String    @id @default(uuid())
+  url              String
+  type             PhotoType
+  confirmedByClient   Boolean @default(false)
+  confirmedByCashier  Boolean @default(false)
+  createdAt        DateTime  @default(now())
+
+  deliveryTrackingId String
+  deliveryTracking   DeliveryTracking @relation(fields: [deliveryTrackingId], references: [id])
+}
+
+enum PhotoType {
+  PICKUP
+  DELIVERY
+}
+
+// ─── DOCUMENTOS DE SERVICIO ──────────────────────────────────────────────────
+model ServiceDocument {
+  id          String       @id @default(uuid())
+  type        DocumentType
+  pdfUrl      String?
+  printed     Boolean      @default(false)
+  generatedAt DateTime     @default(now())
+
   orderId String
   order   Order  @relation(fields: [orderId], references: [id])
 }
@@ -133,7 +231,7 @@ enum DocumentType {
   DELIVERY_NOTE
 }
 
-// ─── NOTIFICACIONES ─────────────────────────────────────────
+// ─── NOTIFICACIONES ──────────────────────────────────────────────────────────
 model Notification {
   id        String           @id @default(uuid())
   type      NotificationType
@@ -143,7 +241,6 @@ model Notification {
   sentAt    DateTime?
   createdAt DateTime         @default(now())
 
-  // Relaciones
   orderId String
   order   Order  @relation(fields: [orderId], references: [id])
 
@@ -155,11 +252,11 @@ enum NotificationType {
   STATUS_CHANGE
   BUDGET_REQUEST
   READY_FOR_PICKUP
+  DELIVERY_UPDATE
   GENERAL
 }
 
 enum Channel {
-  SMS
   EMAIL
   PUSH
 }
