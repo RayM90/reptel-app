@@ -7,7 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── ROLES ──────────────────────────────────────────────────────────────────
 enum Role {
   ADMIN
   CASHIER
@@ -18,7 +17,6 @@ enum Role {
   SELLER
 }
 
-// ─── USUARIOS DEL SISTEMA (empleados) ───────────────────────────────────────
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -30,12 +28,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  ordersAsTechnician  Order[]           @relation("TechnicianOrders")
+  ordersAsTechnician  Order[]            @relation("TechnicianOrders")
   notifications       Notification[]
   deliveryAssignments DeliveryTracking[] @relation("DeliveryUser")
 }
 
-// ─── CLIENTES ────────────────────────────────────────────────────────────────
 model Client {
   id        String   @id @default(uuid())
   name      String
@@ -53,17 +50,16 @@ model Client {
   serviceRequests ServiceRequest[]
 }
 
-// ─── EQUIPOS ─────────────────────────────────────────────────────────────────
 model Device {
-  id           String     @id @default(uuid())
-  type         DeviceType
-  brand        String
-  model        String
-  serialNumber String?
-  color        String?
-  accessories  String?
-  photoUrl     String?
-  createdAt    DateTime   @default(now())
+  id             String     @id @default(uuid())
+  type           DeviceType
+  brand          String
+  model          String
+  serialNumber   String?
+  color          String?
+  accessories    String?
+  devicePassword String?
+  createdAt      DateTime   @default(now())
 
   orders Order[]
 }
@@ -71,10 +67,8 @@ model Device {
 enum DeviceType {
   LAPTOP
   PC
-  OTHER
 }
 
-// ─── ÓRDENES DE REPARACIÓN ───────────────────────────────────────────────────
 model Order {
   id             String      @id @default(uuid())
   orderNumber    String      @unique
@@ -98,12 +92,12 @@ model Order {
   deviceId     String
   device       Device @relation(fields: [deviceId], references: [id])
 
-  serviceRequestId String?        @unique
+  serviceRequestId String?         @unique
   serviceRequest   ServiceRequest? @relation(fields: [serviceRequestId], references: [id])
 
-  statusHistory  OrderStatusHistory[]
-  notifications  Notification[]
-  documents      ServiceDocument[]
+  statusHistory OrderStatusHistory[]
+  notifications Notification[]
+  documents     ServiceDocument[]
 }
 
 enum OrderStatus {
@@ -117,7 +111,6 @@ enum OrderStatus {
   CANCELLED
 }
 
-// ─── HISTORIAL DE ESTADOS ────────────────────────────────────────────────────
 model OrderStatusHistory {
   id        String      @id @default(uuid())
   status    OrderStatus
@@ -128,25 +121,24 @@ model OrderStatusHistory {
   order   Order  @relation(fields: [orderId], references: [id])
 }
 
-// ─── SOLICITUD DE SERVICIO ───────────────────────────────────────────────────
 model ServiceRequest {
-  id          String          @id @default(uuid())
-  type        ServiceType
-  status      RequestStatus   @default(PENDING)
-  deviceType  DeviceType
-  brand       String
-  description String          @db.Text
-  address     String?
+  id            String        @id @default(uuid())
+  type          ServiceType
+  status        RequestStatus @default(PENDING)
+  deviceType    DeviceType
+  brand         String
+  description   String        @db.Text
+  address       String?
   paymentMethod PaymentMethod
   deliveryCost  Decimal?      @db.Decimal(10, 2)
   tip           Decimal?      @db.Decimal(10, 2)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   clientId String
   client   Client @relation(fields: [clientId], references: [id])
 
-  order           Order?
+  order            Order?
   deliveryTracking DeliveryTracking?
 }
 
@@ -169,7 +161,6 @@ enum PaymentMethod {
   POINT_OF_SALE
 }
 
-// ─── DELIVERY TRACKING ───────────────────────────────────────────────────────
 model DeliveryTracking {
   id        String         @id @default(uuid())
   status    DeliveryStatus @default(ASSIGNED)
@@ -196,14 +187,13 @@ enum DeliveryStatus {
   CANCELLED
 }
 
-// ─── FOTOS DEL DELIVERY ──────────────────────────────────────────────────────
 model DeliveryPhoto {
-  id               String    @id @default(uuid())
-  url              String
-  type             PhotoType
-  confirmedByClient   Boolean @default(false)
-  confirmedByCashier  Boolean @default(false)
-  createdAt        DateTime  @default(now())
+  id                 String    @id @default(uuid())
+  url                String
+  type               PhotoType
+  confirmedByClient  Boolean   @default(false)
+  confirmedByCashier Boolean   @default(false)
+  createdAt          DateTime  @default(now())
 
   deliveryTrackingId String
   deliveryTracking   DeliveryTracking @relation(fields: [deliveryTrackingId], references: [id])
@@ -214,7 +204,6 @@ enum PhotoType {
   DELIVERY
 }
 
-// ─── DOCUMENTOS DE SERVICIO ──────────────────────────────────────────────────
 model ServiceDocument {
   id          String       @id @default(uuid())
   type        DocumentType
@@ -231,7 +220,6 @@ enum DocumentType {
   DELIVERY_NOTE
 }
 
-// ─── NOTIFICACIONES ──────────────────────────────────────────────────────────
 model Notification {
   id        String           @id @default(uuid())
   type      NotificationType
