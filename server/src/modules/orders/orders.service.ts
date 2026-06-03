@@ -13,7 +13,7 @@ const generateOrderNumber = (): string => {
 export const getAllOrders = async () => {
   return await prisma.order.findMany({
     include: {
-      client: { select: { id: true, name: true, email: true, phone: true } },
+      client: true,
       technician: { select: { id: true, name: true, email: true } },
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
@@ -26,7 +26,7 @@ export const getOrderById = async (id: string) => {
   return await prisma.order.findUnique({
     where: { id },
     include: {
-      client: { select: { id: true, name: true, email: true, phone: true } },
+      client: true,
       technician: { select: { id: true, name: true, email: true } },
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
@@ -40,10 +40,21 @@ export const getOrderByNumber = async (orderNumber: string) => {
   return await prisma.order.findUnique({
     where: { orderNumber },
     include: {
-      client: { select: { id: true, name: true, phone: true } },
+      client: { select: { id: true, name: true, lastName: true, phone: true } },
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
     },
+  })
+}
+
+export const getOrdersByClient = async (clientId: string) => {
+  return await prisma.order.findMany({
+    where: { clientId },
+    include: {
+      device: true,
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+    orderBy: { receivedAt: 'desc' },
   })
 }
 
@@ -55,7 +66,7 @@ export const createOrder = async (data: {
   technicianId?: string
 }) => {
   const orderNumber = generateOrderNumber()
-  const trackingUrl = `http://localhost:3000/api/orders/track/${orderNumber}`
+  const trackingUrl = `http://192.168.0.107:3000/api/orders/track/${orderNumber}`
   const qrCode = await QRCode.toDataURL(trackingUrl)
 
   return await prisma.order.create({
@@ -75,7 +86,7 @@ export const createOrder = async (data: {
       },
     },
     include: {
-      client: { select: { id: true, name: true, email: true, phone: true } },
+      client: true,
       device: true,
       statusHistory: true,
     },
@@ -102,7 +113,7 @@ export const updateOrderStatus = async (
       },
     },
     include: {
-      client: { select: { id: true, name: true, email: true, phone: true } },
+      client: true,
       technician: { select: { id: true, name: true } },
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
@@ -131,7 +142,7 @@ export const updateOrderBudget = async (
       },
     },
     include: {
-      client: { select: { id: true, name: true, email: true, phone: true } },
+      client: true,
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
     },
