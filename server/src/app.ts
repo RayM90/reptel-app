@@ -6,6 +6,7 @@ import authRouter from './modules/auth/auth.routes'
 import usersRouter from './modules/users/users.routes'
 import devicesRouter from './modules/devices/devices.routes'
 import chatbotRouter from './modules/chatbot/chatbot.routes'
+import clientsRouter from './modules/clients/clients.routes'
 
 dotenv.config()
 
@@ -27,5 +28,6 @@ app.use('/api/users', usersRouter)
 app.use('/api/devices', devicesRouter)
 app.use('/api/orders', ordersRouter)
 app.use('/api/chatbot', chatbotRouter)
+app.use('/api/clients', clientsRouter)
 
 export default app
