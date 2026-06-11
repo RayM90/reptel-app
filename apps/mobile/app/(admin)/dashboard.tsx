@@ -110,6 +110,15 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={styles.newOrderBtn}
+            onPress={() => router.push('/(admin)/search-client')}
+          >
+            <Text style={styles.newOrderBtnText}>+ Nueva Orden</Text>
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.sectionTitle}>Órdenes activas</Text>
 
         {loading ? (
@@ -163,6 +172,18 @@ const styles = StyleSheet.create({
   },
   statNumber: { color: '#fff', fontSize: 28, fontWeight: 'bold' },
   statLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 4 },
+  actionsRow: { marginBottom: 16 },
+  newOrderBtn: {
+    backgroundColor: '#1a73e8',
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+  },
+  newOrderBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
   sectionTitle: { fontSize: 18, fontWeight: '600', color: '#1E3A5F', marginBottom: 12 },
   emptyText: { textAlign: 'center', color: '#999', marginTop: 32, fontSize: 16 },
   orderCard: {
