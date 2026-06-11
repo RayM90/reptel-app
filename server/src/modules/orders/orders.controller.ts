@@ -118,3 +118,30 @@ export const updateBudget = async (req: Request, res: Response): Promise<void> =
     res.status(500).json({ success: false, message: 'Error al actualizar el presupuesto', error: String(error) })
   }
 }
+export const getTodayOrders = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const orders = await ordersService.getTodayOrders()
+    res.json({ success: true, data: orders })
+  } catch (error) {
+    console.error('ERROR GET TODAY ORDERS:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener órdenes del día',
+      error: String(error),
+    })
+  }
+}
+
+export const getAvailableTechnicians = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const technicians = await ordersService.getAvailableTechnicians()
+    res.json({ success: true, data: technicians })
+  } catch (error) {
+    console.error('ERROR GET TECHNICIANS:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener técnicos',
+      error: String(error),
+    })
+  }
+}

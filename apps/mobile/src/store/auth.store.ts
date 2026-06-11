@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-type Role = 'ADMIN' | 'TECHNICIAN' | 'CLIENT' | 'MANAGER' | 'SELLER'
+type Role = 'ADMIN' | 'CASHIER' | 'TECHNICIAN' | 'TECHNICIAN_DELIVERY' | 'DELIVERY' | 'CLIENT' | 'MANAGER' | 'SELLER'
 
 interface User {
   id: string

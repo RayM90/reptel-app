@@ -3,9 +3,18 @@ import * as ordersController from './orders.controller'
 
 const router = Router()
 
-// Ruta pública — tracking por número de orden (sin autenticación)
+// ─── Rutas públicas (sin autenticación) ───────────────────────────
+// Tracking por número de orden
 router.get('/track/:orderNumber', ordersController.trackOrder)
 
+// ─── Rutas estáticas — deben ir ANTES de /:id ─────────────────────
+// Órdenes del día (para pantalla cajera)
+router.get('/today', ordersController.getTodayOrders)
+
+// Técnicos disponibles (para asignación al crear orden)
+router.get('/technicians', ordersController.getAvailableTechnicians)
+
+// ─── Rutas con parámetros dinámicos ───────────────────────────────
 // Obtener todas las órdenes
 router.get('/', ordersController.getOrders)
 

@@ -7,30 +7,167 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
 enum Role {
   ADMIN
   CASHIER
   TECHNICIAN
+  TECHNICIAN_DELIVERY
   DELIVERY
   CLIENT
   MANAGER
   SELLER
 }
 
-model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  phone     String?
-  password  String
-  role      Role     @default(CLIENT)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum TechnicianStatus {
+  AVAILABLE
+  BUSY
+  SATURATED
+  ABSENT
+}
 
-  ordersAsTechnician  Order[]            @relation("TechnicianOrders")
-  notifications       Notification[]
-  deliveryAssignments DeliveryTracking[] @relation("DeliveryUser")
+enum DeviceType {
+  LAPTOP
+  PC
+}
+
+enum OrderStatus {
+  RECEIVED
+  DIAGNOSING
+  WAITING_APPROVAL
+  APPROVED
+  REPAIRING
+  WAITING_PART
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum ServiceType {
+  PRESENCIAL
+  DELIVERY
+}
+
+enum RequestStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED_ON_SITE
+  TAKEN_TO_SHOP
+  COMPLETED
+  CANCELLED
+}
+
+enum DeliveryStatus {
+  ASSIGNED
+  LEAVING_STORE
+  ON_THE_WAY
+  AT_LOCATION
+  DIAGNOSING_ON_SITE
+  EQUIPMENT_PICKED_UP
+  AT_THE_SHOP
+  RETURNING
+  DELIVERED
+  CANCELLED
+}
+
+enum DeliveryResult {
+  RESOLVED_ON_SITE
+  TAKEN_TO_SHOP
+}
+
+enum PhotoType {
+  PICKUP
+  PROCESS
+  DELIVERY
+}
+
+enum DocumentType {
+  RECEIPT_NOTE
+  DELIVERY_NOTE
+  WITHDRAWAL_ACT
+  ON_SITE_RECEIPT
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  POINT_OF_SALE
+  MOBILE_PAYMENT
+  MIXED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+enum NotificationType {
+  STATUS_CHANGE
+  BUDGET_REQUEST
+  READY_FOR_PICKUP
+  DELIVERY_UPDATE
+  PAYMENT_CONFIRMED
+  ORDER_CREATED
+  GENERAL
+}
+
+enum Channel {
+  EMAIL
+  PUSH
+  SMS
+}
+
+enum InvoiceType {
+  SERVICE
+  STORE_PURCHASE
+  DELIVERY_SERVICE
+}
+
+enum ProductOrderStatus {
+  PENDING
+  CONFIRMED
+  READY_FOR_PICKUP
+  ASSIGNED_DELIVERY
+  ON_THE_WAY
+  DELIVERED
+  CANCELLED
+}
+
+enum DeliveryMethod {
+  PICKUP_AT_STORE
+  HOME_DELIVERY
+}
+
+// ─────────────────────────────────────────────
+// MÓDULO USUARIOS Y CLIENTES
+// ─────────────────────────────────────────────
+
+model User {
+  id                String           @id @default(uuid())
+  name              String
+  email             String           @unique
+  phone             String?
+  password          String
+  role              Role             @default(CLIENT)
+  isActive          Boolean          @default(true)
+
+  // Campos exclusivos para técnicos
+  technicianStatus  TechnicianStatus @default(AVAILABLE)
+  activeOrderCount  Int              @default(0)
+  maxOrderCapacity  Int              @default(5)
+
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  ordersAsTechnician   Order[]            @relation("TechnicianOrders")
+  notifications        Notification[]
+  deliveryAssignments  DeliveryTracking[] @relation("DeliveryUser")
+  productDeliveries    ProductDelivery[]  @relation("DeliveryAgent")
 }
 
 model Client {
@@ -48,7 +185,13 @@ model Client {
 
   orders          Order[]
   serviceRequests ServiceRequest[]
+  productOrders   ProductOrder[]
+  invoices        Invoice[]
 }
+
+// ─────────────────────────────────────────────
+// MÓDULO DISPOSITIVOS Y ÓRDENES
+// ─────────────────────────────────────────────
 
 model Device {
   id             String     @id @default(uuid())
@@ -62,11 +205,6 @@ model Device {
   createdAt      DateTime   @default(now())
 
   orders Order[]
-}
-
-enum DeviceType {
-  LAPTOP
-  PC
 }
 
 model Order {
@@ -95,20 +233,11 @@ model Order {
   serviceRequestId String?         @unique
   serviceRequest   ServiceRequest? @relation(fields: [serviceRequestId], references: [id])
 
-  statusHistory OrderStatusHistory[]
-  notifications Notification[]
-  documents     ServiceDocument[]
-}
-
-enum OrderStatus {
-  RECEIVED
-  DIAGNOSING
-  WAITING_APPROVAL
-  APPROVED
-  REPAIRING
-  READY
-  DELIVERED
-  CANCELLED
+  statusHistory    OrderStatusHistory[]
+  notifications    Notification[]
+  documents        ServiceDocument[]
+  payments         ServicePayment[]
+  invoices         Invoice[]
 }
 
 model OrderStatusHistory {
@@ -121,13 +250,22 @@ model OrderStatusHistory {
   order   Order  @relation(fields: [orderId], references: [id])
 }
 
+// ─────────────────────────────────────────────
+// MÓDULO SERVICIO A DOMICILIO
+// ─────────────────────────────────────────────
+
 model ServiceRequest {
   id            String        @id @default(uuid())
   type          ServiceType
   status        RequestStatus @default(PENDING)
   deviceType    DeviceType
   brand         String
+  model         String?
   description   String        @db.Text
+
+  // Síntomas seleccionados (guardados como JSON)
+  symptoms      String?       @db.Text
+
   address       String?
   paymentMethod PaymentMethod
   deliveryCost  Decimal?      @db.Decimal(10, 2)
@@ -142,30 +280,20 @@ model ServiceRequest {
   deliveryTracking DeliveryTracking?
 }
 
-enum ServiceType {
-  PRESENCIAL
-  DELIVERY
-}
-
-enum RequestStatus {
-  PENDING
-  ASSIGNED
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-}
-
-enum PaymentMethod {
-  CASH
-  TRANSFER
-  POINT_OF_SALE
-}
-
 model DeliveryTracking {
   id        String         @id @default(uuid())
   status    DeliveryStatus @default(ASSIGNED)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+
+  // Diagnóstico en sitio
+  onSiteDiagnosis String?        @db.Text
+  result          DeliveryResult?
+
+  // Evidencia GPS al llegar
+  gpsLatitude     Decimal?       @db.Decimal(10, 7)
+  gpsLongitude    Decimal?       @db.Decimal(10, 7)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   serviceRequestId String         @unique
   serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id])
@@ -174,17 +302,6 @@ model DeliveryTracking {
   deliveryUser   User   @relation("DeliveryUser", fields: [deliveryUserId], references: [id])
 
   photos DeliveryPhoto[]
-}
-
-enum DeliveryStatus {
-  ASSIGNED
-  LEAVING_STORE
-  ON_THE_WAY
-  EQUIPMENT_PICKED_UP
-  AT_THE_SHOP
-  RETURNING
-  DELIVERED
-  CANCELLED
 }
 
 model DeliveryPhoto {
@@ -199,26 +316,197 @@ model DeliveryPhoto {
   deliveryTracking   DeliveryTracking @relation(fields: [deliveryTrackingId], references: [id])
 }
 
-enum PhotoType {
-  PICKUP
-  DELIVERY
-}
+// ─────────────────────────────────────────────
+// MÓDULO DOCUMENTOS Y PAGOS
+// ─────────────────────────────────────────────
 
 model ServiceDocument {
-  id          String       @id @default(uuid())
-  type        DocumentType
-  pdfUrl      String?
-  printed     Boolean      @default(false)
-  generatedAt DateTime     @default(now())
+  id           String       @id @default(uuid())
+  type         DocumentType
+  pdfUrl       String?
+  printed      Boolean      @default(false)
+
+  // Firma digital del cliente (base64 o URL en S3)
+  clientSignature String?   @db.Text
+
+  // GPS donde se firmó el documento
+  gpsLatitude   Decimal?    @db.Decimal(10, 7)
+  gpsLongitude  Decimal?    @db.Decimal(10, 7)
+
+  generatedAt  DateTime     @default(now())
 
   orderId String
   order   Order  @relation(fields: [orderId], references: [id])
 }
 
-enum DocumentType {
-  RECEIPT_NOTE
-  DELIVERY_NOTE
+model ServicePayment {
+  id            String        @id @default(uuid())
+  amount        Decimal       @db.Decimal(10, 2)
+  amountBs      Decimal?      @db.Decimal(12, 2)
+  exchangeRate  Decimal?      @db.Decimal(10, 4)
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  reference     String?
+  description   String?
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  invoice Invoice?
 }
+
+model Invoice {
+  id             String      @id @default(uuid())
+  invoiceNumber  String      @unique
+  controlNumber  String?
+  series         String?     @default("A")
+  type           InvoiceType
+  subtotal       Decimal     @db.Decimal(10, 2)
+  igtfBase       Decimal?    @db.Decimal(10, 2)
+  igtfAmount     Decimal?    @db.Decimal(10, 2)
+  total          Decimal     @db.Decimal(10, 2)
+  totalBs        Decimal?    @db.Decimal(12, 2)
+  exchangeRate   Decimal?    @db.Decimal(10, 4)
+  pdfUrl         String?
+  sentByEmail    Boolean     @default(false)
+  sentAt         DateTime?
+  createdAt      DateTime    @default(now())
+
+  // Puede pertenecer a una orden de servicio
+  orderId        String?
+  order          Order?      @relation(fields: [orderId], references: [id])
+
+  // O a un pago de servicio específico
+  servicePaymentId String?   @unique
+  servicePayment   ServicePayment? @relation(fields: [servicePaymentId], references: [id])
+
+  // O a un pedido de la tienda
+  productOrderId String?     @unique
+  productOrder   ProductOrder? @relation(fields: [productOrderId], references: [id])
+
+  // Siempre vinculada a un cliente
+  clientId       String
+  client         Client      @relation(fields: [clientId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// MÓDULO CATÁLOGO DE SERVICIOS
+// ─────────────────────────────────────────────
+
+model ServiceCatalog {
+  id                String   @id @default(uuid())
+  name              String
+  description       String?  @db.Text
+  basePrice         Decimal  @db.Decimal(10, 2)
+  isOnSiteResolvable Boolean @default(false)
+  isActive          Boolean  @default(true)
+  estimatedMinutes  Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("servicecatalog")
+}
+
+// ─────────────────────────────────────────────
+// MÓDULO TIENDA
+// ─────────────────────────────────────────────
+
+model ProductCategory {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  products  Product[]
+
+  @@map("productcategory")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?  @db.Text
+  price       Decimal  @db.Decimal(10, 2)
+  stock       Int      @default(0)
+  minStock    Int      @default(3)
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  categoryId  String
+  category    ProductCategory @relation(fields: [categoryId], references: [id])
+
+  orderItems  ProductOrderItem[]
+
+  @@map("product")
+}
+
+model ProductOrder {
+  id             String             @id @default(uuid())
+  status         ProductOrderStatus @default(PENDING)
+  deliveryMethod DeliveryMethod
+  address        String?
+  deliveryCost   Decimal?           @db.Decimal(10, 2)
+  total          Decimal            @db.Decimal(10, 2)
+  paymentMethod  PaymentMethod
+  paidAt         DateTime?
+  notes          String?            @db.Text
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
+
+  // Si la compra está vinculada a una orden de reparación
+  linkedOrderId String?
+
+  items          ProductOrderItem[]
+  delivery       ProductDelivery?
+  invoice        Invoice?
+
+  @@map("productorder")
+}
+
+model ProductOrderItem {
+  id         String  @id @default(uuid())
+  quantity   Int
+  unitPrice  Decimal @db.Decimal(10, 2)
+  subtotal   Decimal @db.Decimal(10, 2)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  productOrderId String
+  productOrder   ProductOrder @relation(fields: [productOrderId], references: [id])
+
+  @@map("productorderitem")
+}
+
+model ProductDelivery {
+  id             String         @id @default(uuid())
+  status         DeliveryStatus @default(ASSIGNED)
+  gpsLatitude    Decimal?       @db.Decimal(10, 7)
+  gpsLongitude   Decimal?       @db.Decimal(10, 7)
+  photoUrl       String?
+  deliveredAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  productOrderId String       @unique
+  productOrder   ProductOrder @relation(fields: [productOrderId], references: [id])
+
+  agentId String
+  agent   User   @relation("DeliveryAgent", fields: [agentId], references: [id])
+
+  @@map("productdelivery")
+}
+
+// ─────────────────────────────────────────────
+// MÓDULO NOTIFICACIONES
+// ─────────────────────────────────────────────
 
 model Notification {
   id        String           @id @default(uuid())
@@ -229,22 +517,12 @@ model Notification {
   sentAt    DateTime?
   createdAt DateTime         @default(now())
 
-  orderId String
-  order   Order  @relation(fields: [orderId], references: [id])
+  // La notificación puede ser de una orden o de un pedido de tienda
+  orderId        String?
+  order          Order?  @relation(fields: [orderId], references: [id])
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
-}
 
-enum NotificationType {
-  STATUS_CHANGE
-  BUDGET_REQUEST
-  READY_FOR_PICKUP
-  DELIVERY_UPDATE
-  GENERAL
-}
-
-enum Channel {
-  EMAIL
-  PUSH
+  @@map("notification")
 }
