@@ -1,6 +1,10 @@
 import prisma from '../../lib/prisma'
 import QRCode from 'qrcode'
 
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+
 const generateOrderNumber = (): string => {
   const date = new Date()
   const year = date.getFullYear().toString().slice(-2)
@@ -10,6 +14,99 @@ const generateOrderNumber = (): string => {
   return `REP-${year}${month}${day}-${random}`
 }
 
+// ─────────────────────────────────────────────
+// ASIGNACIÓN AUTOMÁTICA DE TÉCNICO
+// Prioridad 1: AVAILABLE (menos carga)
+// Prioridad 2: BUSY bajo su límite (menos carga)
+// Prioridad 3: null → asignación manual
+// ─────────────────────────────────────────────
+
+const assignTechnician = async (): Promise<string | null> => {
+  // Prioridad 1: técnicos disponibles, ordenados por menor carga y más
+  // tiempo sin recibir orden
+  const available = await prisma.user.findMany({
+    where: {
+      role: { in: ['TECHNICIAN', 'TECHNICIAN_DELIVERY'] },
+      isActive: true,
+      technicianStatus: 'AVAILABLE',
+    },
+    orderBy: [
+      { activeOrderCount: 'asc' },
+      { updatedAt: 'asc' },
+    ],
+  })
+
+  if (available.length > 0) {
+    return available[0].id
+  }
+
+  // Prioridad 2: técnicos ocupados pero bajo su límite de capacidad
+  const busy = await prisma.user.findMany({
+    where: {
+      role: { in: ['TECHNICIAN', 'TECHNICIAN_DELIVERY'] },
+      isActive: true,
+      technicianStatus: 'BUSY',
+    },
+    orderBy: { activeOrderCount: 'asc' },
+  })
+
+  const underCapacity = busy.filter(
+    (t) => t.activeOrderCount < t.maxOrderCapacity
+  )
+
+  if (underCapacity.length > 0) {
+    return underCapacity[0].id
+  }
+
+  // Sin técnicos disponibles → asignación manual
+  return null
+}
+
+// Actualiza el contador y estado del técnico al asignarle una orden
+const incrementTechnicianLoad = async (technicianId: string) => {
+  const technician = await prisma.user.findUnique({
+    where: { id: technicianId },
+  })
+
+  if (!technician) return
+
+  const newCount = technician.activeOrderCount + 1
+  const newStatus =
+    newCount >= technician.maxOrderCapacity ? 'SATURATED' : 'BUSY'
+
+  await prisma.user.update({
+    where: { id: technicianId },
+    data: {
+      activeOrderCount: newCount,
+      technicianStatus: newStatus,
+    },
+  })
+}
+
+// Actualiza el contador y estado del técnico al cerrar una orden
+export const decrementTechnicianLoad = async (technicianId: string) => {
+  const technician = await prisma.user.findUnique({
+    where: { id: technicianId },
+  })
+
+  if (!technician) return
+
+  const newCount = Math.max(0, technician.activeOrderCount - 1)
+  const newStatus = newCount === 0 ? 'AVAILABLE' : 'BUSY'
+
+  await prisma.user.update({
+    where: { id: technicianId },
+    data: {
+      activeOrderCount: newCount,
+      technicianStatus: newStatus,
+    },
+  })
+}
+
+// ─────────────────────────────────────────────
+// ÓRDENES — CONSULTAS
+// ─────────────────────────────────────────────
+
 export const getAllOrders = async () => {
   return await prisma.order.findMany({
     include: {
@@ -17,6 +114,31 @@ export const getAllOrders = async () => {
       technician: { select: { id: true, name: true, email: true } },
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+    orderBy: { receivedAt: 'desc' },
+  })
+}
+
+// Órdenes del día — para la pantalla de la cajera
+export const getTodayOrders = async () => {
+  const startOfDay = new Date()
+  startOfDay.setHours(0, 0, 0, 0)
+
+  const endOfDay = new Date()
+  endOfDay.setHours(23, 59, 59, 999)
+
+  return await prisma.order.findMany({
+    where: {
+      receivedAt: {
+        gte: startOfDay,
+        lte: endOfDay,
+      },
+    },
+    include: {
+      client: true,
+      technician: { select: { id: true, name: true } },
+      device: true,
+      statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
     },
     orderBy: { receivedAt: 'desc' },
   })
@@ -40,7 +162,9 @@ export const getOrderByNumber = async (orderNumber: string) => {
   return await prisma.order.findUnique({
     where: { orderNumber },
     include: {
-      client: { select: { id: true, name: true, lastName: true, phone: true } },
+      client: {
+        select: { id: true, name: true, lastName: true, phone: true },
+      },
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
     },
@@ -58,18 +182,25 @@ export const getOrdersByClient = async (clientId: string) => {
   })
 }
 
+// ─────────────────────────────────────────────
+// ÓRDENES — CREACIÓN
+// ─────────────────────────────────────────────
+
 export const createOrder = async (data: {
   clientId: string
   deviceId: string
   problem: string
   observations?: string
-  technicianId?: string
+  technicianId?: string  // si viene vacío, el sistema asigna uno
 }) => {
   const orderNumber = generateOrderNumber()
   const trackingUrl = `http://192.168.0.107:3000/api/orders/track/${orderNumber}`
   const qrCode = await QRCode.toDataURL(trackingUrl)
 
-  return await prisma.order.create({
+  // Si no viene un técnico específico, asignamos automáticamente
+  const resolvedTechnicianId = data.technicianId ?? (await assignTechnician())
+
+  const order = await prisma.order.create({
     data: {
       orderNumber,
       qrCode,
@@ -77,21 +208,39 @@ export const createOrder = async (data: {
       deviceId: data.deviceId,
       problem: data.problem,
       observations: data.observations,
-      technicianId: data.technicianId,
+      technicianId: resolvedTechnicianId,
       statusHistory: {
         create: {
           status: 'RECEIVED',
-          comment: 'Orden creada y equipo recibido en el taller',
+          comment: resolvedTechnicianId
+            ? 'Orden creada y técnico asignado automáticamente'
+            : 'Orden creada — pendiente de asignación de técnico',
         },
       },
     },
     include: {
       client: true,
       device: true,
+      technician: { select: { id: true, name: true } },
       statusHistory: true,
     },
   })
+
+  // Actualiza la carga del técnico asignado
+  if (resolvedTechnicianId) {
+    await incrementTechnicianLoad(resolvedTechnicianId)
+  }
+
+  return {
+    ...order,
+    technicianAutoAssigned: !data.technicianId && !!resolvedTechnicianId,
+    noTechnicianAvailable: !resolvedTechnicianId,
+  }
 }
+
+// ─────────────────────────────────────────────
+// ÓRDENES — ACTUALIZACIÓN
+// ─────────────────────────────────────────────
 
 export const updateOrderStatus = async (
   id: string,
@@ -99,7 +248,7 @@ export const updateOrderStatus = async (
   comment?: string,
   technicianId?: string
 ) => {
-  return await prisma.order.update({
+  const order = await prisma.order.update({
     where: { id },
     data: {
       status: status as any,
@@ -119,6 +268,16 @@ export const updateOrderStatus = async (
       statusHistory: { orderBy: { createdAt: 'desc' } },
     },
   })
+
+  // Si la orden se entrega o cancela, libera al técnico
+  if (
+    (status === 'DELIVERED' || status === 'CANCELLED') &&
+    order.technicianId
+  ) {
+    await decrementTechnicianLoad(order.technicianId)
+  }
+
+  return order
 }
 
 export const updateOrderBudget = async (
@@ -146,5 +305,27 @@ export const updateOrderBudget = async (
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
     },
+  })
+}
+
+// ─────────────────────────────────────────────
+// TÉCNICOS — CONSULTAS PARA LA CAJERA
+// ─────────────────────────────────────────────
+
+export const getAvailableTechnicians = async () => {
+  return await prisma.user.findMany({
+    where: {
+      role: { in: ['TECHNICIAN', 'TECHNICIAN_DELIVERY'] },
+      isActive: true,
+      technicianStatus: { in: ['AVAILABLE', 'BUSY'] },
+    },
+    select: {
+      id: true,
+      name: true,
+      technicianStatus: true,
+      activeOrderCount: true,
+      maxOrderCapacity: true,
+    },
+    orderBy: { activeOrderCount: 'asc' },
   })
 }
