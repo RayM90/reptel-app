@@ -58,8 +58,8 @@ export default function RootLayout() {
           options={{ title: 'Panel Principal', headerLeft: () => null }} />
         <Stack.Screen name="(admin)/orders"
           options={{ title: 'Órdenes' }} />
-        <Stack.Screen name="(admin)/search-client"
-          options={{ title: 'Buscar Cliente' }} />
+        <Stack.Screen name="(admin)/create-order"
+          options={{ title: 'Nueva Orden' }} />
         <Stack.Screen name="(technician)/orders"
           options={{ title: 'Mis Órdenes' }} />
         <Stack.Screen name="(client)/tracking"
