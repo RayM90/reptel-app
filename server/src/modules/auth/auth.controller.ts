@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { registerUser, loginUser } from './auth.service';
+import { registerUser, loginUser, refreshUserToken } from './auth.service';
 import prisma from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
 
@@ -66,5 +66,27 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     })
   } catch (error: any) {
     res.status(401).json({ message: error.message || 'Credenciales inválidas' });
+  }
+};
+
+export const refresh = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      res.status(400).json({ message: 'Refresh token requerido' });
+      return;
+    }
+
+    const tokens = await refreshUserToken(refreshToken);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        token: tokens.accessToken,
+      }
+    });
+  } catch (error: any) {
+    res.status(401).json({ message: error.message || 'Token inválido o expirado' });
   }
 };

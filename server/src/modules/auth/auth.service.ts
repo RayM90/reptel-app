@@ -95,3 +95,25 @@ export const loginUser = async (email: string, password: string) => {
     idToken: response.AuthenticationResult?.IdToken,           // Token con info del usuario
   };
 };
+
+/**
+ * Renueva el token de acceso usando el refresh token de Cognito
+ * @param refreshToken - Token de refresco obtenido en el login
+ * @returns Nuevo accessToken
+ */
+export const refreshUserToken = async (refreshToken: string) => {
+  const response = await client.send(
+    new InitiateAuthCommand({
+      AuthFlow: "REFRESH_TOKEN_AUTH",
+      ClientId: CLIENT_ID,
+      AuthParameters: {
+        REFRESH_TOKEN: refreshToken,
+      },
+    })
+  );
+
+  return {
+    accessToken: response.AuthenticationResult?.AccessToken,
+    idToken: response.AuthenticationResult?.IdToken,
+  };
+};
