@@ -39,8 +39,8 @@ export default function LoginScreen() {
     try {
       setLoading(true);
       const response = await api.post("/api/auth/login", { email, password });
-      const { user, token } = response.data.data;
-      setUser(user, token);
+      const { user, token, refreshToken } = response.data.data;
+      setUser(user, token, refreshToken);
 
       switch (user.role) {
         case "ADMIN":
