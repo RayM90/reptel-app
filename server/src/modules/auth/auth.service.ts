@@ -14,6 +14,8 @@ import {
   AdminConfirmSignUpCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 
+import prisma from '../../lib/prisma';
+
 /** Cliente de AWS Cognito configurado con la región del proyecto */
 const client = new CognitoIdentityProviderClient({
   region: process.env.AWS_REGION!,
@@ -23,20 +25,23 @@ const CLIENT_ID = process.env.COGNITO_CLIENT_ID!;
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID!;
 
 /**
- * Registra un nuevo usuario en AWS Cognito
+ * Registra un nuevo usuario en AWS Cognito y en la base de datos local
  * - Crea el usuario con email y contraseña
  * - Confirma automáticamente la cuenta
  * - Asigna el grupo/rol correspondiente
+ * - Guarda el usuario en MySQL via Prisma
  * @param email - Correo electrónico del usuario
- * @param password - Contraseña del usuario
+ * @param password - Contraseña del usuario (manejada por Cognito)
  * @param name - Nombre completo del usuario
- * @param role - Rol a asignar (ADMIN, MANAGER, TECHNICIAN, SELLER, CLIENT)
+ * @param role - Rol a asignar
+ * @param phone - Teléfono del usuario (opcional)
  */
 export const registerUser = async (
   email: string,
   password: string,
   name: string,
-  role: string
+  role: string,
+  phone?: string,
 ) => {
   // 1. Registrar usuario en Cognito
   await client.send(
@@ -68,7 +73,19 @@ export const registerUser = async (
     })
   );
 
-  return { message: 'Usuario registrado exitosamente' };
+  // 4. Guardar usuario en base de datos local
+  // password se guarda vacío porque Cognito maneja la autenticación
+  const user = await prisma.user.create({
+    data: {
+      email,
+      name,
+      role: role as any,
+      phone: phone ?? null,
+      password: '',
+    },
+  });
+
+  return { message: 'Usuario registrado exitosamente', userId: user.id };
 };
 
 /**
@@ -90,9 +107,9 @@ export const loginUser = async (email: string, password: string) => {
   );
 
   return {
-    accessToken: response.AuthenticationResult?.AccessToken,   // Token para llamar endpoints protegidos
-    refreshToken: response.AuthenticationResult?.RefreshToken, // Token para renovar la sesión
-    idToken: response.AuthenticationResult?.IdToken,           // Token con info del usuario
+    accessToken: response.AuthenticationResult?.AccessToken,
+    refreshToken: response.AuthenticationResult?.RefreshToken,
+    idToken: response.AuthenticationResult?.IdToken,
   };
 };
 
