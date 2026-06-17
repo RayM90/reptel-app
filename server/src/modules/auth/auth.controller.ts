@@ -5,20 +5,20 @@ import jwt from 'jsonwebtoken';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, name, role } = req.body;
+    const { email, password, name, role, phone, address } = req.body;
 
     if (!email || !password || !name || !role) {
       res.status(400).json({ message: 'Todos los campos son requeridos' });
       return;
     }
 
-    const validRoles = ['ADMIN', 'MANAGER', 'TECHNICIAN', 'SELLER', 'CLIENT'];
+    const validRoles = ['ADMIN', 'TECHNICIAN', 'TECHNICIAN_DELIVERY', 'DELIVERY', 'SUPPORT', 'CLIENT'];
     if (!validRoles.includes(role)) {
       res.status(400).json({ message: 'Rol inválido' });
       return;
     }
 
-    const result = await registerUser(email, password, name, role);
+    const result = await registerUser(email, password, name, role, phone);
     res.status(201).json(result);
   } catch (error: any) {
     res.status(400).json({ message: error.message || 'Error al registrar usuario' });

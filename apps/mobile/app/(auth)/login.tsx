@@ -59,7 +59,7 @@ export default function LoginScreen() {
           router.replace("/(admin)/dashboard");
           break;
         case "CLIENT":
-          router.replace("/(client)/tracking");
+          router.replace("/(client)/home-client");  // ✅
           break;
         default:
           router.replace("/welcome");
