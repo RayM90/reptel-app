@@ -162,12 +162,16 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     paddingHorizontal: 4,
   },
-  logo: {
+logo: {
     width: 220,
     height: 70,
-    marginBottom: 12,
-    marginTop: -60,
-    transform: [{ scale: 1.8 }],
+    marginBottom: 40,  
+    marginTop: -45,    
+    alignSelf: 'center',
+    transform: [
+      { scale: 2.8 },    
+      { translateX: -4 } 
+    ],
   },
   greeting: {
     fontSize: 16,
