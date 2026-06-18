@@ -1,11 +1,3 @@
-/**
- * @file auth.service.ts
- * @description Servicio de autenticación para RepTel API.
- * Maneja el registro y login de usuarios mediante AWS Cognito,
- * incluyendo confirmación automática y asignación de roles por grupos.
- * @module Auth
- */
-
 import {
   CognitoIdentityProviderClient,
   InitiateAuthCommand,
@@ -16,7 +8,6 @@ import {
 
 import prisma from '../../lib/prisma';
 
-/** Cliente de AWS Cognito configurado con la región del proyecto */
 const client = new CognitoIdentityProviderClient({
   region: process.env.AWS_REGION!,
 });
@@ -24,26 +15,15 @@ const client = new CognitoIdentityProviderClient({
 const CLIENT_ID = process.env.COGNITO_CLIENT_ID!;
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID!;
 
-/**
- * Registra un nuevo usuario en AWS Cognito y en la base de datos local
- * - Crea el usuario con email y contraseña
- * - Confirma automáticamente la cuenta
- * - Asigna el grupo/rol correspondiente
- * - Guarda el usuario en MySQL via Prisma
- * @param email - Correo electrónico del usuario
- * @param password - Contraseña del usuario (manejada por Cognito)
- * @param name - Nombre completo del usuario
- * @param role - Rol a asignar
- * @param phone - Teléfono del usuario (opcional)
- */
 export const registerUser = async (
   email: string,
   password: string,
   name: string,
   role: string,
   phone?: string,
+  address?: string,
 ) => {
-  // 1. Registrar usuario en Cognito
+  // 1. Registrar en Cognito
   await client.send(
     new SignUpCommand({
       ClientId: CLIENT_ID,
@@ -56,7 +36,7 @@ export const registerUser = async (
     })
   );
 
-  // 2. Confirmar automáticamente sin requerir verificación por email
+  // 2. Confirmar automáticamente
   await client.send(
     new AdminConfirmSignUpCommand({
       UserPoolId: USER_POOL_ID,
@@ -64,7 +44,7 @@ export const registerUser = async (
     })
   );
 
-  // 3. Asignar el grupo/rol al usuario
+  // 3. Asignar grupo/rol
   await client.send(
     new AdminAddUserToGroupCommand({
       UserPoolId: USER_POOL_ID,
@@ -73,8 +53,25 @@ export const registerUser = async (
     })
   );
 
-  // 4. Guardar usuario en base de datos local
-  // password se guarda vacío porque Cognito maneja la autenticación
+  // 4. Si es CLIENT, crear registro en tabla Client primero
+  let clientId: string | undefined = undefined;
+
+  if (role === 'CLIENT') {
+    const newClient = await prisma.client.create({
+      data: {
+        name,
+        lastName: '',       // se puede actualizar en el perfil
+        idNumber: email,    // temporal único usando email
+        phone: phone ?? '',
+        email,
+        address: address ?? null,
+        password: '',
+      },
+    });
+    clientId = newClient.id;
+  }
+
+  // 5. Crear User vinculado al Client si aplica
   const user = await prisma.user.create({
     data: {
       email,
@@ -82,18 +79,13 @@ export const registerUser = async (
       role: role as any,
       phone: phone ?? null,
       password: '',
+      clientId: clientId ?? null,
     },
   });
 
   return { message: 'Usuario registrado exitosamente', userId: user.id };
 };
 
-/**
- * Autentica un usuario con email y contraseña
- * @param email - Correo electrónico del usuario
- * @param password - Contraseña del usuario
- * @returns Tokens JWT: accessToken, refreshToken, idToken
- */
 export const loginUser = async (email: string, password: string) => {
   const response = await client.send(
     new InitiateAuthCommand({
@@ -113,15 +105,10 @@ export const loginUser = async (email: string, password: string) => {
   };
 };
 
-/**
- * Renueva el token de acceso usando el refresh token de Cognito
- * @param refreshToken - Token de refresco obtenido en el login
- * @returns Nuevo accessToken
- */
 export const refreshUserToken = async (refreshToken: string) => {
   const response = await client.send(
     new InitiateAuthCommand({
-      AuthFlow: "REFRESH_TOKEN_AUTH",
+      AuthFlow: 'REFRESH_TOKEN_AUTH',
       ClientId: CLIENT_ID,
       AuthParameters: {
         REFRESH_TOKEN: refreshToken,
