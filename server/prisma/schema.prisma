@@ -156,7 +156,11 @@ model User {
   role              Role             @default(CLIENT)
   isActive          Boolean          @default(true)
 
-  // Campos exclusivos para técnicos
+  // ── NUEVO ──
+  clientId          String?          @unique
+  client            Client?          @relation(fields: [clientId], references: [id])
+  // ────────────
+
   technicianStatus  TechnicianStatus @default(AVAILABLE)
   activeOrderCount  Int              @default(0)
   maxOrderCapacity  Int              @default(5)
@@ -183,6 +187,7 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  user            User?
   orders          Order[]
   serviceRequests ServiceRequest[]
   productOrders   ProductOrder[]

@@ -18,7 +18,8 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const result = await registerUser(email, password, name, role, phone);
+    // Ahora se pasan phone y address al service
+    const result = await registerUser(email, password, name, role, phone, address);
     res.status(201).json(result);
   } catch (error: any) {
     res.status(400).json({ message: error.message || 'Error al registrar usuario' });
@@ -39,6 +40,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     const decoded = jwt.decode(tokens.idToken!) as any
 
+    // Buscar user con su client vinculado
     const user = await prisma.user.findUnique({
       where: { email },
       select: {
@@ -47,6 +49,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         email: true,
         phone: true,
         role: true,
+        clientId: true,
+        client: {
+          select: {
+            id: true,
+            address: true,
+            phone: true,
+            idNumber: true,
+          }
+        }
       }
     })
 
@@ -58,7 +69,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     res.status(200).json({
       success: true,
       data: {
-        user,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          clientId: user.clientId,
+          address: user.client?.address ?? null,
+        },
         token: tokens.accessToken,
         idToken: tokens.idToken,
         refreshToken: tokens.refreshToken,
