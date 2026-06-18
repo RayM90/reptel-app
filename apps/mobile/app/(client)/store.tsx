@@ -6,6 +6,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
@@ -21,6 +22,10 @@ interface Product {
   imageUrl: string | null;
   category: { id: string; name: string };
 }
+
+const productImages: Record<string, any> = {
+  'products/cargador-usbc.jpg': require('../../assets/images/products/cargador-usbc.jpg'),
+};
 
 export default function StoreScreen() {
   const router = useRouter();
@@ -38,7 +43,6 @@ export default function StoreScreen() {
       const response = await api.get('/api/products');
       const data: Product[] = response.data.data;
       setProducts(data);
-
       const cats = ['Todos', ...new Set(data.map((p) => p.category.name))];
       setCategories(cats);
     } catch (error: any) {
@@ -68,7 +72,7 @@ export default function StoreScreen() {
           <Text style={styles.subtitle}>Accesorios y repuestos</Text>
         </View>
 
-        {/* Secciones de Categorías */}
+        {/* Categorías */}
         <View style={styles.categoryHeaderRow}>
           <Text style={styles.categoryTitleText}>Categorías</Text>
           <Text style={styles.scrollHint}>desliza »</Text>
@@ -83,25 +87,17 @@ export default function StoreScreen() {
           {categories.map((cat) => (
             <TouchableOpacity
               key={cat}
-              style={[
-                styles.filterBtn,
-                selectedCategory === cat && styles.filterBtnActive,
-              ]}
+              style={[styles.filterBtn, selectedCategory === cat && styles.filterBtnActive]}
               onPress={() => setSelectedCategory(cat)}
             >
-              <Text
-                style={[
-                  styles.filterText,
-                  selectedCategory === cat && styles.filterTextActive,
-                ]}
-              >
+              <Text style={[styles.filterText, selectedCategory === cat && styles.filterTextActive]}>
                 {cat}
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        {/* Lista de productos */}
+        {/* Productos */}
         {loading ? (
           <ActivityIndicator size="large" color="#17247a" style={{ marginTop: 60 }} />
         ) : (
@@ -116,7 +112,15 @@ export default function StoreScreen() {
                 {filtered.map((product) => (
                   <View key={product.id} style={styles.card}>
                     <View style={styles.imagePlaceholder}>
-                      <Text style={styles.imagePlaceholderText}>📦</Text>
+                      {product.imageUrl && productImages[product.imageUrl] ? (
+                        <Image
+                          source={productImages[product.imageUrl]}
+                          style={styles.productImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Text style={styles.imagePlaceholderText}>📦</Text>
+                      )}
                     </View>
 
                     <View style={styles.cardBody}>
@@ -134,10 +138,7 @@ export default function StoreScreen() {
                         </Text>
                       </View>
                       <TouchableOpacity
-                        style={[
-                          styles.buyBtn,
-                          product.stock === 0 && styles.buyBtnDisabled,
-                        ]}
+                        style={[styles.buyBtn, product.stock === 0 && styles.buyBtnDisabled]}
                         disabled={product.stock === 0}
                       >
                         <Text style={styles.buyBtnText}>
@@ -165,14 +166,8 @@ const styles = StyleSheet.create({
   },
   backBtn: { marginBottom: 8 },
   backText: { color: '#5364ad', fontSize: 14, fontWeight: '500' },
-  title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#17247a',
-    marginBottom: 2,
-  },
+  title: { fontSize: 26, fontWeight: '800', color: '#17247a', marginBottom: 2 },
   subtitle: { fontSize: 14, color: '#5364ad' },
-  
   categoryHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -180,31 +175,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     marginBottom: 8,
   },
-  categoryTitleText: {
-    fontSize: 13,
-    color: '#17247a',
-    fontWeight: '700',
-  },
-  scrollHint: {
-    fontSize: 11,
-    color: '#5364ad',
-    fontWeight: '500',
-  },
-
-  // Ajustes de altura e insolación para evitar solapamientos invisibles
-  filterScroll: { 
-    maxHeight: 50,
-    minHeight: 50,
-    marginBottom: 10,
-  },
+  categoryTitleText: { fontSize: 13, color: '#17247a', fontWeight: '700' },
+  scrollHint: { fontSize: 11, color: '#5364ad', fontWeight: '500' },
+  filterScroll: { maxHeight: 50, minHeight: 50, marginBottom: 10 },
   filterContainer: {
     paddingHorizontal: 22,
-    gap: 10, 
+    gap: 10,
     alignItems: 'center',
     flexDirection: 'row',
   },
   filterBtn: {
-    paddingHorizontal: 16, 
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.9)',
@@ -212,27 +193,12 @@ const styles = StyleSheet.create({
     borderColor: '#d0d8ff',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 'auto',
     alignSelf: 'flex-start',
   },
-  filterBtnActive: {
-    backgroundColor: '#17247a',
-    borderColor: '#17247a',
-  },
-  filterText: { 
-    fontSize: 13, 
-    color: '#5364ad', 
-    fontWeight: '600', 
-    textAlign: 'center',
-    flexShrink: 0, 
-  },
+  filterBtnActive: { backgroundColor: '#17247a', borderColor: '#17247a' },
+  filterText: { fontSize: 13, color: '#5364ad', fontWeight: '600', textAlign: 'center', flexShrink: 0 },
   filterTextActive: { color: '#ffffff' },
-  
-  productList: {
-    paddingHorizontal: 16,
-    paddingTop: 8, 
-    paddingBottom: 40,
-  },
+  productList: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -256,6 +222,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  productImage: { width: '100%', height: '100%' },
   imagePlaceholderText: { fontSize: 40 },
   cardBody: { padding: 12 },
   categoryTag: {
@@ -265,18 +232,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 4,
   },
-  productName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#17247a',
-    marginBottom: 4,
-  },
-  productDesc: {
-    fontSize: 11,
-    color: '#5364ad',
-    lineHeight: 15,
-    marginBottom: 8,
-  },
+  productName: { fontSize: 13, fontWeight: '700', color: '#17247a', marginBottom: 4 },
+  productDesc: { fontSize: 11, color: '#5364ad', lineHeight: 15, marginBottom: 8 },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -285,18 +242,8 @@ const styles = StyleSheet.create({
   },
   price: { fontSize: 16, fontWeight: '800', color: '#17247a' },
   stock: { fontSize: 11, color: '#4ade80', fontWeight: '600' },
-  buyBtn: {
-    backgroundColor: '#17247a',
-    borderRadius: 10,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
+  buyBtn: { backgroundColor: '#17247a', borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
   buyBtnDisabled: { backgroundColor: '#c0c0c0' },
   buyBtnText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
-  emptyText: {
-    textAlign: 'center',
-    color: '#5364ad',
-    marginTop: 60,
-    fontSize: 15,
-  },
+  emptyText: { textAlign: 'center', color: '#5364ad', marginTop: 60, fontSize: 15 },
 });
