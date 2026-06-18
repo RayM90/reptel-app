@@ -7,54 +7,68 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { api } from '../../src/services/api';
+} from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
+import { Stack, useRouter } from 'expo-router'
+import { useEffect, useState } from 'react'
+import { api } from '../../src/services/api'
+import { useCartStore } from '../../src/store/cart.store'
 
 interface Product {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  stock: number;
-  imageUrl: string | null;
-  category: { id: string; name: string };
+  id: string
+  name: string
+  description: string
+  price: number
+  stock: number
+  imageUrl: string | null
+  category: { id: string; name: string }
 }
 
 const productImages: Record<string, any> = {
   'products/cargador-usbc.jpg': require('../../assets/images/products/cargador-usbc.jpg'),
-};
+}
 
 export default function StoreScreen() {
-  const router = useRouter();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
-  const [categories, setCategories] = useState<string[]>(['Todos']);
+  const router = useRouter()
+  const { addItem, totalItems } = useCartStore()
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedCategory, setSelectedCategory] = useState<string>('Todos')
+  const [categories, setCategories] = useState<string[]>(['Todos'])
 
   useEffect(() => {
-    fetchProducts();
-  }, []);
+    fetchProducts()
+  }, [])
 
   const fetchProducts = async () => {
     try {
-      const response = await api.get('/api/products');
-      const data: Product[] = response.data.data;
-      setProducts(data);
-      const cats = ['Todos', ...new Set(data.map((p) => p.category.name))];
-      setCategories(cats);
+      const response = await api.get('/api/products')
+      const data: Product[] = response.data.data
+      setProducts(data)
+      const cats = ['Todos', ...new Set(data.map((p) => p.category.name))]
+      setCategories(cats)
     } catch (error: any) {
-      Alert.alert('Error', 'No se pudieron cargar los productos');
+      Alert.alert('Error', 'No se pudieron cargar los productos')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
-  const filtered = selectedCategory === 'Todos'
-    ? products
-    : products.filter((p) => p.category.name === selectedCategory);
+  const handleAddToCart = (product: Product) => {
+    addItem({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      imageUrl: product.imageUrl,
+      categoryName: product.category.name,
+    })
+    Alert.alert('✓ Agregado', `${product.name} se agregó al carrito`)
+  }
+
+  const filtered =
+    selectedCategory === 'Todos'
+      ? products
+      : products.filter((p) => p.category.name === selectedCategory)
 
   return (
     <>
@@ -68,8 +82,24 @@ export default function StoreScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={styles.backText}>← Inicio</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Tienda RepTel</Text>
-          <Text style={styles.subtitle}>Accesorios y repuestos</Text>
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.title}>Tienda RepTel</Text>
+              <Text style={styles.subtitle}>Accesorios y repuestos</Text>
+            </View>
+            {/* Badge carrito */}
+            <TouchableOpacity
+              style={styles.cartBtn}
+              onPress={() => router.push('/(client)/checkout')}
+            >
+              <Text style={styles.cartIcon}>🛒</Text>
+              {totalItems > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{totalItems}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Categorías */}
@@ -87,10 +117,18 @@ export default function StoreScreen() {
           {categories.map((cat) => (
             <TouchableOpacity
               key={cat}
-              style={[styles.filterBtn, selectedCategory === cat && styles.filterBtnActive]}
+              style={[
+                styles.filterBtn,
+                selectedCategory === cat && styles.filterBtnActive,
+              ]}
               onPress={() => setSelectedCategory(cat)}
             >
-              <Text style={[styles.filterText, selectedCategory === cat && styles.filterTextActive]}>
+              <Text
+                style={[
+                  styles.filterText,
+                  selectedCategory === cat && styles.filterTextActive,
+                ]}
+              >
                 {cat}
               </Text>
             </TouchableOpacity>
@@ -138,8 +176,12 @@ export default function StoreScreen() {
                         </Text>
                       </View>
                       <TouchableOpacity
-                        style={[styles.buyBtn, product.stock === 0 && styles.buyBtnDisabled]}
+                        style={[
+                          styles.buyBtn,
+                          product.stock === 0 && styles.buyBtnDisabled,
+                        ]}
                         disabled={product.stock === 0}
+                        onPress={() => handleAddToCart(product)}
                       >
                         <Text style={styles.buyBtnText}>
                           {product.stock > 0 ? 'Agregar al carrito' : 'Agotado'}
@@ -154,7 +196,7 @@ export default function StoreScreen() {
         )}
       </LinearGradient>
     </>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
@@ -166,8 +208,31 @@ const styles = StyleSheet.create({
   },
   backBtn: { marginBottom: 8 },
   backText: { color: '#5364ad', fontSize: 14, fontWeight: '500' },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   title: { fontSize: 26, fontWeight: '800', color: '#17247a', marginBottom: 2 },
   subtitle: { fontSize: 14, color: '#5364ad' },
+  cartBtn: {
+    position: 'relative',
+    padding: 8,
+  },
+  cartIcon: { fontSize: 28 },
+  badge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#e63946',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   categoryHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -246,4 +311,4 @@ const styles = StyleSheet.create({
   buyBtnDisabled: { backgroundColor: '#c0c0c0' },
   buyBtnText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
   emptyText: { textAlign: 'center', color: '#5364ad', marginTop: 60, fontSize: 15 },
-});
+})
