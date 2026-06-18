@@ -169,7 +169,7 @@ logo: {
     marginTop: -45,    
     alignSelf: 'center',
     transform: [
-      { scale: 2.8 },    
+      { scale: 1.9 },    
       { translateX: -4 } 
     ],
   },
