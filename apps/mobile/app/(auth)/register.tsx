@@ -1,4 +1,3 @@
-// apps/mobile/app/(auth)/register.tsx
 import { useState } from "react";
 import {
   View,
@@ -22,17 +21,38 @@ import { api } from "../../src/services/api";
 
 const { width } = Dimensions.get("window");
 
+const traducirErrorCognito = (mensaje: string): string => {
+  if (mensaje.includes("already exists") || mensaje.includes("UsernameExistsException"))
+    return "Ya existe una cuenta con ese correo electrónico";
+  if (mensaje.includes("lowercase"))
+    return "La contraseña debe contener al menos una letra minúscula";
+  if (mensaje.includes("uppercase"))
+    return "La contraseña debe contener al menos una letra mayúscula";
+  if (mensaje.includes("numeric"))
+    return "La contraseña debe contener al menos un número";
+  if (mensaje.includes("symbol") || mensaje.includes("special"))
+    return "La contraseña debe contener al menos un carácter especial (!@#$...)";
+  if (mensaje.includes("long enough") || mensaje.includes("8 characters"))
+    return "La contraseña debe tener al menos 8 caracteres";
+  if (mensaje.includes("Invalid email"))
+    return "El correo electrónico no es válido";
+  if (mensaje.includes("Password did not conform"))
+    return "La contraseña no cumple los requisitos: mínimo 8 caracteres, mayúscula, minúscula, número y símbolo";
+  return mensaje;
+};
+
 export default function RegisterScreen() {
-  const [nombre,     setNombre]     = useState("");
-  const [correo,     setCorreo]     = useState("");
-  const [telefono,   setTelefono]   = useState("");
-  const [direccion,  setDireccion]  = useState("");
-  const [password,   setPassword]   = useState("");
-  const [confirmar,  setConfirmar]  = useState("");
-  const [loading,    setLoading]    = useState(false);
+  const [nombre,        setNombre]        = useState("");
+  const [correo,        setCorreo]        = useState("");
+  const [telefono,      setTelefono]      = useState("");
+  const [direccion,     setDireccion]     = useState("");
+  const [password,      setPassword]      = useState("");
+  const [confirmar,     setConfirmar]     = useState("");
+  const [loading,       setLoading]       = useState(false);
+  const [verPassword,   setVerPassword]   = useState(false);
+  const [verConfirmar,  setVerConfirmar]  = useState(false);
 
   const handleRegister = async () => {
-    // Validaciones básicas
     if (!nombre || !correo || !telefono || !direccion || !password || !confirmar) {
       Alert.alert("Error", "Por favor completa todos los campos");
       return;
@@ -54,6 +74,7 @@ export default function RegisterScreen() {
         phone:    telefono,
         address:  direccion,
         password,
+        role:     "CLIENT",
       });
 
       Alert.alert(
@@ -62,10 +83,8 @@ export default function RegisterScreen() {
         [{ text: "Iniciar sesión", onPress: () => router.replace("/(auth)/login?role=client") }]
       );
     } catch (error: any) {
-      Alert.alert(
-        "Error",
-        error.response?.data?.message || "No se pudo crear la cuenta"
-      );
+      const mensajeRaw = error.response?.data?.message || "No se pudo crear la cuenta";
+      Alert.alert("Error", traducirErrorCognito(mensajeRaw));
     } finally {
       setLoading(false);
     }
@@ -83,13 +102,15 @@ export default function RegisterScreen() {
 
         <KeyboardAvoidingView
           style={styles.keyboardView}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "android" ? 0 : 0}
         >
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
           >
-            {/* ── Header ── */}
+            {/* Header */}
             <View style={styles.header}>
               <Image
                 source={require("../../assets/images/logo-reptel.png")}
@@ -102,10 +123,9 @@ export default function RegisterScreen() {
               </Text>
             </View>
 
-            {/* ── Formulario ── */}
+            {/* Formulario */}
             <View style={styles.form}>
 
-              {/* Nombre completo */}
               <Text style={styles.label}>Nombre completo</Text>
               <TextInput
                 style={styles.input}
@@ -114,9 +134,9 @@ export default function RegisterScreen() {
                 value={nombre}
                 onChangeText={setNombre}
                 autoCapitalize="words"
+                returnKeyType="next"
               />
 
-              {/* Correo */}
               <Text style={styles.label}>Correo electrónico</Text>
               <TextInput
                 style={styles.input}
@@ -126,9 +146,9 @@ export default function RegisterScreen() {
                 onChangeText={setCorreo}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                returnKeyType="next"
               />
 
-              {/* Teléfono */}
               <Text style={styles.label}>Teléfono</Text>
               <TextInput
                 style={styles.input}
@@ -137,9 +157,9 @@ export default function RegisterScreen() {
                 value={telefono}
                 onChangeText={setTelefono}
                 keyboardType="phone-pad"
+                returnKeyType="next"
               />
 
-              {/* Dirección */}
               <Text style={styles.label}>Dirección completa</Text>
               <TextInput
                 style={[styles.input, styles.inputMultiline]}
@@ -152,29 +172,51 @@ export default function RegisterScreen() {
                 textAlignVertical="top"
               />
 
-              {/* Contraseña */}
+              {/* Contraseña con ojito */}
               <Text style={styles.label}>Contraseña</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Mínimo 8 caracteres"
-                placeholderTextColor="#9ca3af"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={styles.inputFlex}
+                  placeholder="Mínimo 8 caracteres"
+                  placeholderTextColor="#9ca3af"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!verPassword}
+                  returnKeyType="next"
+                />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setVerPassword(!verPassword)}
+                >
+                  <Text style={styles.eyeIcon}>{verPassword ? "🙈" : "👁️"}</Text>
+                </TouchableOpacity>
+              </View>
 
-              {/* Confirmar contraseña */}
+              {/* Confirmar contraseña con ojito */}
               <Text style={styles.label}>Confirmar contraseña</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Repite tu contraseña"
-                placeholderTextColor="#9ca3af"
-                value={confirmar}
-                onChangeText={setConfirmar}
-                secureTextEntry
-              />
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={styles.inputFlex}
+                  placeholder="Repite tu contraseña"
+                  placeholderTextColor="#9ca3af"
+                  value={confirmar}
+                  onChangeText={setConfirmar}
+                  secureTextEntry={!verConfirmar}
+                  returnKeyType="done"
+                />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setVerConfirmar(!verConfirmar)}
+                >
+                  <Text style={styles.eyeIcon}>{verConfirmar ? "🙈" : "👁️"}</Text>
+                </TouchableOpacity>
+              </View>
 
-              {/* Botón registrar */}
+              {/* Hint contraseña */}
+              <Text style={styles.passwordHint}>
+                La contraseña debe tener mayúscula, minúscula, número y símbolo (!@#$...)
+              </Text>
+
               <TouchableOpacity
                 style={[styles.btnRegister, loading && styles.btnDisabled]}
                 onPress={handleRegister}
@@ -187,7 +229,6 @@ export default function RegisterScreen() {
                 )}
               </TouchableOpacity>
 
-              {/* Ya tengo cuenta */}
               <TouchableOpacity
                 style={styles.btnLogin}
                 onPress={() => router.replace("/(auth)/login?role=client")}
@@ -200,7 +241,6 @@ export default function RegisterScreen() {
 
             </View>
 
-            {/* ── Volver ── */}
             <TouchableOpacity
               style={styles.backBtn}
               onPress={() => router.replace("/welcome")}
@@ -217,20 +257,15 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
-
   safeArea: {
     flex: 1,
     paddingTop: StatusBar.currentHeight || 30,
   },
-
   keyboardView: { flex: 1 },
-
   scrollContent: {
     paddingHorizontal: 24,
-    paddingBottom: 40,
+    paddingBottom: 80,
   },
-
-  // ── Header ────────────────────────────────────────────
   header: {
     alignItems: "center",
     paddingTop: 20,
@@ -253,8 +288,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: "center",
   },
-
-  // ── Formulario ────────────────────────────────────────
   form: {
     backgroundColor: "rgba(255,255,255,0.88)",
     borderRadius: 24,
@@ -264,7 +297,6 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
-
   label: {
     fontSize: 13,
     fontWeight: "600",
@@ -272,7 +304,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     marginTop: 12,
   },
-
   input: {
     borderWidth: 1.5,
     borderColor: "#d0d8ff",
@@ -282,13 +313,38 @@ const styles = StyleSheet.create({
     color: "#1a1a6e",
     backgroundColor: "#f0f4ff",
   },
-
   inputMultiline: {
     height: 80,
     paddingTop: 12,
   },
-
-  // Botón registrar — azul marino
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#d0d8ff",
+    borderRadius: 12,
+    backgroundColor: "#f0f4ff",
+    paddingRight: 8,
+  },
+  inputFlex: {
+    flex: 1,
+    padding: 13,
+    fontSize: 15,
+    color: "#1a1a6e",
+  },
+  eyeBtn: {
+    padding: 8,
+  },
+  eyeIcon: {
+    fontSize: 18,
+  },
+  passwordHint: {
+    fontSize: 11,
+    color: "#7a7aaa",
+    marginTop: 6,
+    marginBottom: 4,
+    lineHeight: 16,
+  },
   btnRegister: {
     backgroundColor: "#1a1a6e",
     borderRadius: 14,
@@ -303,8 +359,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.3,
   },
-
-  // Ya tengo cuenta
   btnLogin: {
     alignItems: "center",
     marginTop: 16,
@@ -317,8 +371,6 @@ const styles = StyleSheet.create({
     color: "#1a1a6e",
     fontWeight: "700",
   },
-
-  // Volver
   backBtn: {
     alignItems: "center",
     marginTop: 20,

@@ -4,7 +4,8 @@ import {
   TouchableOpacity, 
   StyleSheet, 
   ScrollView,
-  Image
+  Image,
+  Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack } from 'expo-router';
@@ -12,9 +13,27 @@ import { useAuthStore } from '../../src/store/auth.store';
 
 export default function HomeClient() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
 
   const firstName = user?.name?.split(' ')[0] ?? 'Cliente';
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Cerrar sesión',
+      '¿Estás seguro de que deseas salir?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Salir',
+          style: 'destructive',
+          onPress: () => {
+            logout();
+            router.replace('/welcome');
+          },
+        },
+      ]
+    );
+  };
 
   const primaryOptions = [
     {
@@ -58,6 +77,13 @@ export default function HomeClient() {
         colors={['#ffffff', '#eef2ff', '#d5ddff', '#8fa5ff']}
         style={styles.container}
       >
+        {/* Barra superior con cerrar sesión */}
+        <View style={styles.topBar}>
+          <TouchableOpacity onPress={handleLogout}>
+            <Text style={styles.logoutText}>Cerrar sesión →</Text>
+          </TouchableOpacity>
+        </View>
+
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scroll}
@@ -69,7 +95,7 @@ export default function HomeClient() {
               style={styles.logo}
               resizeMode="contain"
             />
-            <Text style={styles.greeting}>👋 Bienvenido,</Text>
+            <Text style={styles.greeting}>👋 ¡Hola,</Text>
             <Text style={styles.userName}>{firstName}</Text>
             <Text style={styles.subtitle}>¿Qué deseas hacer hoy?</Text>
           </View>
@@ -150,10 +176,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingTop: 30,
+    paddingHorizontal: 22,
+  },
+  logoutText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#5364ad',
+  },
   scroll: {
     flexGrow: 1,
     paddingHorizontal: 22,
-    paddingTop: 80,
+    paddingTop: 20,
     paddingBottom: 40,
     justifyContent: 'center',
   },
@@ -162,11 +199,11 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     paddingHorizontal: 4,
   },
-logo: {
+  logo: {
     width: 220,
     height: 70,
-    marginBottom: 40,  
-    marginTop: -45,    
+    marginBottom: 8,  
+    marginTop: -10,    
     alignSelf: 'center',
     transform: [
       { scale: 1.9 },    
