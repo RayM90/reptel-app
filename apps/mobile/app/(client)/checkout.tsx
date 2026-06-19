@@ -29,7 +29,7 @@ const PAYMENT_INFO: Record<PaymentMethod, string> = {
 
 export default function CheckoutScreen() {
   const router = useRouter()
-  const { items, totalItems, totalPrice, clearCart } = useCartStore()
+  const { items, totalItems, totalPrice, clearCart, updateQuantity, removeItem } = useCartStore()
   const { user } = useAuthStore()
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [loading, setLoading] = useState(false)
@@ -56,6 +56,25 @@ export default function CheckoutScreen() {
         </LinearGradient>
       </>
     )
+  }
+
+  const handleDecrease = (id: string, quantity: number) => {
+    if (quantity === 1) {
+      Alert.alert(
+        'Eliminar producto',
+        '¿Deseas quitar este producto del carrito?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Eliminar', style: 'destructive', onPress: () => removeItem(id) },
+        ]
+      )
+    } else {
+      updateQuantity(id, quantity - 1)
+    }
+  }
+
+  const handleIncrease = (id: string, quantity: number) => {
+    updateQuantity(id, quantity + 1)
   }
 
   const handleConfirmOrder = async () => {
@@ -122,9 +141,25 @@ export default function CheckoutScreen() {
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
                   <Text style={styles.itemCategory}>{item.categoryName}</Text>
+                  <Text style={styles.itemUnitPrice}>${item.price.toFixed(2)} c/u</Text>
                 </View>
-                <View style={styles.itemPriceCol}>
-                  <Text style={styles.itemQty}>x{item.quantity}</Text>
+
+                <View style={styles.itemRightCol}>
+                  <View style={styles.qtyControls}>
+                    <TouchableOpacity
+                      style={styles.qtyBtnSmall}
+                      onPress={() => handleDecrease(item.id, item.quantity)}
+                    >
+                      <Text style={styles.qtyBtnSmallText}>−</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.qtyValueSmall}>{item.quantity}</Text>
+                    <TouchableOpacity
+                      style={styles.qtyBtnSmall}
+                      onPress={() => handleIncrease(item.id, item.quantity)}
+                    >
+                      <Text style={styles.qtyBtnSmallText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.itemPrice}>
                     ${(item.price * item.quantity).toFixed(2)}
                   </Text>
@@ -229,7 +264,23 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1, marginRight: 12 },
   itemName: { fontSize: 13, fontWeight: '700', color: '#17247a' },
   itemCategory: { fontSize: 11, color: '#5364ad', marginTop: 2 },
-  itemPriceCol: { alignItems: 'flex-end' },
+  itemUnitPrice: { fontSize: 11, color: '#9aa5cc', marginTop: 2 },
+  itemRightCol: { alignItems: 'flex-end', gap: 8 },
+  qtyControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  qtyBtnSmall: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: '#eef2ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  qtyBtnSmallText: { fontSize: 16, fontWeight: '700', color: '#17247a' },
+  qtyValueSmall: { fontSize: 13, fontWeight: '800', color: '#17247a', minWidth: 18, textAlign: 'center' },
   itemQty: { fontSize: 11, color: '#5364ad' },
   itemPrice: { fontSize: 14, fontWeight: '800', color: '#17247a' },
   totalRow: {

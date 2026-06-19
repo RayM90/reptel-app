@@ -14,6 +14,7 @@ import {
   Dimensions,
   SafeAreaView,
   StatusBar,
+  ScrollView,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -26,9 +27,10 @@ export default function LoginScreen() {
   const { role } = useLocalSearchParams<{ role: string }>();
   const isClient = role === "client";
 
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [email, setEmail]           = useState("");
+  const [password, setPassword]     = useState("");
+  const [loading, setLoading]       = useState(false);
+  const [verPassword, setVerPassword] = useState(false);
   const { setUser } = useAuthStore();
 
   const handleLogin = async () => {
@@ -59,7 +61,7 @@ export default function LoginScreen() {
           router.replace("/(admin)/dashboard");
           break;
         case "CLIENT":
-          router.replace("/(client)/home-client");  // ✅
+          router.replace("/(client)/home-client");
           break;
         default:
           router.replace("/welcome");
@@ -86,98 +88,112 @@ export default function LoginScreen() {
 
         <KeyboardAvoidingView
           style={styles.keyboardView}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-          {/* ── Header ── */}
-          <View style={styles.header}>
-            <Image
-              source={require("../../assets/images/logo-reptel.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-            <Text style={styles.roleLabel}>
-              {isClient ? "Portal Cliente" : "Acceso Personal"}
-            </Text>
-            <Text style={styles.roleSubtitle}>
-              {isClient
-                ? "Ingresa con tu cuenta para continuar"
-                : "Acceso exclusivo para empleados RepTel"}
-            </Text>
-          </View>
-
-          {/* ── Formulario ── */}
-          <View style={styles.form}>
-
-            {/* Indicador de rol */}
-            <View style={[
-              styles.roleBadge,
-              isClient ? styles.roleBadgeClient : styles.roleBadgeStaff
-            ]}>
-              <Text style={styles.roleBadgeText}>
-                {isClient ? "🧑‍💼  Cliente" : "🔧  Personal RepTel"}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Header */}
+            <View style={styles.header}>
+              <Image
+                source={require("../../assets/images/logo-reptel.png")}
+                style={styles.logo}
+                resizeMode="contain"
+              />
+              <Text style={styles.roleLabel}>
+                {isClient ? "Portal Cliente" : "Acceso Personal"}
+              </Text>
+              <Text style={styles.roleSubtitle}>
+                {isClient
+                  ? "Ingresa con tu cuenta para continuar"
+                  : "Acceso exclusivo para empleados RepTel"}
               </Text>
             </View>
 
-            <Text style={styles.label}>Correo electrónico</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="correo@ejemplo.com"
-              placeholderTextColor="#9ca3af"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
+            {/* Formulario */}
+            <View style={styles.form}>
 
-            <Text style={styles.label}>Contraseña</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="#9ca3af"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+              <View style={[
+                styles.roleBadge,
+                isClient ? styles.roleBadgeClient : styles.roleBadgeStaff
+              ]}>
+                <Text style={styles.roleBadgeText}>
+                  {isClient ? "🧑‍💼  Cliente" : "🔧  Personal RepTel"}
+                </Text>
+              </View>
 
-            {/* Botón login */}
-            <TouchableOpacity
-              style={[
-                styles.btnLogin,
-                isClient ? styles.btnClient : styles.btnStaff,
-                loading && styles.btnDisabled,
-              ]}
-              onPress={handleLogin}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.btnText}>Iniciar sesión</Text>
+              <Text style={styles.label}>Correo electrónico</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="correo@ejemplo.com"
+                placeholderTextColor="#9ca3af"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                returnKeyType="next"
+              />
+
+              {/* Contraseña con ojito */}
+              <Text style={styles.label}>Contraseña</Text>
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={styles.inputFlex}
+                  placeholder="••••••••"
+                  placeholderTextColor="#9ca3af"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!verPassword}
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
+                />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setVerPassword(!verPassword)}
+                >
+                  <Text style={styles.eyeIcon}>{verPassword ? "🙈" : "👁️"}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.btnLogin,
+                  isClient ? styles.btnClient : styles.btnStaff,
+                  loading && styles.btnDisabled,
+                ]}
+                onPress={handleLogin}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.btnText}>Iniciar sesión</Text>
+                )}
+              </TouchableOpacity>
+
+              {isClient && (
+                <TouchableOpacity
+                  style={styles.btnRegister}
+                  onPress={() => router.push("/(auth)/register")}
+                >
+                  <Text style={styles.btnRegisterText}>
+                    ¿No tienes cuenta?{" "}
+                    <Text style={styles.btnRegisterLink}>Regístrate</Text>
+                  </Text>
+                </TouchableOpacity>
               )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => router.replace("/welcome")}
+            >
+              <Text style={styles.backText}>← Volver al inicio</Text>
             </TouchableOpacity>
 
-            {/* Registro solo para clientes */}
-            {isClient && (
-              <TouchableOpacity
-                style={styles.btnRegister}
-                onPress={() => router.push("/(auth)/register")}
-              >
-                <Text style={styles.btnRegisterText}>
-                  ¿No tienes cuenta?{" "}
-                  <Text style={styles.btnRegisterLink}>Regístrate</Text>
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* ── Volver ── */}
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => router.replace("/welcome")}
-          >
-            <Text style={styles.backText}>← Volver al inicio</Text>
-          </TouchableOpacity>
-
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
@@ -192,20 +208,23 @@ const styles = StyleSheet.create({
     paddingTop: StatusBar.currentHeight || 30,
   },
 
-  keyboardView: {
-    flex: 1,
+  keyboardView: { flex: 1 },
+
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 24,
+    paddingBottom: 60,
   },
 
-  // ── Header ────────────────────────────────────────────
+  // Header
   header: {
     alignItems: "center",
     marginBottom: 28,
   },
   logo: {
-    width: width * 0.65,
-    height: 80,
+    width: width * 0.8,
+    height: 100,
     marginBottom: 12,
   },
   roleLabel: {
@@ -221,7 +240,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // ── Formulario ────────────────────────────────────────
+  // Formulario
   form: {
     backgroundColor: "rgba(255,255,255,0.88)",
     borderRadius: 24,
@@ -232,7 +251,6 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  // Badge de rol
   roleBadge: {
     borderRadius: 50,
     paddingVertical: 6,
@@ -269,7 +287,29 @@ const styles = StyleSheet.create({
     backgroundColor: "#f0f4ff",
   },
 
-  // Botón login cliente — azul marino
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#d0d8ff",
+    borderRadius: 12,
+    backgroundColor: "#f0f4ff",
+    paddingRight: 8,
+  },
+  inputFlex: {
+    flex: 1,
+    padding: 13,
+    fontSize: 15,
+    color: "#1a1a6e",
+  },
+  eyeBtn: {
+    padding: 8,
+  },
+  eyeIcon: {
+    fontSize: 18,
+  },
+
+  // Botón login
   btnLogin: {
     borderRadius: 14,
     padding: 16,
@@ -290,7 +330,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // Registro
   btnRegister: {
     alignItems: "center",
     marginTop: 16,
@@ -304,7 +343,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  // Volver
   backBtn: {
     alignItems: "center",
     marginTop: 24,

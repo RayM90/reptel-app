@@ -54,14 +54,14 @@ export default function StoreScreen() {
     }
   }
 
-  const handleAddToCart = (product: Product) => {
-    addItem({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      imageUrl: product.imageUrl,
-      categoryName: product.category.name,
-    })
+const handleAddToCart = (product: Product) => {
+  addItem({
+    id: product.id,
+    name: product.name,
+    price: Number(product.price),
+    imageUrl: product.imageUrl,
+    categoryName: product.category.name,
+  })
     Alert.alert('✓ Agregado', `${product.name} se agregó al carrito`)
   }
 
@@ -87,7 +87,6 @@ export default function StoreScreen() {
               <Text style={styles.title}>Tienda RepTel</Text>
               <Text style={styles.subtitle}>Accesorios y repuestos</Text>
             </View>
-            {/* Badge carrito */}
             <TouchableOpacity
               style={styles.cartBtn}
               onPress={() => router.push('/(client)/checkout')}
@@ -148,7 +147,17 @@ export default function StoreScreen() {
             ) : (
               <View style={styles.grid}>
                 {filtered.map((product) => (
-                  <View key={product.id} style={styles.card}>
+                  <TouchableOpacity
+                    key={product.id}
+                    style={styles.card}
+                    activeOpacity={0.85}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/(client)/product-detail',
+                        params: { product: JSON.stringify(product) },
+                      })
+                    }
+                  >
                     <View style={styles.imagePlaceholder}>
                       {product.imageUrl && productImages[product.imageUrl] ? (
                         <Image
@@ -181,14 +190,17 @@ export default function StoreScreen() {
                           product.stock === 0 && styles.buyBtnDisabled,
                         ]}
                         disabled={product.stock === 0}
-                        onPress={() => handleAddToCart(product)}
+                        onPress={(e) => {
+                          e.stopPropagation()
+                          handleAddToCart(product)
+                        }}
                       >
                         <Text style={styles.buyBtnText}>
                           {product.stock > 0 ? 'Agregar al carrito' : 'Agotado'}
                         </Text>
                       </TouchableOpacity>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
