@@ -4,7 +4,7 @@ import { router } from 'expo-router'
 import { useAuthStore } from '../src/store/auth.store'
 
 export default function Index() {
-  const { isAuthenticated, user } = useAuthStore()
+  const { isAuthenticated } = useAuthStore()
 
   useEffect(() => {
     setTimeout(() => {
@@ -12,23 +12,8 @@ export default function Index() {
         // Sin sesión → pantalla de bienvenida
         router.replace('/welcome')
       } else {
-        // Con sesión → redirige según rol
-        switch (user?.role) {
-          case 'ADMIN':
-          case 'MANAGER':
-          case 'CASHIER':
-            router.replace('/(admin)/dashboard')
-            break
-          case 'TECHNICIAN':
-          case 'TECHNICIAN_DELIVERY':
-            router.replace('/(technician)/orders')
-            break
-          case 'CLIENT':
-            router.replace('/(client)/tracking')
-            break
-          default:
-            router.replace('/welcome')
-        }
+        // Con sesión → home del cliente
+        router.replace('/(client)/home-client')
       }
     }, 500)
   }, [isAuthenticated])

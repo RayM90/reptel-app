@@ -63,29 +63,29 @@ export default function WelcomeScreen() {
             colors={["#e8eeff", "#d0d8ff"]}
             style={styles.panelContent}
           >
-            <Text style={styles.title}>¿Cómo deseas ingresar?</Text>
+            <Text style={styles.title}>Bienvenido a RepTel</Text>
 
-            {/* Botón Cliente — blanco semitransparente texto azul */}
+            {/* Botón Iniciar sesión */}
             <TouchableOpacity
               style={styles.client}
               activeOpacity={0.85}
-              onPress={() => router.push("/(auth)/login?role=client")}
+              onPress={() => router.push("/(auth)/login")}
             >
               <View style={styles.btnCliente}>
-                <Text style={styles.btnClienteTitle}>Soy Cliente</Text>
-                <Text style={styles.btnClienteSub}>Compras y servicio técnico</Text>
+                <Text style={styles.btnClienteTitle}>Iniciar sesión</Text>
+                <Text style={styles.btnClienteSub}>Ya tengo una cuenta</Text>
               </View>
             </TouchableOpacity>
 
-            {/* Botón Personal — blanco semitransparente texto violeta */}
+            {/* Botón Crear cuenta */}
             <TouchableOpacity
               style={styles.staff}
               activeOpacity={0.85}
-              onPress={() => router.push("/(auth)/login?role=staff")}
+              onPress={() => router.push("/(auth)/register")}
             >
               <View style={styles.btnPersonal}>
-                <Text style={styles.btnPersonalTitle}>Soy Personal</Text>
-                <Text style={styles.btnPersonalSub}>Acceso interno RepTel</Text>
+                <Text style={styles.btnPersonalTitle}>Crear cuenta</Text>
+                <Text style={styles.btnPersonalSub}>Soy nuevo en RepTel</Text>
               </View>
             </TouchableOpacity>
 
@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   logo: {
-    width: width * 0.95,   // más grande
+    width: width * 0.95,
     height: 130,
   },
   subtitle: {
@@ -165,65 +165,53 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Wrapper botón cliente
+  // Wrapper botón Iniciar sesión
   client: {
     width: "100%",
-    borderRadius: 20,
-    shadowColor: "#1a1a6e",
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
   },
 
-  // Wrapper botón personal
+  // Wrapper botón Crear cuenta
   staff: {
     width: "100%",
-    borderRadius: 20,
-    shadowColor: "#5a2a9a",
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
   },
 
-  // Botón Cliente — blanco con borde azul sutil
+  // Botón Iniciar sesión — borde sutil, sin fondo
   btnCliente: {
-    backgroundColor: "rgba(255,255,255,0.82)",
-    borderRadius: 20,
     paddingVertical: 17,
     alignItems: "center",
+    borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: "rgba(30,30,180,0.25)",
+    borderColor: "rgba(83,100,173,0.35)",
   },
   btnClienteTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#1a1a6e",
+    color: "#5364ad",
     letterSpacing: 0.3,
   },
   btnClienteSub: {
     fontSize: 13,
-    color: "#3a3a9e",
+    color: "#5364ad",
     marginTop: 2,
   },
 
-  // Botón Personal — blanco con borde violeta sutil
+  // Botón Crear cuenta — borde sutil, sin fondo
   btnPersonal: {
-    backgroundColor: "rgba(255,255,255,0.82)",
-    borderRadius: 20,
     paddingVertical: 17,
     alignItems: "center",
+    borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: "rgba(90,30,160,0.25)",
+    borderColor: "rgba(83,100,173,0.35)",
   },
   btnPersonalTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#5a2a9a",
+    color: "#5364ad",
     letterSpacing: 0.3,
   },
   btnPersonalSub: {
     fontSize: 13,
-    color: "#7a3aaa",
+    color: "#5364ad",
     marginTop: 2,
   },
 

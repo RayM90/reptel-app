@@ -16,20 +16,18 @@ import {
   StatusBar,
   ScrollView,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth.store";
 import { api } from "../../src/services/api";
 
 const { width } = Dimensions.get("window");
 
 export default function LoginScreen() {
-  const { role } = useLocalSearchParams<{ role: string }>();
-  const isClient = role === "client";
-
-  const [email, setEmail]           = useState("");
-  const [password, setPassword]     = useState("");
-  const [loading, setLoading]       = useState(false);
+  const [email, setEmail]             = useState("");
+  const [password, setPassword]       = useState("");
+  const [loading, setLoading]         = useState(false);
   const [verPassword, setVerPassword] = useState(false);
   const { setUser } = useAuthStore();
 
@@ -44,28 +42,7 @@ export default function LoginScreen() {
       const { user, token, refreshToken } = response.data.data;
       setUser(user, token, refreshToken);
 
-      switch (user.role) {
-        case "ADMIN":
-        case "MANAGER":
-        case "CASHIER":
-          router.replace("/(admin)/dashboard");
-          break;
-        case "TECHNICIAN":
-        case "TECHNICIAN_DELIVERY":
-          router.replace("/(technician)/orders");
-          break;
-        case "DELIVERY":
-          router.replace("/(technician)/orders");
-          break;
-        case "SUPPORT":
-          router.replace("/(admin)/dashboard");
-          break;
-        case "CLIENT":
-          router.replace("/(client)/home-client");
-          break;
-        default:
-          router.replace("/welcome");
-      }
+      router.replace("/(client)/home-client");
     } catch (error: any) {
       Alert.alert(
         "Error",
@@ -102,27 +79,14 @@ export default function LoginScreen() {
                 style={styles.logo}
                 resizeMode="contain"
               />
-              <Text style={styles.roleLabel}>
-                {isClient ? "Portal Cliente" : "Acceso Personal"}
-              </Text>
+              <Text style={styles.roleLabel}>Portal Cliente</Text>
               <Text style={styles.roleSubtitle}>
-                {isClient
-                  ? "Ingresa con tu cuenta para continuar"
-                  : "Acceso exclusivo para empleados RepTel"}
+                Ingresa con tu cuenta para continuar
               </Text>
             </View>
 
             {/* Formulario */}
             <View style={styles.form}>
-
-              <View style={[
-                styles.roleBadge,
-                isClient ? styles.roleBadgeClient : styles.roleBadgeStaff
-              ]}>
-                <Text style={styles.roleBadgeText}>
-                  {isClient ? "🧑‍💼  Cliente" : "🔧  Personal RepTel"}
-                </Text>
-              </View>
 
               <Text style={styles.label}>Correo electrónico</Text>
               <TextInput
@@ -153,14 +117,17 @@ export default function LoginScreen() {
                   style={styles.eyeBtn}
                   onPress={() => setVerPassword(!verPassword)}
                 >
-                  <Text style={styles.eyeIcon}>{verPassword ? "🙈" : "👁️"}</Text>
+                  <Feather
+                    name={verPassword ? "eye-off" : "eye"}
+                    size={20}
+                    color="#8a8fc0"
+                  />
                 </TouchableOpacity>
               </View>
 
               <TouchableOpacity
                 style={[
                   styles.btnLogin,
-                  isClient ? styles.btnClient : styles.btnStaff,
                   loading && styles.btnDisabled,
                 ]}
                 onPress={handleLogin}
@@ -173,17 +140,15 @@ export default function LoginScreen() {
                 )}
               </TouchableOpacity>
 
-              {isClient && (
-                <TouchableOpacity
-                  style={styles.btnRegister}
-                  onPress={() => router.push("/(auth)/register")}
-                >
-                  <Text style={styles.btnRegisterText}>
-                    ¿No tienes cuenta?{" "}
-                    <Text style={styles.btnRegisterLink}>Regístrate</Text>
-                  </Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                style={styles.btnRegister}
+                onPress={() => router.push("/(auth)/register")}
+              >
+                <Text style={styles.btnRegisterText}>
+                  ¿No tienes cuenta?{" "}
+                  <Text style={styles.btnRegisterLink}>Regístrate</Text>
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <TouchableOpacity
@@ -251,25 +216,6 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  roleBadge: {
-    borderRadius: 50,
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    alignSelf: "center",
-    marginBottom: 20,
-  },
-  roleBadgeClient: {
-    backgroundColor: "rgba(26,26,110,0.10)",
-  },
-  roleBadgeStaff: {
-    backgroundColor: "rgba(90,42,154,0.10)",
-  },
-  roleBadgeText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#1a1a6e",
-  },
-
   label: {
     fontSize: 13,
     fontWeight: "600",
@@ -305,9 +251,6 @@ const styles = StyleSheet.create({
   eyeBtn: {
     padding: 8,
   },
-  eyeIcon: {
-    fontSize: 18,
-  },
 
   // Botón login
   btnLogin: {
@@ -315,12 +258,7 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: "center",
     marginTop: 22,
-  },
-  btnClient: {
     backgroundColor: "#1a1a6e",
-  },
-  btnStaff: {
-    backgroundColor: "#3a2a8a",
   },
   btnDisabled: { opacity: 0.6 },
   btnText: {
