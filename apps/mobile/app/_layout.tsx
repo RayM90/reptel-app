@@ -53,17 +53,8 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)/register" options={{ headerShown: false }} />
 
-        {/* Pantallas CON header */}
-        <Stack.Screen name="(admin)/dashboard"
-          options={{ title: 'Panel Principal', headerLeft: () => null }} />
-        <Stack.Screen name="(admin)/orders"
-          options={{ title: 'Órdenes' }} />
-        <Stack.Screen name="(admin)/create-order"
-          options={{ title: 'Nueva Orden' }} />
-        <Stack.Screen name="(technician)/orders"
-          options={{ title: 'Mis Órdenes' }} />
-        <Stack.Screen name="(client)/tracking"
-          options={{ title: 'Rastrear Equipo' }} />
+        {/* Home del cliente — controla su propio header internamente */}
+        <Stack.Screen name="(client)/home-client" options={{ headerShown: false }} />
       </Stack>
     </QueryClientProvider>
   )
