@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { Feather } from "@expo/vector-icons";
 import { api } from "../../src/services/api";
 
 const { width } = Dimensions.get("window");
@@ -80,7 +81,7 @@ export default function RegisterScreen() {
       Alert.alert(
         "¡Cuenta creada!",
         "Tu cuenta fue creada exitosamente. Ahora puedes iniciar sesión.",
-        [{ text: "Iniciar sesión", onPress: () => router.replace("/(auth)/login?role=client") }]
+        [{ text: "Iniciar sesión", onPress: () => router.replace("/(auth)/login") }]
       );
     } catch (error: any) {
       const mensajeRaw = error.response?.data?.message || "No se pudo crear la cuenta";
@@ -188,7 +189,11 @@ export default function RegisterScreen() {
                   style={styles.eyeBtn}
                   onPress={() => setVerPassword(!verPassword)}
                 >
-                  <Text style={styles.eyeIcon}>{verPassword ? "🙈" : "👁️"}</Text>
+                  <Feather
+                    name={verPassword ? "eye-off" : "eye"}
+                    size={20}
+                    color="#8a8fc0"
+                  />
                 </TouchableOpacity>
               </View>
 
@@ -208,7 +213,11 @@ export default function RegisterScreen() {
                   style={styles.eyeBtn}
                   onPress={() => setVerConfirmar(!verConfirmar)}
                 >
-                  <Text style={styles.eyeIcon}>{verConfirmar ? "🙈" : "👁️"}</Text>
+                  <Feather
+                    name={verConfirmar ? "eye-off" : "eye"}
+                    size={20}
+                    color="#8a8fc0"
+                  />
                 </TouchableOpacity>
               </View>
 
@@ -231,7 +240,7 @@ export default function RegisterScreen() {
 
               <TouchableOpacity
                 style={styles.btnLogin}
-                onPress={() => router.replace("/(auth)/login?role=client")}
+                onPress={() => router.replace("/(auth)/login")}
               >
                 <Text style={styles.btnLoginText}>
                   ¿Ya tienes cuenta?{" "}
@@ -334,9 +343,6 @@ const styles = StyleSheet.create({
   },
   eyeBtn: {
     padding: 8,
-  },
-  eyeIcon: {
-    fontSize: 18,
   },
   passwordHint: {
     fontSize: 11,
