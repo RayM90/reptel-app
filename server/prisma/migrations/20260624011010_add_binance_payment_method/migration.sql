@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE `productorder` MODIFY `paymentMethod` ENUM('CASH', 'TRANSFER', 'POINT_OF_SALE', 'MOBILE_PAYMENT', 'MIXED', 'BINANCE') NOT NULL;
+
+-- AlterTable
+ALTER TABLE `servicepayment` MODIFY `method` ENUM('CASH', 'TRANSFER', 'POINT_OF_SALE', 'MOBILE_PAYMENT', 'MIXED', 'BINANCE') NOT NULL;
+
+-- AlterTable
+ALTER TABLE `servicerequest` MODIFY `paymentMethod` ENUM('CASH', 'TRANSFER', 'POINT_OF_SALE', 'MOBILE_PAYMENT', 'MIXED', 'BINANCE') NOT NULL;

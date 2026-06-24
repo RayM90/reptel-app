@@ -98,6 +98,7 @@ enum PaymentMethod {
   POINT_OF_SALE
   MOBILE_PAYMENT
   MIXED
+  BINANCE
 }
 
 enum PaymentStatus {
@@ -458,6 +459,7 @@ model ProductOrder {
   total          Decimal            @db.Decimal(10, 2)
   paymentMethod  PaymentMethod
   paidAt         DateTime?
+  receiptUrl     String?
   notes          String?            @db.Text
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
@@ -465,12 +467,12 @@ model ProductOrder {
   clientId String
   client   Client @relation(fields: [clientId], references: [id])
 
-  // Si la compra está vinculada a una orden de reparación
   linkedOrderId String?
 
   items          ProductOrderItem[]
   delivery       ProductDelivery?
   invoice        Invoice?
+  notifications  Notification[]
 
   @@map("productorder")
 }
@@ -522,9 +524,11 @@ model Notification {
   sentAt    DateTime?
   createdAt DateTime         @default(now())
 
-  // La notificación puede ser de una orden o de un pedido de tienda
   orderId        String?
   order          Order?  @relation(fields: [orderId], references: [id])
+
+  productOrderId String?
+  productOrder   ProductOrder? @relation(fields: [productOrderId], references: [id])
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
