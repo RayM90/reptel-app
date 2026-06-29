@@ -51,6 +51,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setUser: (user, token, refreshToken?) => {
     set({ user, token, refreshToken: refreshToken ?? null, isAuthenticated: true });
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     if (refreshToken) {
       scheduleRefresh(() => get().refreshSession());
     }
@@ -61,6 +62,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       clearTimeout(refreshTimer);
       refreshTimer = null;
     }
+    delete api.defaults.headers.common["Authorization"];
     set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
   },
 
