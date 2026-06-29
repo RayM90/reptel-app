@@ -6,12 +6,14 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  TextInput,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter } from 'expo-router'
 import { useState } from 'react'
 import { useCartStore } from '../../src/store/cart.store'
 import { useAuthStore } from '../../src/store/auth.store'
+import { productOrdersAPI } from '../../src/services/api'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -33,6 +35,9 @@ export default function CheckoutScreen() {
   const { user } = useAuthStore()
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [loading, setLoading] = useState(false)
+  const [useOtherAddress, setUseOtherAddress] = useState(false)
+  const [customAddress, setCustomAddress] = useState('')
+  const [notes, setNotes] = useState('')
 
   if (items.length === 0) {
     return (
@@ -77,11 +82,28 @@ export default function CheckoutScreen() {
     updateQuantity(id, quantity + 1)
   }
 
+  const getDeliveryAddress = () => {
+    if (useOtherAddress) return customAddress.trim()
+    return user?.address?.trim() || ''
+  }
+
   const handleConfirmOrder = async () => {
     if (!selectedMethod) {
       Alert.alert('Método de pago', 'Selecciona un método de pago para continuar')
       return
     }
+
+    const address = getDeliveryAddress()
+    if (!address) {
+      Alert.alert(
+        'Dirección requerida',
+        useOtherAddress
+          ? 'Escribe la dirección donde quieres recibir tu pedido'
+          : 'No tienes una dirección registrada. Activa "usar otra dirección" para escribir una.'
+      )
+      return
+    }
+
     Alert.alert(
       'Confirmar pedido',
       `Total: $${totalPrice.toFixed(2)}\nMétodo: ${PAYMENT_LABELS[selectedMethod]}\n\n¿Confirmas el pedido?`,
@@ -89,17 +111,52 @@ export default function CheckoutScreen() {
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Confirmar',
-          onPress: () => {
-            // TODO Fase 3: crear orden en backend + subir comprobante a S3
-            Alert.alert(
-              '✅ Pedido registrado',
-              'Tu pedido fue registrado. Realiza el pago y sube el comprobante.',
-              [{ text: 'OK', onPress: () => { clearCart(); router.replace('/(client)/home-client') } }]
-            )
-          },
+          onPress: () => submitOrder(address),
         },
       ]
     )
+  }
+
+  const submitOrder = async (address: string) => {
+    if (!selectedMethod) return
+    setLoading(true)
+    try {
+      const response = await productOrdersAPI.create({
+        items: items.map((item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+        })),
+        paymentMethod: selectedMethod,
+        address,
+        notes: notes.trim() || undefined,
+      })
+
+      const createdOrder = response.data.data
+      clearCart()
+
+      Alert.alert(
+        '✅ Pedido registrado',
+        'Tu pedido fue registrado. Ahora sube el comprobante de pago.',
+        [
+          {
+            text: 'OK',
+            onPress: () =>
+              router.replace({
+                pathname: '/(client)/upload-receipt',
+                params: { orderId: createdOrder.id },
+              }),
+          },
+        ]
+      )
+    } catch (error: any) {
+      const backendMessage = error?.response?.data?.message
+      Alert.alert(
+        'No se pudo registrar el pedido',
+        backendMessage || 'Ocurrió un error al procesar tu pedido. Intenta de nuevo.'
+      )
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -131,6 +188,26 @@ export default function CheckoutScreen() {
                 {user?.address || 'Sin dirección registrada'}
               </Text>
             </View>
+
+            <TouchableOpacity
+              style={styles.toggleAddressBtn}
+              onPress={() => setUseOtherAddress((prev) => !prev)}
+            >
+              <Text style={styles.toggleAddressText}>
+                {useOtherAddress ? '✕ Cancelar otra dirección' : '✎ Usar otra dirección'}
+              </Text>
+            </TouchableOpacity>
+
+            {useOtherAddress && (
+              <TextInput
+                style={styles.addressInput}
+                placeholder="Escribe la dirección de entrega para este pedido"
+                placeholderTextColor="#9aa5cc"
+                value={customAddress}
+                onChangeText={setCustomAddress}
+                multiline
+              />
+            )}
           </View>
 
           {/* Resumen de productos */}
@@ -198,6 +275,19 @@ export default function CheckoutScreen() {
             ))}
           </View>
 
+          {/* Notas del pedido */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>📝 Notas (opcional)</Text>
+            <TextInput
+              style={styles.notesInput}
+              placeholder="Ej: dejar el pedido con el conserje, llamar antes de entregar..."
+              placeholderTextColor="#9aa5cc"
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+            />
+          </View>
+
           {/* Nota comprobante */}
           {selectedMethod && (
             <View style={styles.noteCard}>
@@ -209,9 +299,9 @@ export default function CheckoutScreen() {
 
           {/* Botón confirmar */}
           <TouchableOpacity
-            style={[styles.confirmBtn, !selectedMethod && styles.confirmBtnDisabled]}
+            style={[styles.confirmBtn, (!selectedMethod || loading) && styles.confirmBtnDisabled]}
             onPress={handleConfirmOrder}
-            disabled={loading}
+            disabled={loading || !selectedMethod}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
@@ -250,6 +340,20 @@ const styles = StyleSheet.create({
   },
   addressName: { fontSize: 15, fontWeight: '700', color: '#17247a', marginBottom: 4 },
   addressText: { fontSize: 13, color: '#5364ad', lineHeight: 20 },
+  toggleAddressBtn: { marginTop: 10, alignSelf: 'flex-start' },
+  toggleAddressText: { color: '#5364ad', fontSize: 13, fontWeight: '600' },
+  addressInput: {
+    marginTop: 10,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#d0d8ff',
+    fontSize: 13,
+    color: '#17247a',
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -321,6 +425,17 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#eef2ff',
     paddingTop: 10,
+  },
+  notesInput: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#d0d8ff',
+    fontSize: 13,
+    color: '#17247a',
+    minHeight: 60,
+    textAlignVertical: 'top',
   },
   noteCard: {
     backgroundColor: '#fff8e1',

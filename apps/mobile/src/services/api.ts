@@ -33,6 +33,26 @@ export const ordersAPI = {
     api.patch(`/api/orders/${id}/budget`, { budget, approved }),
 }
 
+export const productOrdersAPI = {
+  create: (data: {
+    items: { productId: string; quantity: number }[]
+    paymentMethod: 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
+    address: string
+    notes?: string
+  }) => api.post('/api/product-orders', data),
+
+  getMyOrders: () => api.get('/api/product-orders/my-orders'),
+
+  getById: (id: string) => api.get(`/api/product-orders/${id}`),
+
+  uploadReceipt: (id: string, receiptUrl: string) =>
+    api.patch(`/api/product-orders/${id}/receipt`, { receiptUrl }),
+
+  // Uso futuro en admin-web (rol ADMIN)
+  confirmPayment: (id: string, approved: boolean) =>
+    api.patch(`/api/product-orders/${id}/confirm-payment`, { approved }),
+}
+
 export const chatbotAPI = {
   sendMessage: (sessionId: string, message: string) =>
     api.post('/api/chatbot/message', { sessionId, message }),
