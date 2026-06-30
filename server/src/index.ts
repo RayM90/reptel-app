@@ -21,8 +21,8 @@ wss.on('connection', (ws) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor RepTel corriendo en http://localhost:${PORT}`)
-  console.log(`Red local: http://192.168.0.107:${PORT}`)
-  console.log(`WebSocket corriendo en ws://192.168.0.107:${PORT}`)
+  console.log(`Red local: http://192.168.0.116:${PORT}`)
+  console.log(`WebSocket corriendo en ws://192.168.0.116:${PORT}`)
 })
 
 export default app
