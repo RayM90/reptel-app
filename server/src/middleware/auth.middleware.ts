@@ -14,7 +14,7 @@ import { CognitoJwtVerifier } from 'aws-jwt-verify';
  */
 const verifier = CognitoJwtVerifier.create({
   userPoolId: process.env.COGNITO_USER_POOL_ID!,
-  tokenUse: 'access',
+  tokenUse: 'id',
   clientId: process.env.COGNITO_CLIENT_ID!,
 });
 
@@ -49,7 +49,7 @@ export const authenticate = async (
     const token = authHeader.split(' ')[1];
     const payload = await verifier.verify(token);
 
-    req.user = {
+  req.user = {
       sub: payload.sub,
       email: payload.email as string,
       groups: (payload['cognito:groups'] as string[]) || [],

@@ -78,8 +78,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           clientId: user.clientId,
           address: user.client?.address ?? null,
         },
-        token: tokens.accessToken,
-        idToken: tokens.idToken,
+        token: tokens.idToken,
+        accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       }
     })
@@ -102,7 +102,8 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     res.status(200).json({
       success: true,
       data: {
-        token: tokens.accessToken,
+        token: tokens.idToken,
+        accessToken: tokens.accessToken,
       }
     });
   } catch (error: any) {
