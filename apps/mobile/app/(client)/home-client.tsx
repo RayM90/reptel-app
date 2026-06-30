@@ -48,24 +48,24 @@ export default function HomeClient() {
       emoji: '🔧',
       label: 'Servicio Técnico',
       description: 'Solicita tu reparación y hazle seguimiento',
-      route: '/(client)/technical-service',
+      route: null,
     },
   ];
 
   const secondaryOptions = [
     {
-      id: 'profile',
-      emoji: '👤',
-      label: 'Mi Perfil',
-      description: 'Datos y órdenes',
-      route: '/(client)/profile',
+      id: 'orders',
+      emoji: '📦',
+      label: 'Mis Pedidos',
+      description: 'Historial de compras',
+      route: '/(client)/my-orders',
     },
     {
       id: 'support',
       emoji: '💬',
       label: 'Soporte',
       description: 'WhatsApp activo',
-      route: '/(client)/support',
+      route: null,
     },
   ];
 
@@ -107,7 +107,13 @@ export default function HomeClient() {
                 key={option.id}
                 style={styles.mainCard}
                 activeOpacity={0.85}
-                onPress={() => router.push(option.route as any)}
+                onPress={() => {
+                  if (option.route) {
+                    router.push(option.route as any)
+                  } else {
+                    Alert.alert('Próximamente', 'Esta función estará disponible pronto.')
+                  }
+                }}
               >
                 <View style={styles.iconWrapper}>
                   <Text style={styles.mainCardIcon}>{option.emoji}</Text>
@@ -127,7 +133,13 @@ export default function HomeClient() {
                 key={option.id}
                 style={styles.subCard}
                 activeOpacity={0.85}
-                onPress={() => router.push(option.route as any)}
+                onPress={() => {
+                  if (option.route) {
+                  router.push(option.route as any)
+                 } else {
+                    Alert.alert('Próximamente', 'Esta función estará disponible pronto.')
+                 }
+                }}
               >
                 <View style={styles.subCardIconWrapper}>
                   <Text style={styles.subCardIcon}>{option.emoji}</Text>
