@@ -176,6 +176,7 @@ export const getOrdersByClient = async (clientId: string) => {
     where: { clientId },
     include: {
       device: true,
+      technician: { select: { id: true, name: true } },
       statusHistory: { orderBy: { createdAt: 'desc' } },
     },
     orderBy: { receivedAt: 'desc' },
@@ -194,7 +195,7 @@ export const createOrder = async (data: {
   technicianId?: string  // si viene vacío, el sistema asigna uno
 }) => {
   const orderNumber = generateOrderNumber()
-  const trackingUrl = `http://192.168.0.107:3000/api/orders/track/${orderNumber}`
+  const trackingUrl = `http://192.168.0.116:3000/api/orders/track/${orderNumber}`
   const qrCode = await QRCode.toDataURL(trackingUrl)
 
   // Si no viene un técnico específico, asignamos automáticamente
@@ -234,6 +235,99 @@ export const createOrder = async (data: {
   return {
     ...order,
     technicianAutoAssigned: !data.technicianId && !!resolvedTechnicianId,
+    noTechnicianAvailable: !resolvedTechnicianId,
+  }
+}
+
+// ─────────────────────────────────────────────
+// ÓRDENES — CREACIÓN POR EL CLIENTE (self-service)
+// Crea el dispositivo y la orden en una sola transacción atómica.
+// El clientId se resuelve desde el email del token, nunca desde el body.
+// ─────────────────────────────────────────────
+
+export const createSelfServiceOrder = async (data: {
+  email: string
+  device: {
+    type: string
+    brand: string
+    model: string
+    serialNumber?: string
+    color: string
+    accessories: string
+    devicePassword?: string
+  }
+  problem: string
+  observations?: string
+}) => {
+  // Resolver clientId desde el usuario autenticado
+  const user = await prisma.user.findUnique({
+    where: { email: data.email },
+    select: { clientId: true },
+  })
+
+  if (!user || !user.clientId) {
+    throw new Error('Cliente no encontrado para este usuario')
+  }
+
+  const clientId = user.clientId
+  const orderNumber = generateOrderNumber()
+  const trackingUrl = `http://192.168.0.116:3000/api/orders/track/${orderNumber}`
+  const qrCode = await QRCode.toDataURL(trackingUrl)
+
+  // Asignación automática de técnico (lectura previa a la transacción)
+  const resolvedTechnicianId = await assignTechnician()
+
+  // Transacción atómica: si falla la creación de la orden, el dispositivo
+  // tampoco queda creado (evita dispositivos huérfanos)
+  const order = await prisma.$transaction(async (tx) => {
+    const device = await tx.device.create({
+      data: {
+        type: data.device.type as any,
+        brand: data.device.brand,
+        model: data.device.model,
+        serialNumber: data.device.serialNumber,
+        color: data.device.color,
+        accessories: data.device.accessories,
+        devicePassword: data.device.devicePassword,
+      },
+    })
+
+    return await tx.order.create({
+      data: {
+        orderNumber,
+        qrCode,
+        clientId,
+        deviceId: device.id,
+        problem: data.problem,
+        observations: data.observations,
+        technicianId: resolvedTechnicianId,
+        statusHistory: {
+          create: {
+            status: 'RECEIVED',
+            comment: resolvedTechnicianId
+              ? 'Orden creada por el cliente y técnico asignado automáticamente'
+              : 'Orden creada por el cliente — pendiente de asignación de técnico',
+          },
+        },
+      },
+      include: {
+        client: true,
+        device: true,
+        technician: { select: { id: true, name: true } },
+        statusHistory: true,
+      },
+    })
+  })
+
+  // Actualiza la carga del técnico asignado (fuera de la transacción,
+  // igual que en createOrder())
+  if (resolvedTechnicianId) {
+    await incrementTechnicianLoad(resolvedTechnicianId)
+  }
+
+  return {
+    ...order,
+    technicianAutoAssigned: !!resolvedTechnicianId,
     noTechnicianAvailable: !resolvedTechnicianId,
   }
 }

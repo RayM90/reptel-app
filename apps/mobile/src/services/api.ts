@@ -31,6 +31,23 @@ export const ordersAPI = {
     api.patch(`/api/orders/${id}/status`, { status, comment }),
   updateBudget: (id: string, budget: number, approved: boolean) =>
     api.patch(`/api/orders/${id}/budget`, { budget, approved }),
+
+  // ── Cliente (self-service) ──────────────────────────────────
+  createSelfService: (data: {
+    device: {
+      type: 'LAPTOP' | 'PC'
+      brand: string
+      model: string
+      serialNumber?: string
+      color: string
+      accessories: string
+      devicePassword?: string
+    }
+    problem: string
+    observations?: string
+  }) => api.post('/api/orders/self-service', data),
+
+  getMyOrders: () => api.get('/api/orders/my-orders'),
 }
 
 export const productOrdersAPI = {
