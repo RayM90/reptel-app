@@ -15,6 +15,15 @@ const generateOrderNumber = (): string => {
 }
 
 // ─────────────────────────────────────────────
+// PAGO ANTICIPADO — MONTOS FIJOS (constantes)
+// TODO: mover a configuración en BD si en el futuro se necesitan
+// hacer editables desde el panel admin (Fase 4).
+// ─────────────────────────────────────────────
+
+const ADVANCE_DELIVERY_AMOUNT = 10
+const ADVANCE_REVISION_AMOUNT = 15
+
+// ─────────────────────────────────────────────
 // ASIGNACIÓN AUTOMÁTICA DE TÉCNICO
 // Prioridad 1: AVAILABLE (menos carga)
 // Prioridad 2: BUSY bajo su límite (menos carga)
@@ -22,8 +31,6 @@ const generateOrderNumber = (): string => {
 // ─────────────────────────────────────────────
 
 const assignTechnician = async (): Promise<string | null> => {
-  // Prioridad 1: técnicos disponibles, ordenados por menor carga y más
-  // tiempo sin recibir orden
   const available = await prisma.user.findMany({
     where: {
       role: { in: ['TECHNICIAN', 'TECHNICIAN_DELIVERY'] },
@@ -40,7 +47,6 @@ const assignTechnician = async (): Promise<string | null> => {
     return available[0].id
   }
 
-  // Prioridad 2: técnicos ocupados pero bajo su límite de capacidad
   const busy = await prisma.user.findMany({
     where: {
       role: { in: ['TECHNICIAN', 'TECHNICIAN_DELIVERY'] },
@@ -58,11 +64,9 @@ const assignTechnician = async (): Promise<string | null> => {
     return underCapacity[0].id
   }
 
-  // Sin técnicos disponibles → asignación manual
   return null
 }
 
-// Actualiza el contador y estado del técnico al asignarle una orden
 const incrementTechnicianLoad = async (technicianId: string) => {
   const technician = await prisma.user.findUnique({
     where: { id: technicianId },
@@ -83,7 +87,6 @@ const incrementTechnicianLoad = async (technicianId: string) => {
   })
 }
 
-// Actualiza el contador y estado del técnico al cerrar una orden
 export const decrementTechnicianLoad = async (technicianId: string) => {
   const technician = await prisma.user.findUnique({
     where: { id: technicianId },
@@ -119,7 +122,6 @@ export const getAllOrders = async () => {
   })
 }
 
-// Órdenes del día — para la pantalla de la cajera
 export const getTodayOrders = async () => {
   const startOfDay = new Date()
   startOfDay.setHours(0, 0, 0, 0)
@@ -192,13 +194,12 @@ export const createOrder = async (data: {
   deviceId: string
   problem: string
   observations?: string
-  technicianId?: string  // si viene vacío, el sistema asigna uno
+  technicianId?: string
 }) => {
   const orderNumber = generateOrderNumber()
   const trackingUrl = `http://192.168.0.116:3000/api/orders/track/${orderNumber}`
   const qrCode = await QRCode.toDataURL(trackingUrl)
 
-  // Si no viene un técnico específico, asignamos automáticamente
   const resolvedTechnicianId = data.technicianId ?? (await assignTechnician())
 
   const order = await prisma.order.create({
@@ -227,7 +228,6 @@ export const createOrder = async (data: {
     },
   })
 
-  // Actualiza la carga del técnico asignado
   if (resolvedTechnicianId) {
     await incrementTechnicianLoad(resolvedTechnicianId)
   }
@@ -243,6 +243,13 @@ export const createOrder = async (data: {
 // ÓRDENES — CREACIÓN POR EL CLIENTE (self-service)
 // Crea el dispositivo y la orden en una sola transacción atómica.
 // El clientId se resuelve desde el email del token, nunca desde el body.
+//
+// PAGO ANTICIPADO: toda orden self-service requiere pago adelantado de
+// delivery + revisión antes de que el técnico-delivery sea despachado.
+// La orden nace en status PENDING_PAYMENT con los montos fijos ya
+// asignados. El técnico SÍ se asigna automáticamente (igual que antes),
+// pero no se notifica/despacha hasta que el pago quede confirmado por
+// el ADMIN (endpoint de confirmación pendiente para Fase 4).
 // ─────────────────────────────────────────────
 
 export const createSelfServiceOrder = async (data: {
@@ -258,8 +265,8 @@ export const createSelfServiceOrder = async (data: {
   }
   problem: string
   observations?: string
+  advancePaymentMethod: string // ya mapeado al enum PaymentMethod de Prisma
 }) => {
-  // Resolver clientId desde el usuario autenticado
   const user = await prisma.user.findUnique({
     where: { email: data.email },
     select: { clientId: true },
@@ -274,11 +281,8 @@ export const createSelfServiceOrder = async (data: {
   const trackingUrl = `http://192.168.0.116:3000/api/orders/track/${orderNumber}`
   const qrCode = await QRCode.toDataURL(trackingUrl)
 
-  // Asignación automática de técnico (lectura previa a la transacción)
   const resolvedTechnicianId = await assignTechnician()
 
-  // Transacción atómica: si falla la creación de la orden, el dispositivo
-  // tampoco queda creado (evita dispositivos huérfanos)
   const order = await prisma.$transaction(async (tx) => {
     const device = await tx.device.create({
       data: {
@@ -301,12 +305,16 @@ export const createSelfServiceOrder = async (data: {
         problem: data.problem,
         observations: data.observations,
         technicianId: resolvedTechnicianId,
+        status: 'PENDING_PAYMENT',
+        deliveryAmount: ADVANCE_DELIVERY_AMOUNT,
+        revisionAmount: ADVANCE_REVISION_AMOUNT,
+        advancePaymentMethod: data.advancePaymentMethod as any,
         statusHistory: {
           create: {
-            status: 'RECEIVED',
+            status: 'PENDING_PAYMENT',
             comment: resolvedTechnicianId
-              ? 'Orden creada por el cliente y técnico asignado automáticamente'
-              : 'Orden creada por el cliente — pendiente de asignación de técnico',
+              ? 'Orden creada por el cliente — técnico asignado, pendiente de pago anticipado (delivery + revisión)'
+              : 'Orden creada por el cliente — pendiente de asignación de técnico y de pago anticipado',
           },
         },
       },
@@ -319,8 +327,6 @@ export const createSelfServiceOrder = async (data: {
     })
   })
 
-  // Actualiza la carga del técnico asignado (fuera de la transacción,
-  // igual que en createOrder())
   if (resolvedTechnicianId) {
     await incrementTechnicianLoad(resolvedTechnicianId)
   }
@@ -330,6 +336,68 @@ export const createSelfServiceOrder = async (data: {
     technicianAutoAssigned: !!resolvedTechnicianId,
     noTechnicianAvailable: !resolvedTechnicianId,
   }
+}
+
+// ─────────────────────────────────────────────
+// PAGO ANTICIPADO — SUBIR COMPROBANTE (cliente)
+// Mismo patrón que product-orders.service.ts → uploadReceipt().
+// Guarda la URL del comprobante (simulado, sin S3 real por ahora) y
+// notifica a los administradores. La confirmación real del pago
+// (que dispara el despacho del técnico-delivery) queda para el
+// endpoint de ADMIN de Fase 4 — no incluida aquí todavía.
+// ─────────────────────────────────────────────
+
+export const submitAdvancePayment = async (
+  orderId: string,
+  email: string,
+  receiptUrl: string
+) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { clientId: true },
+  })
+
+  if (!user || !user.clientId) {
+    throw new Error('Cliente no encontrado para este usuario')
+  }
+
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, clientId: user.clientId },
+  })
+
+  if (!order) {
+    throw new Error('Orden no encontrada')
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: { id: orderId },
+    data: { advanceReceiptUrl: receiptUrl },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+
+  const admins = await prisma.user.findMany({
+    where: { role: 'ADMIN', isActive: true },
+    select: { id: true },
+  })
+
+  if (admins.length > 0) {
+    await prisma.notification.createMany({
+      data: admins.map((admin) => ({
+        type: 'PAYMENT_CONFIRMED',
+        channel: 'PUSH',
+        message: `Comprobante de pago anticipado subido para la orden de servicio técnico #${order.orderNumber}`,
+        userId: admin.id,
+        orderId,
+      })),
+    })
+  }
+
+  return updatedOrder
 }
 
 // ─────────────────────────────────────────────
@@ -363,7 +431,6 @@ export const updateOrderStatus = async (
     },
   })
 
-  // Si la orden se entrega o cancela, libera al técnico
   if (
     (status === 'DELIVERED' || status === 'CANCELLED') &&
     order.technicianId
