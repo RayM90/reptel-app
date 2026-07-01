@@ -74,6 +74,14 @@ const secondaryOptions = [
       description: 'WhatsApp activo',
       route: null,
     },
+    {
+      id: 'track',
+      emoji: '🔍',
+      label: 'Rastrear Orden',
+      description: 'Consulta el estado por número',
+      // TODO: pantalla pendiente de construir — usará GET /api/orders/track/:orderNumber
+      route: null,
+    },
   ];
 
   return (
@@ -157,27 +165,7 @@ const secondaryOptions = [
             ))}
           </View>
 
-          {/* 4. BANNER PROMOCIONAL */}
-          <View style={styles.bannerContainer}>
-            <LinearGradient
-              colors={['#17247a', '#25358f']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.bannerGradient}
-            >
-              <View style={styles.bannerTextContainer}>
-                <Text style={styles.bannerTitle}>¿Tu equipo falla?</Text>
-                <Text style={styles.bannerSubtitle}>
-                  Tráelo hoy mismo a revisión técnica con los mejores expertos de RepTel.
-                </Text>
-              </View>
-              <View style={styles.bannerBadge}>
-                <Text style={styles.bannerBadgeText}>⚡ Express</Text>
-              </View>
-            </LinearGradient>
-          </View>
-
-          {/* 5. ESTADO DEL SERVICIO */}
+          {/* 4. ESTADO DEL SERVICIO */}
           <View style={styles.statusBar}>
             <View style={styles.statusDot} />
             <Text style={styles.statusText}>
@@ -331,50 +319,6 @@ const styles = StyleSheet.create({
     color: '#5364ad',
     textAlign: 'center',
     lineHeight: 15,
-  },
-  bannerContainer: {
-    width: '100%',
-    borderRadius: 18,
-    overflow: 'hidden',
-    marginTop: 4,
-    shadowColor: '#17247a',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  bannerGradient: {
-    flexDirection: 'row',
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  bannerTextContainer: {
-    flex: 1,
-    marginRight: 10,
-  },
-  bannerTitle: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  bannerSubtitle: {
-    color: '#d5ddff',
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '400',
-  },
-  bannerBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 20,
-  },
-  bannerBadgeText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '700',
   },
   statusBar: {
     flexDirection: 'row',
