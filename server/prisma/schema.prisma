@@ -35,6 +35,7 @@ enum DeviceType {
 }
 
 enum OrderStatus {
+  PENDING_PAYMENT
   RECEIVED
   DIAGNOSING
   WAITING_APPROVAL
@@ -226,6 +227,15 @@ model Order {
   receivedAt     DateTime    @default(now())
   deliveredAt    DateTime?
   updatedAt      DateTime    @updatedAt
+
+  // ── NUEVO: pago anticipado (delivery + revisión) ──
+  deliveryAmount             Decimal?       @db.Decimal(10, 2)
+  revisionAmount             Decimal?       @db.Decimal(10, 2)
+  advancePaymentMethod       PaymentMethod?
+  advanceReceiptUrl          String?
+  advancePaymentConfirmed    Boolean        @default(false)
+  advancePaymentConfirmedAt  DateTime?
+  // ────────────────────────────────────────────────
 
   clientId     String
   client       Client @relation(fields: [clientId], references: [id])

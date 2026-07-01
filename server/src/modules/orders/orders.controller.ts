@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
 import * as ordersService from './orders.service'
+import { mapPaymentMethod } from '../product-orders/product-orders.service'
 import { broadcastOrderUpdate } from '../../websocket'
 import prisma from '../../lib/prisma'
 
@@ -78,6 +79,11 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
 // CLIENTE — Crear orden propia (self-service)
 // El clientId NUNCA se toma del body, siempre del token autenticado,
 // para que un cliente no pueda crear órdenes a nombre de otro.
+//
+// PAGO ANTICIPADO: ahora requiere advancePaymentMethod en el body
+// (mismos códigos que la tienda: PAGO_MOVIL, TRANSFERENCIA, BINANCE).
+// La orden nace en PENDING_PAYMENT con los montos fijos de delivery
+// y revisión ya asignados por el service.
 // ─────────────────────────────────────────────
 
 export const createMyOrder = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -88,7 +94,7 @@ export const createMyOrder = async (req: AuthRequest, res: Response): Promise<vo
       return
     }
 
-    const { device, problem, observations } = req.body
+    const { device, problem, observations, advancePaymentMethod } = req.body
 
     if (!device || !device.type || !device.brand || !device.model || !device.color || !device.accessories) {
       res.status(400).json({
@@ -103,11 +109,29 @@ export const createMyOrder = async (req: AuthRequest, res: Response): Promise<vo
       return
     }
 
+    if (!advancePaymentMethod) {
+      res.status(400).json({
+        success: false,
+        message: 'El método de pago anticipado (delivery + revisión) es requerido',
+      })
+      return
+    }
+
+    const mappedMethod = mapPaymentMethod(advancePaymentMethod)
+    if (!mappedMethod) {
+      res.status(400).json({
+        success: false,
+        message: `Método de pago no soportado: ${advancePaymentMethod}`,
+      })
+      return
+    }
+
     const order = await ordersService.createSelfServiceOrder({
       email,
       device,
       problem,
       observations,
+      advancePaymentMethod: mappedMethod,
     })
 
     broadcastOrderUpdate({
@@ -119,6 +143,36 @@ export const createMyOrder = async (req: AuthRequest, res: Response): Promise<vo
   } catch (error: any) {
     console.error('ERROR CREAR ORDEN (CLIENTE):', error)
     res.status(400).json({ success: false, message: error.message || 'Error al crear la orden' })
+  }
+}
+
+// ─────────────────────────────────────────────
+// CLIENTE — Subir comprobante de pago anticipado
+// Mismo patrón que product-orders: recibe receiptUrl ya resuelto
+// (simulado, sin S3 real por ahora) y lo guarda en la orden.
+// ─────────────────────────────────────────────
+
+export const submitAdvancePayment = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const id = String(req.params.id)
+    const { receiptUrl } = req.body
+
+    if (!receiptUrl) {
+      res.status(400).json({ success: false, message: 'receiptUrl es requerido' })
+      return
+    }
+
+    const order = await ordersService.submitAdvancePayment(id, email, receiptUrl)
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR SUBIR COMPROBANTE PAGO ANTICIPADO:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al subir el comprobante' })
   }
 }
 
