@@ -35,7 +35,7 @@ export default function HomeClient() {
     );
   };
 
-  const primaryOptions = [
+const primaryOptions = [
     {
       id: 'store',
       emoji: '🛍️',
@@ -48,17 +48,24 @@ export default function HomeClient() {
       emoji: '🔧',
       label: 'Servicio Técnico',
       description: 'Solicita tu reparación y hazle seguimiento',
-      route: null,
+      route: '/(client)/technical-service',
     },
   ];
 
-  const secondaryOptions = [
+const secondaryOptions = [
     {
       id: 'orders',
       emoji: '📦',
       label: 'Mis Pedidos',
       description: 'Historial de compras',
       route: '/(client)/my-orders',
+    },
+    {
+      id: 'techOrders',
+      emoji: '🛠️',
+      label: 'Mis Órdenes',
+      description: 'Servicio técnico',
+      route: '/(client)/my-technical-orders',
     },
     {
       id: 'support',
@@ -277,12 +284,14 @@ const styles = StyleSheet.create({
   },
   secondaryRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     gap: 16,
     marginBottom: 24,
   },
   subCard: {
-    flex: 1,
-    height: 145,
+    width: '47%',
+    height: 130,
     backgroundColor: '#ffffff',
     borderRadius: 18,
     padding: 16,
