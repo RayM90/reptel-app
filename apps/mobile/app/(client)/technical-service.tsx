@@ -1,11 +1,10 @@
 import React, { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+  ScrollView, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
-import { ordersAPI } from '../../src/services/api'
 
 // ── Tipos ────────────────────────────────────────────────────────
 interface FaultItem {
@@ -147,7 +146,6 @@ export default function TechnicalServiceScreen() {
 
   // ── Observaciones ────────────────────────────────────────────────
   const [observations, setObservations] = useState('')
-  const [saving, setSaving] = useState(false)
 
   // ── Total estimado ───────────────────────────────────────────────
   const totalEstimated = selectedItems.reduce((sum, item) => sum + item.price, 0)
@@ -204,7 +202,11 @@ export default function TechnicalServiceScreen() {
     if (!noPassword) setDevicePassword('')
   }
 
-  const handleSubmit = async () => {
+  // La orden ya NO se crea aquí. Este formulario solo recolecta los
+  // datos del equipo y la falla, y navega a advance-payment.tsx, donde
+  // se selecciona el método de pago anticipado (delivery + revisión) y
+  // ahí sí se crea la orden — mismo patrón que checkout.tsx en la tienda.
+  const handleSubmit = () => {
     if (!brand.trim() || !model.trim()) {
       Alert.alert('Error', 'Marca y modelo son obligatorios')
       return
@@ -228,35 +230,26 @@ export default function TechnicalServiceScreen() {
 
     const problem = selectedItems.map(i => i.name).join(' | ')
 
-    setSaving(true)
-    try {
-      const response = await ordersAPI.createSelfService({
-        device: {
-          type: deviceType,
-          brand: brand.trim(),
-          model: model.trim(),
-          serialNumber: serialNumber.trim() || undefined,
-          color: color.trim(),
-          accessories: accessories.trim(),
-          devicePassword: noPassword ? undefined : devicePassword.trim(),
-        },
-        problem,
-        observations: observations.trim() || undefined,
-      })
-
-      const orderData = response.data.data
-      const techName = orderData.technician?.name || 'Por asignar'
-
-      Alert.alert(
-        'Orden creada',
-        `Número: ${orderData.orderNumber}\nTécnico: ${techName}\nTotal estimado: $${totalEstimated}`,
-        [{ text: 'Aceptar', onPress: () => router.replace('/(client)/my-technical-orders') }]
-      )
-    } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'No se pudo crear la orden')
-    } finally {
-      setSaving(false)
+    const device = {
+      type: deviceType,
+      brand: brand.trim(),
+      model: model.trim(),
+      serialNumber: serialNumber.trim() || undefined,
+      color: color.trim(),
+      accessories: accessories.trim(),
+      devicePassword: noPassword ? undefined : devicePassword.trim(),
     }
+
+    router.push({
+      pathname: '/(client)/advance-payment',
+      params: {
+        device: JSON.stringify(device),
+        problem,
+        observations: observations.trim() || '',
+        totalEstimated: String(totalEstimated),
+        selectedItems: JSON.stringify(selectedItems),
+      },
+    })
   }
 
   return (
@@ -452,14 +445,10 @@ export default function TechnicalServiceScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.btnSave, saving && styles.btnDisabled]}
+            style={styles.btnSave}
             onPress={handleSubmit}
-            disabled={saving}
           >
-            {saving
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.btnSaveText}>Crear orden</Text>
-            }
+            <Text style={styles.btnSaveText}>Continuar al pago →</Text>
           </TouchableOpacity>
 
           <View style={{ height: 40 }} />
