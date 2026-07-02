@@ -143,6 +143,7 @@ enum ProductOrderStatus {
 enum DeliveryMethod {
   PICKUP_AT_STORE
   HOME_DELIVERY
+  TECHNICIAN_DELIVERY
 }
 
 // ─────────────────────────────────────────────
@@ -254,6 +255,10 @@ model Order {
   documents        ServiceDocument[]
   payments         ServicePayment[]
   invoices         Invoice[]
+
+  // ── NUEVO: compras de tienda vinculadas (Tarea 3 — repuestos) ──
+  linkedProductOrders ProductOrder[] @relation("ProductOrderToServiceOrder")
+  // ────────────────────────────────────────────────────────────
 }
 
 model OrderStatusHistory {
@@ -457,6 +462,10 @@ model Product {
 
   orderItems  ProductOrderItem[]
 
+  // ── NUEVO: instalación (Tarea 3 — vínculo tienda-servicio) ──
+  requiresInstallation Boolean @default(false)
+  // ──────────────────────────────────────────────────────────
+
   @@map("product")
 }
 
@@ -477,7 +486,13 @@ model ProductOrder {
   clientId String
   client   Client @relation(fields: [clientId], references: [id])
 
+  // ── NUEVO: vínculo tienda-servicio (Tarea 3) ──
+  requiresInstallation Boolean  @default(false)
+  installationCost     Decimal? @db.Decimal(10, 2)
+
   linkedOrderId String?
+  linkedOrder   Order?  @relation("ProductOrderToServiceOrder", fields: [linkedOrderId], references: [id])
+  // ────────────────────────────────────────────
 
   items          ProductOrderItem[]
   delivery       ProductDelivery?
