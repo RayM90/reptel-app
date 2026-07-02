@@ -32,7 +32,7 @@ export const ordersAPI = {
   updateBudget: (id: string, budget: number, approved: boolean) =>
     api.patch(`/api/orders/${id}/budget`, { budget, approved }),
 
-  // ── Cliente (self-service) ──────────────────────────────────
+// ── Cliente (self-service) ──────────────────────────────────
   createSelfService: (data: {
     device: {
       type: 'LAPTOP' | 'PC'
@@ -45,9 +45,14 @@ export const ordersAPI = {
     }
     problem: string
     observations?: string
+    advancePaymentMethod: 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
   }) => api.post('/api/orders/self-service', data),
 
   getMyOrders: () => api.get('/api/orders/my-orders'),
+
+  // Pago anticipado (delivery + revisión) — sube el comprobante
+  submitAdvancePayment: (id: string, receiptUrl: string) =>
+    api.post(`/api/orders/${id}/advance-payment`, { receiptUrl }),
 }
 
 export const productOrdersAPI = {

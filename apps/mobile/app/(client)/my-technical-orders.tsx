@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { ordersAPI } from '../../src/services/api'
 
 type OrderStatus =
+  | 'PENDING_PAYMENT'
   | 'RECEIVED'
   | 'WAITING_APPROVAL'
   | 'APPROVED'
@@ -51,6 +52,7 @@ interface TechOrder {
 }
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
+  PENDING_PAYMENT: '💳 Pendiente de confirmación de pago',
   RECEIVED: '📥 Recibida',
   WAITING_APPROVAL: '⏳ Esperando aprobación de presupuesto',
   APPROVED: '✅ Presupuesto aprobado',
@@ -61,6 +63,7 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 }
 
 const STATUS_COLOR: Record<OrderStatus, string> = {
+  PENDING_PAYMENT: '#b45309',
   RECEIVED: '#1d4ed8',
   WAITING_APPROVAL: '#b45309',
   APPROVED: '#15803d',
@@ -71,6 +74,7 @@ const STATUS_COLOR: Record<OrderStatus, string> = {
 }
 
 const STATUS_BG: Record<OrderStatus, string> = {
+  PENDING_PAYMENT: '#fef3c7',
   RECEIVED: '#dbeafe',
   WAITING_APPROVAL: '#fef3c7',
   APPROVED: '#dcfce7',
