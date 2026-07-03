@@ -61,6 +61,7 @@ export const productOrdersAPI = {
     paymentMethod: 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
     address: string
     notes?: string
+    requiresInstallation?: boolean
   }) => api.post('/api/product-orders', data),
 
   getMyOrders: () => api.get('/api/product-orders/my-orders'),
