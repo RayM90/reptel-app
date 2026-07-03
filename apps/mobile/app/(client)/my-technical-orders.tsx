@@ -249,6 +249,22 @@ export default function MyTechnicalOrdersScreen() {
                         </View>
                       )}
 
+                      {/* Comprar repuesto — solo si ya hay presupuesto */}
+                      {order.budget != null && (
+                        <TouchableOpacity
+                          style={styles.linkedProductBtn}
+                          onPress={(e) => {
+                            e.stopPropagation()
+                            router.push({
+                              pathname: '/(client)/select-linked-products',
+                              params: { orderId: order.id, orderNumber: order.orderNumber },
+                            })
+                          }}
+                        >
+                          <Text style={styles.linkedProductBtnText}>🔧 Comprar repuesto para esta orden</Text>
+                        </TouchableOpacity>
+                      )}
+
                       {/* Historial de estados */}
                       <Text style={styles.itemsTitle}>📋 Historial</Text>
                       {order.statusHistory.map((entry) => (
@@ -339,6 +355,14 @@ const styles = StyleSheet.create({
   detailLabel: { fontSize: 11, color: '#9aa5cc', fontWeight: '600', textTransform: 'uppercase', marginBottom: 2 },
   detailValue: { fontSize: 13, color: '#17247a', lineHeight: 18 },
   itemsTitle: { fontSize: 13, fontWeight: '700', color: '#17247a', marginBottom: 8, marginTop: 4 },
+  linkedProductBtn: {
+    backgroundColor: '#17247a',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  linkedProductBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
