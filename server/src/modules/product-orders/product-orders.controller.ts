@@ -3,7 +3,7 @@ import { AuthRequest } from '../../middleware/auth.middleware'
 import * as productOrdersService from './product-orders.service'
 
 // ─────────────────────────────────────────────
-// CREAR PEDIDO DE TIENDA
+// CREAR PEDIDO DE TIENDA (flujo normal + Dirección A)
 // ─────────────────────────────────────────────
 
 export const createOrder = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -23,7 +23,7 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
       return
     }
 
-    const { items, paymentMethod, address, notes } = req.body
+    const { items, paymentMethod, address, notes, requiresInstallation } = req.body
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ success: false, message: 'El pedido debe contener al menos un producto' })
@@ -55,12 +55,77 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
       paymentMethod: mappedMethod,
       address,
       notes,
+      requiresInstallation: Boolean(requiresInstallation),
     })
 
     res.status(201).json({ success: true, data: order })
   } catch (error) {
     console.error('ERROR CREAR PEDIDO DE TIENDA:', error)
     const message = error instanceof Error ? error.message : 'Error al crear el pedido'
+    res.status(400).json({ success: false, message })
+  }
+}
+
+// ─────────────────────────────────────────────
+// CREAR PEDIDO VINCULADO A ORDEN DE SERVICIO TÉCNICO (Dirección B)
+// ─────────────────────────────────────────────
+
+export const createLinkedOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const clientId = await productOrdersService.resolveClientIdFromEmail(email)
+    if (!clientId) {
+      res.status(404).json({
+        success: false,
+        message: 'No se encontró un cliente vinculado a este usuario',
+      })
+      return
+    }
+
+    const { items, paymentMethod, linkedOrderId, receiptUrl, notes } = req.body
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ success: false, message: 'El pedido debe contener al menos un producto' })
+      return
+    }
+
+    if (!paymentMethod) {
+      res.status(400).json({ success: false, message: 'El método de pago es requerido' })
+      return
+    }
+
+    if (!linkedOrderId) {
+      res.status(400).json({ success: false, message: 'linkedOrderId es requerido' })
+      return
+    }
+
+    const mappedMethod = productOrdersService.mapPaymentMethod(paymentMethod)
+    if (!mappedMethod) {
+      res.status(400).json({
+        success: false,
+        message: `Método de pago no soportado: ${paymentMethod}`,
+      })
+      return
+    }
+
+    const order = await productOrdersService.createLinkedProductOrder({
+      clientId,
+      items,
+      paymentMethod: mappedMethod,
+      linkedOrderId,
+      receiptUrl,
+      notes,
+    })
+
+    res.status(201).json({ success: true, data: order })
+  } catch (error) {
+    console.error('ERROR CREAR PEDIDO VINCULADO:', error)
+    const message = error instanceof Error ? error.message : 'Error al crear el pedido vinculado'
     res.status(400).json({ success: false, message })
   }
 }
