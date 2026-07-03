@@ -1,4 +1,6 @@
+import { Prisma } from '@prisma/client'
 import prisma from '../../lib/prisma'
+import { INSTALLATION_COST } from '../../config/constants'
 
 // ─────────────────────────────────────────────
 // MAPEO DE MÉTODOS DE PAGO (frontend → enum Prisma)
@@ -45,12 +47,80 @@ interface CreateProductOrderInput {
   paymentMethod: string // ya mapeado al enum de Prisma
   address: string
   notes?: string
+  requiresInstallation?: boolean
+}
+
+interface CreateLinkedProductOrderInput {
+  clientId: string
+  items: CreateProductOrderItemInput[]
+  paymentMethod: string // ya mapeado al enum de Prisma
+  linkedOrderId: string
+  receiptUrl?: string
+  notes?: string
+}
+
+interface ProcessedItem {
+  productId: string
+  quantity: number
+  unitPrice: number
+  subtotal: number
+  requiresInstallation: boolean
+}
+
+// ─────────────────────────────────────────────
+// HELPER INTERNO — validar stock, calcular precios y total
+// Compartido entre createProductOrder (Tienda / Dirección A) y
+// createLinkedProductOrder (Dirección B). No exportado.
+// ─────────────────────────────────────────────
+
+const processOrderItems = async (
+  tx: Prisma.TransactionClient,
+  items: CreateProductOrderItemInput[]
+): Promise<{ itemsToCreate: ProcessedItem[]; total: number }> => {
+  let total = 0
+  const itemsToCreate: ProcessedItem[] = []
+
+  for (const item of items) {
+    const product = await tx.product.findUnique({
+      where: { id: item.productId },
+    })
+
+    if (!product) {
+      throw new Error(`Producto no encontrado: ${item.productId}`)
+    }
+
+    if (!product.isActive) {
+      throw new Error(`El producto "${product.name}" ya no está disponible`)
+    }
+
+    if (product.stock < item.quantity) {
+      throw new Error(
+        `Stock insuficiente para "${product.name}". Disponible: ${product.stock}, solicitado: ${item.quantity}`
+      )
+    }
+
+    const unitPrice = Number(product.price)
+    const subtotal = unitPrice * item.quantity
+    total += subtotal
+
+    itemsToCreate.push({
+      productId: item.productId,
+      quantity: item.quantity,
+      unitPrice,
+      subtotal,
+      requiresInstallation: product.requiresInstallation,
+    })
+  }
+
+  return { itemsToCreate, total }
 }
 
 // ─────────────────────────────────────────────
 // CREAR PEDIDO — TRANSACCIÓN ATÓMICA
 // Verifica stock, calcula totales, crea orden + items,
 // y descuenta el stock. Si algo falla, todo se revierte.
+// Cubre el flujo normal de Tienda y la Dirección A
+// (compra de producto + instalación opcional).
 // ─────────────────────────────────────────────
 
 export const createProductOrder = async (data: CreateProductOrderInput) => {
@@ -59,47 +129,27 @@ export const createProductOrder = async (data: CreateProductOrderInput) => {
   }
 
   return await prisma.$transaction(async (tx) => {
-    let total = 0
-    const itemsToCreate: {
-      productId: string
-      quantity: number
-      unitPrice: number
-      subtotal: number
-    }[] = []
+    const { itemsToCreate, total: itemsTotal } = await processOrderItems(
+      tx,
+      data.items
+    )
 
-    // Verificar stock y calcular totales de cada producto
-    for (const item of data.items) {
-      const product = await tx.product.findUnique({
-        where: { id: item.productId },
-      })
+    let installationCost: number | null = null
+    let total = itemsTotal
 
-      if (!product) {
-        throw new Error(`Producto no encontrado: ${item.productId}`)
-      }
-
-      if (!product.isActive) {
-        throw new Error(`El producto "${product.name}" ya no está disponible`)
-      }
-
-      if (product.stock < item.quantity) {
+    if (data.requiresInstallation) {
+      const hasInstallableProduct = itemsToCreate.some(
+        (item) => item.requiresInstallation
+      )
+      if (!hasInstallableProduct) {
         throw new Error(
-          `Stock insuficiente para "${product.name}". Disponible: ${product.stock}, solicitado: ${item.quantity}`
+          'Ninguno de los productos seleccionados admite instalación'
         )
       }
-
-      const unitPrice = Number(product.price)
-      const subtotal = unitPrice * item.quantity
-      total += subtotal
-
-      itemsToCreate.push({
-        productId: item.productId,
-        quantity: item.quantity,
-        unitPrice,
-        subtotal,
-      })
+      installationCost = INSTALLATION_COST
+      total += installationCost
     }
 
-    // Crear la orden con sus items
     const order = await tx.productOrder.create({
       data: {
         clientId: data.clientId,
@@ -108,8 +158,12 @@ export const createProductOrder = async (data: CreateProductOrderInput) => {
         total,
         paymentMethod: data.paymentMethod as any,
         notes: data.notes,
+        requiresInstallation: !!data.requiresInstallation,
+        installationCost,
         items: {
-          create: itemsToCreate,
+          create: itemsToCreate.map(
+            ({ requiresInstallation, ...item }) => item
+          ),
         },
       },
       include: {
@@ -117,6 +171,84 @@ export const createProductOrder = async (data: CreateProductOrderInput) => {
           include: { product: true },
         },
         client: true,
+      },
+    })
+
+    // Descontar el stock de cada producto
+    for (const item of itemsToCreate) {
+      await tx.product.update({
+        where: { id: item.productId },
+        data: {
+          stock: { decrement: item.quantity },
+        },
+      })
+    }
+
+    return order
+  })
+}
+
+// ─────────────────────────────────────────────
+// CREAR PEDIDO VINCULADO A ORDEN DE SERVICIO TÉCNICO
+// (Dirección B) — sin dirección/delivery propio, el técnico ya
+// asignado a la Order trae el repuesto en su próxima visita.
+// Solo permitido si la Order ya tiene presupuesto (budget != null).
+// ─────────────────────────────────────────────
+
+export const createLinkedProductOrder = async (
+  data: CreateLinkedProductOrderInput
+) => {
+  if (!data.items || data.items.length === 0) {
+    throw new Error('El pedido debe contener al menos un producto')
+  }
+
+  const linkedOrder = await prisma.order.findFirst({
+    where: { id: data.linkedOrderId, clientId: data.clientId },
+  })
+
+  if (!linkedOrder) {
+    throw new Error('Orden de servicio técnico no encontrada')
+  }
+
+  if (linkedOrder.budget === null) {
+    throw new Error(
+      'La orden aún no tiene presupuesto asignado por el técnico'
+    )
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const { itemsToCreate, total } = await processOrderItems(tx, data.items)
+
+    const nonInstallable = itemsToCreate.find(
+      (item) => !item.requiresInstallation
+    )
+    if (nonInstallable) {
+      throw new Error(
+        'Todos los productos deben ser repuestos habilitados para instalación'
+      )
+    }
+
+    const order = await tx.productOrder.create({
+      data: {
+        clientId: data.clientId,
+        deliveryMethod: 'TECHNICIAN_DELIVERY',
+        total,
+        paymentMethod: data.paymentMethod as any,
+        notes: data.notes,
+        receiptUrl: data.receiptUrl,
+        linkedOrderId: data.linkedOrderId,
+        items: {
+          create: itemsToCreate.map(
+            ({ requiresInstallation, ...item }) => item
+          ),
+        },
+      },
+      include: {
+        items: {
+          include: { product: true },
+        },
+        client: true,
+        linkedOrder: true,
       },
     })
 

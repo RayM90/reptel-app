@@ -5,12 +5,22 @@ import { authenticate, authorize } from '../../middleware/auth.middleware'
 const router = Router()
 
 // ─── Rutas del cliente ─────────────────────────────────────────────
-// Crear un nuevo pedido de tienda
+// Crear un nuevo pedido de tienda (flujo normal + Dirección A: instalación)
 router.post(
   '/',
   authenticate,
   authorize('CLIENT'),
   productOrdersController.createOrder
+)
+
+// Crear pedido de repuesto vinculado a una orden de servicio técnico en curso (Dirección B)
+// IMPORTANTE: debe ir ANTES de /:id para que Express no intente matchear
+// "link-to-service" como si fuera un id de ProductOrder.
+router.post(
+  '/link-to-service',
+  authenticate,
+  authorize('CLIENT'),
+  productOrdersController.createLinkedOrder
 )
 
 // Historial de pedidos del cliente autenticado
