@@ -22,7 +22,9 @@ interface Product {
   stock: number
   imageUrl: string | null
   category: { id: string; name: string }
+  requiresInstallation: boolean
 }
+
 
 const productImages: Record<string, any> = {
   'products/cargador-usbc.jpg': require('../../assets/images/products/cargador-usbc.jpg'),
@@ -61,6 +63,7 @@ const handleAddToCart = (product: Product) => {
     price: Number(product.price),
     imageUrl: product.imageUrl,
     categoryName: product.category.name,
+    requiresInstallation: product.requiresInstallation,
   })
     Alert.alert('✓ Agregado', `${product.name} se agregó al carrito`)
   }

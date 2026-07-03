@@ -15,6 +15,10 @@ import { useCartStore } from '../../src/store/cart.store'
 import { useAuthStore } from '../../src/store/auth.store'
 import { productOrdersAPI } from '../../src/services/api'
 
+// Mismo monto fijo que el backend (server/src/config/constants.ts -> INSTALLATION_COST).
+// Prototipo de tesis, no configurable todavía.
+const INSTALLATION_COST = 15
+
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
@@ -38,6 +42,7 @@ export default function CheckoutScreen() {
   const [useOtherAddress, setUseOtherAddress] = useState(false)
   const [customAddress, setCustomAddress] = useState('')
   const [notes, setNotes] = useState('')
+  const [wantsInstallation, setWantsInstallation] = useState(false)
 
   if (items.length === 0) {
     return (
@@ -62,6 +67,10 @@ export default function CheckoutScreen() {
       </>
     )
   }
+
+  const hasInstallableItem = items.some((item) => item.requiresInstallation)
+  const installationCost = wantsInstallation ? INSTALLATION_COST : 0
+  const finalTotal = totalPrice + installationCost
 
   const handleDecrease = (id: string, quantity: number) => {
     if (quantity === 1) {
@@ -106,7 +115,7 @@ export default function CheckoutScreen() {
 
     Alert.alert(
       'Confirmar pedido',
-      `Total: $${totalPrice.toFixed(2)}\nMétodo: ${PAYMENT_LABELS[selectedMethod]}\n\n¿Confirmas el pedido?`,
+      `Total: $${finalTotal.toFixed(2)}\nMétodo: ${PAYMENT_LABELS[selectedMethod]}\n\n¿Confirmas el pedido?`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -129,6 +138,7 @@ export default function CheckoutScreen() {
         paymentMethod: selectedMethod,
         address,
         notes: notes.trim() || undefined,
+        requiresInstallation: wantsInstallation,
       })
 
       const createdOrder = response.data.data
@@ -243,9 +253,37 @@ export default function CheckoutScreen() {
                 </View>
               </View>
             ))}
+
+            {hasInstallableItem && (
+              <TouchableOpacity
+                style={styles.installationCard}
+                onPress={() => setWantsInstallation((prev) => !prev)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.installationRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.installationTitle}>🔧 ¿Requieres instalación?</Text>
+                    <Text style={styles.installationSubtitle}>
+                      El técnico-delivery que entrega tu producto lo instala ahí mismo (+${INSTALLATION_COST.toFixed(2)})
+                    </Text>
+                  </View>
+                  <View style={[styles.checkbox, wantsInstallation && styles.checkboxActive]}>
+                    {wantsInstallation && <Text style={styles.checkboxCheck}>✓</Text>}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {wantsInstallation && (
+              <View style={styles.installationCostRow}>
+                <Text style={styles.installationCostLabel}>Instalación</Text>
+                <Text style={styles.installationCostValue}>+${INSTALLATION_COST.toFixed(2)}</Text>
+              </View>
+            )}
+
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>${totalPrice.toFixed(2)}</Text>
+              <Text style={styles.totalValue}>${finalTotal.toFixed(2)}</Text>
             </View>
           </View>
 
@@ -307,7 +345,7 @@ export default function CheckoutScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.confirmBtnText}>
-                Confirmar Pedido • ${totalPrice.toFixed(2)}
+                Confirmar Pedido • ${finalTotal.toFixed(2)}
               </Text>
             )}
           </TouchableOpacity>
@@ -387,6 +425,41 @@ const styles = StyleSheet.create({
   qtyValueSmall: { fontSize: 13, fontWeight: '800', color: '#17247a', minWidth: 18, textAlign: 'center' },
   itemQty: { fontSize: 11, color: '#5364ad' },
   itemPrice: { fontSize: 14, fontWeight: '800', color: '#17247a' },
+  installationCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 4,
+    marginBottom: 4,
+    borderWidth: 1.5,
+    borderColor: '#d0d8ff',
+  },
+  installationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  installationTitle: { fontSize: 13, fontWeight: '700', color: '#17247a', marginBottom: 2 },
+  installationSubtitle: { fontSize: 11, color: '#5364ad', lineHeight: 15 },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#d0d8ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxActive: { backgroundColor: '#17247a', borderColor: '#17247a' },
+  checkboxCheck: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  installationCostRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginBottom: 4,
+  },
+  installationCostLabel: { fontSize: 13, color: '#5364ad', fontWeight: '600' },
+  installationCostValue: { fontSize: 13, color: '#17247a', fontWeight: '700' },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

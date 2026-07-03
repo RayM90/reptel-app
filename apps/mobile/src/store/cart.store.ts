@@ -9,6 +9,7 @@ export interface CartItem {
   quantity: number
   imageUrl: string | null
   categoryName: string
+  requiresInstallation: boolean
 }
 
 interface CartState {
