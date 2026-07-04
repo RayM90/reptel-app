@@ -133,6 +133,7 @@ enum InvoiceType {
 enum ProductOrderStatus {
   PENDING
   CONFIRMED
+  REJECTED
   READY_FOR_PICKUP
   ASSIGNED_DELIVERY
   ON_THE_WAY
@@ -159,10 +160,8 @@ model User {
   role              Role             @default(CLIENT)
   isActive          Boolean          @default(true)
 
-  // ── NUEVO ──
   clientId          String?          @unique
   client            Client?          @relation(fields: [clientId], references: [id])
-  // ────────────
 
   technicianStatus  TechnicianStatus @default(AVAILABLE)
   activeOrderCount  Int              @default(0)
@@ -229,14 +228,13 @@ model Order {
   deliveredAt    DateTime?
   updatedAt      DateTime    @updatedAt
 
-  // ── NUEVO: pago anticipado (delivery + revisión) ──
   deliveryAmount             Decimal?       @db.Decimal(10, 2)
   revisionAmount             Decimal?       @db.Decimal(10, 2)
   advancePaymentMethod       PaymentMethod?
   advanceReceiptUrl          String?
   advancePaymentConfirmed    Boolean        @default(false)
   advancePaymentConfirmedAt  DateTime?
-  // ────────────────────────────────────────────────
+  advancePaymentRejectionReason String?     @db.Text
 
   clientId     String
   client       Client @relation(fields: [clientId], references: [id])
@@ -250,15 +248,16 @@ model Order {
   serviceRequestId String?         @unique
   serviceRequest   ServiceRequest? @relation(fields: [serviceRequestId], references: [id])
 
+  serviceCatalogId String?
+  serviceCatalog   ServiceCatalog? @relation(fields: [serviceCatalogId], references: [id])
+
   statusHistory    OrderStatusHistory[]
   notifications    Notification[]
   documents        ServiceDocument[]
   payments         ServicePayment[]
   invoices         Invoice[]
 
-  // ── NUEVO: compras de tienda vinculadas (Tarea 3 — repuestos) ──
   linkedProductOrders ProductOrder[] @relation("ProductOrderToServiceOrder")
-  // ────────────────────────────────────────────────────────────
 }
 
 model OrderStatusHistory {
@@ -284,7 +283,6 @@ model ServiceRequest {
   model         String?
   description   String        @db.Text
 
-  // Síntomas seleccionados (guardados como JSON)
   symptoms      String?       @db.Text
 
   address       String?
@@ -305,11 +303,9 @@ model DeliveryTracking {
   id        String         @id @default(uuid())
   status    DeliveryStatus @default(ASSIGNED)
 
-  // Diagnóstico en sitio
   onSiteDiagnosis String?        @db.Text
   result          DeliveryResult?
 
-  // Evidencia GPS al llegar
   gpsLatitude     Decimal?       @db.Decimal(10, 7)
   gpsLongitude    Decimal?       @db.Decimal(10, 7)
 
@@ -347,10 +343,8 @@ model ServiceDocument {
   pdfUrl       String?
   printed      Boolean      @default(false)
 
-  // Firma digital del cliente (base64 o URL en S3)
   clientSignature String?   @db.Text
 
-  // GPS donde se firmó el documento
   gpsLatitude   Decimal?    @db.Decimal(10, 7)
   gpsLongitude  Decimal?    @db.Decimal(10, 7)
 
@@ -395,19 +389,15 @@ model Invoice {
   sentAt         DateTime?
   createdAt      DateTime    @default(now())
 
-  // Puede pertenecer a una orden de servicio
   orderId        String?
   order          Order?      @relation(fields: [orderId], references: [id])
 
-  // O a un pago de servicio específico
   servicePaymentId String?   @unique
   servicePayment   ServicePayment? @relation(fields: [servicePaymentId], references: [id])
 
-  // O a un pedido de la tienda
   productOrderId String?     @unique
   productOrder   ProductOrder? @relation(fields: [productOrderId], references: [id])
 
-  // Siempre vinculada a un cliente
   clientId       String
   client         Client      @relation(fields: [clientId], references: [id])
 }
@@ -426,6 +416,8 @@ model ServiceCatalog {
   estimatedMinutes  Int?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  orders            Order[]
 
   @@map("servicecatalog")
 }
@@ -462,9 +454,7 @@ model Product {
 
   orderItems  ProductOrderItem[]
 
-  // ── NUEVO: instalación (Tarea 3 — vínculo tienda-servicio) ──
   requiresInstallation Boolean @default(false)
-  // ──────────────────────────────────────────────────────────
 
   @@map("product")
 }
@@ -483,16 +473,16 @@ model ProductOrder {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
+  rejectionReason String? @db.Text
+
   clientId String
   client   Client @relation(fields: [clientId], references: [id])
 
-  // ── NUEVO: vínculo tienda-servicio (Tarea 3) ──
   requiresInstallation Boolean  @default(false)
   installationCost     Decimal? @db.Decimal(10, 2)
 
   linkedOrderId String?
   linkedOrder   Order?  @relation("ProductOrderToServiceOrder", fields: [linkedOrderId], references: [id])
-  // ────────────────────────────────────────────
 
   items          ProductOrderItem[]
   delivery       ProductDelivery?
@@ -526,6 +516,8 @@ model ProductDelivery {
   deliveredAt    DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+
+  clientConfirmedAt DateTime?
 
   productOrderId String       @unique
   productOrder   ProductOrder @relation(fields: [productOrderId], references: [id])
