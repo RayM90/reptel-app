@@ -15,13 +15,14 @@ import { ordersAPI } from '../../src/services/api'
 type OrderStatus =
   | 'PENDING_PAYMENT'
   | 'RECEIVED'
+  | 'DIAGNOSING'
   | 'WAITING_APPROVAL'
   | 'APPROVED'
-  | 'IN_PROGRESS'
+  | 'REPAIRING'
+  | 'WAITING_PART'
   | 'READY'
   | 'DELIVERED'
   | 'CANCELLED'
-
 interface StatusHistoryEntry {
   id: string
   status: OrderStatus
@@ -54,9 +55,11 @@ interface TechOrder {
 const STATUS_LABEL: Record<OrderStatus, string> = {
   PENDING_PAYMENT: '💳 Pendiente de confirmación de pago',
   RECEIVED: '📥 Recibida',
+  DIAGNOSING: '🔍 En diagnóstico',
   WAITING_APPROVAL: '⏳ Esperando aprobación de presupuesto',
   APPROVED: '✅ Presupuesto aprobado',
-  IN_PROGRESS: '🔧 En reparación',
+  REPAIRING: '🔧 En reparación',
+  WAITING_PART: '📦 Esperando repuesto',
   READY: '📦 Lista para entrega',
   DELIVERED: '🚚 Entregada',
   CANCELLED: '❌ Cancelada',
@@ -65,9 +68,11 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 const STATUS_COLOR: Record<OrderStatus, string> = {
   PENDING_PAYMENT: '#b45309',
   RECEIVED: '#1d4ed8',
+  DIAGNOSING: '#9333ea',
   WAITING_APPROVAL: '#b45309',
   APPROVED: '#15803d',
-  IN_PROGRESS: '#7c3aed',
+  REPAIRING: '#7c3aed',
+  WAITING_PART: '#c2410c',
   READY: '#0f766e',
   DELIVERED: '#15803d',
   CANCELLED: '#b91c1c',
@@ -76,9 +81,11 @@ const STATUS_COLOR: Record<OrderStatus, string> = {
 const STATUS_BG: Record<OrderStatus, string> = {
   PENDING_PAYMENT: '#fef3c7',
   RECEIVED: '#dbeafe',
+  DIAGNOSING: '#f3e8ff',
   WAITING_APPROVAL: '#fef3c7',
   APPROVED: '#dcfce7',
-  IN_PROGRESS: '#ede9fe',
+  REPAIRING: '#ede9fe',
+  WAITING_PART: '#ffedd5',
   READY: '#ccfbf1',
   DELIVERED: '#dcfce7',
   CANCELLED: '#fee2e2',
