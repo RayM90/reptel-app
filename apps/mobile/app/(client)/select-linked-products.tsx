@@ -33,7 +33,11 @@ interface SelectedItem {
 
 export default function SelectLinkedProductsScreen() {
   const router = useRouter()
-  const { orderId, orderNumber } = useLocalSearchParams<{ orderId: string; orderNumber: string }>()
+  const { orderId, orderNumber, budget } = useLocalSearchParams<{
+  orderId: string
+  orderNumber: string
+  budget: string
+}>()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Record<string, number>>({})
@@ -86,14 +90,15 @@ export default function SelectLinkedProductsScreen() {
       Alert.alert('Selecciona al menos un repuesto', 'Debes elegir al menos un producto para continuar')
       return
     }
-    router.push({
-      pathname: '/(client)/link-checkout',
-      params: {
-        orderId,
+      router.push({
+        pathname: '/(client)/link-checkout',
+        params: {
+       orderId,
         orderNumber,
+        budget,
         items: JSON.stringify(selectedItems),
       },
-    })
+  })
   }
 
   return (

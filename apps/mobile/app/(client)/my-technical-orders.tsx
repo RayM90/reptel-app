@@ -257,7 +257,11 @@ export default function MyTechnicalOrdersScreen() {
                             e.stopPropagation()
                             router.push({
                               pathname: '/(client)/select-linked-products',
-                              params: { orderId: order.id, orderNumber: order.orderNumber },
+                              params: {
+                                orderId: order.id,
+                                orderNumber: order.orderNumber,
+                                budget: String(order.budget),
+                              },
                             })
                           }}
                         >
