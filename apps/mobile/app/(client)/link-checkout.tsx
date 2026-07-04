@@ -13,6 +13,8 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import { productOrdersAPI } from '../../src/services/api'
 
+const REVISION_COST = 15 // mismo valor que el backend (constants.ts), duplicada intencionalmente en frontend
+
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
@@ -36,13 +38,17 @@ interface SelectedItem {
 
 export default function LinkCheckoutScreen() {
   const router = useRouter()
-  const { orderId, orderNumber, items: itemsParam } = useLocalSearchParams<{
+  const { orderId, orderNumber, budget, items: itemsParam } = useLocalSearchParams<{
     orderId: string
     orderNumber: string
+    budget: string
     items: string
   }>()
   const items: SelectedItem[] = JSON.parse(itemsParam)
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+
+  const budgetNumber = budget != null && budget !== 'null' ? Number(budget) : null
+  const laborPending = budgetNumber != null ? Math.max(budgetNumber - REVISION_COST, 0) : null
 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [notes, setNotes] = useState('')
@@ -121,8 +127,27 @@ export default function LinkCheckoutScreen() {
             </Text>
           </View>
 
+          {budgetNumber != null && laborPending != null && (
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryTitle}>📋 Resumen de tu reparación</Text>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Mano de obra / diagnóstico</Text>
+                <Text style={styles.summaryValue}>${budgetNumber.toFixed(2)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Ya pagado (anticipo de revisión)</Text>
+                <Text style={styles.summaryValueNegative}>-${REVISION_COST.toFixed(2)}</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabelBold}>Pendiente al finalizar la reparación</Text>
+                <Text style={styles.summaryValueBold}>${laborPending.toFixed(2)}</Text>
+              </View>
+            </View>
+          )}
+
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📦 Resumen</Text>
+            <Text style={styles.sectionTitle}>🔧 Repuesto que compras ahora</Text>
             {items.map((item) => (
               <View key={item.productId} style={styles.itemRow}>
                 <View style={styles.itemInfo}>
@@ -133,7 +158,7 @@ export default function LinkCheckoutScreen() {
               </View>
             ))}
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalLabel}>Total a pagar ahora</Text>
               <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
             </View>
           </View>
@@ -198,11 +223,36 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff8e1',
     borderRadius: 12,
     padding: 14,
-    marginBottom: 20,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#ffe082',
   },
   noteText: { fontSize: 13, color: '#7a6000', lineHeight: 20 },
+  summaryCard: {
+    backgroundColor: '#f0f3ff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: '#d0d8ff',
+  },
+  summaryTitle: { fontSize: 14, fontWeight: '800', color: '#17247a', marginBottom: 12 },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  summaryLabel: { fontSize: 12, color: '#5364ad' },
+  summaryValue: { fontSize: 13, fontWeight: '700', color: '#17247a' },
+  summaryValueNegative: { fontSize: 13, fontWeight: '700', color: '#15803d' },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: '#d0d8ff',
+    marginVertical: 8,
+  },
+  summaryLabelBold: { fontSize: 13, fontWeight: '700', color: '#17247a', flex: 1, marginRight: 8 },
+  summaryValueBold: { fontSize: 15, fontWeight: '900', color: '#17247a' },
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#17247a', marginBottom: 12 },
   itemRow: {
