@@ -268,3 +268,56 @@ export const getOrderDetail = async (req: AuthRequest, res: Response): Promise<v
     res.status(500).json({ success: false, message: 'Error al obtener el pedido' })
   }
 }
+
+// ─────────────────────────────────────────────
+// MOTORIZADO — Marcar pedido como entregado (Fase 4)
+// ─────────────────────────────────────────────
+
+export const markAsDelivered = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const id = String(req.params.id)
+    const order = await productOrdersService.markAsDelivered(id, email)
+    res.json({ success: true, data: order })
+  } catch (error) {
+    console.error('ERROR MARCAR ENTREGADO:', error)
+    const message = error instanceof Error ? error.message : 'Error al marcar como entregado'
+    res.status(400).json({ success: false, message })
+  }
+}
+
+// ─────────────────────────────────────────────
+// CLIENTE — Confirmar recepción del pedido (Fase 4)
+// ─────────────────────────────────────────────
+
+export const confirmReceived = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const clientId = await productOrdersService.resolveClientIdFromEmail(email)
+    if (!clientId) {
+      res.status(404).json({
+        success: false,
+        message: 'No se encontró un cliente vinculado a este usuario',
+      })
+      return
+    }
+
+    const id = String(req.params.id)
+    const order = await productOrdersService.confirmReceived(id, clientId)
+    res.json({ success: true, data: order })
+  } catch (error) {
+    console.error('ERROR CONFIRMAR RECEPCIÓN:', error)
+    const message = error instanceof Error ? error.message : 'Error al confirmar la recepción'
+    res.status(400).json({ success: false, message })
+  }
+}

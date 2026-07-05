@@ -479,3 +479,73 @@ export const decrementDeliveryLoad = async (agentId: string) => {
     data: { activeOrderCount: newCount, technicianStatus: newStatus },
   })
 }
+
+// ─────────────────────────────────────────────
+// MOTORIZADO — Marcar pedido como entregado (Fase 4)
+// Verifica que el motorizado autenticado sea el agente asignado a
+// ese ProductDelivery antes de marcarlo. Libera su carga de trabajo.
+// ─────────────────────────────────────────────
+
+export const markAsDelivered = async (productOrderId: string, email: string) => {
+  const user = await prisma.user.findUnique({ where: { email } })
+  if (!user) {
+    throw new Error('Usuario no encontrado')
+  }
+
+  const delivery = await prisma.productDelivery.findUnique({
+    where: { productOrderId },
+  })
+
+  if (!delivery) {
+    throw new Error('Este pedido no tiene un motorizado asignado')
+  }
+
+  if (delivery.agentId !== user.id) {
+    throw new Error('No estás asignado a este pedido')
+  }
+
+  const updated = await prisma.productDelivery.update({
+    where: { productOrderId },
+    data: {
+      status: 'DELIVERED',
+      deliveredAt: new Date(),
+    },
+    include: { productOrder: true },
+  })
+
+  await decrementDeliveryLoad(user.id)
+
+  return updated
+}
+
+// ─────────────────────────────────────────────
+// CLIENTE — Confirmar recepción del pedido (Fase 4)
+// ─────────────────────────────────────────────
+
+export const confirmReceived = async (productOrderId: string, clientId: string) => {
+  const order = await prisma.productOrder.findFirst({
+    where: { id: productOrderId, clientId },
+  })
+
+  if (!order) {
+    throw new Error('Pedido no encontrado')
+  }
+
+  const delivery = await prisma.productDelivery.findUnique({
+    where: { productOrderId },
+  })
+
+  if (!delivery) {
+    throw new Error('Este pedido aún no tiene registro de entrega')
+  }
+
+  if (!delivery.deliveredAt) {
+    throw new Error('El motorizado aún no ha marcado este pedido como entregado')
+  }
+
+  return await prisma.productDelivery.update({
+    where: { productOrderId },
+    data: { clientConfirmedAt: new Date() },
+    include: { productOrder: true },
+  })
+}
