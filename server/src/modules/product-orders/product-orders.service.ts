@@ -55,7 +55,7 @@ interface CreateLinkedProductOrderInput {
   items: CreateProductOrderItemInput[]
   paymentMethod: string // ya mapeado al enum de Prisma
   linkedOrderId: string
-  receiptUrl?: string
+  address: string
   notes?: string
 }
 
@@ -231,11 +231,11 @@ export const createLinkedProductOrder = async (
     const order = await tx.productOrder.create({
       data: {
         clientId: data.clientId,
-        deliveryMethod: 'TECHNICIAN_DELIVERY',
+        deliveryMethod: 'HOME_DELIVERY',
+        address: data.address,
         total,
         paymentMethod: data.paymentMethod as any,
         notes: data.notes,
-        receiptUrl: data.receiptUrl,
         linkedOrderId: data.linkedOrderId,
         items: {
           create: itemsToCreate.map(
@@ -252,13 +252,10 @@ export const createLinkedProductOrder = async (
       },
     })
 
-    // Descontar el stock de cada producto
     for (const item of itemsToCreate) {
       await tx.product.update({
         where: { id: item.productId },
-        data: {
-          stock: { decrement: item.quantity },
-        },
+        data: { stock: { decrement: item.quantity } },
       })
     }
 
@@ -321,10 +318,10 @@ export const uploadReceipt = async (
 // CONFIRMAR O RECHAZAR PAGO (acción del administrador)
 // Notifica de vuelta al cliente con el resultado
 // ─────────────────────────────────────────────
-
 export const confirmPayment = async (
   productOrderId: string,
-  approved: boolean
+  approved: boolean,
+  rejectionReason?: string
 ) => {
   const order = await prisma.productOrder.findUnique({
     where: { id: productOrderId },
@@ -335,28 +332,50 @@ export const confirmPayment = async (
     throw new Error('Pedido no encontrado')
   }
 
-  const updatedOrder = await prisma.productOrder.update({
-    where: { id: productOrderId },
-    data: {
-      status: approved ? 'CONFIRMED' : 'PENDING',
-      paidAt: approved ? new Date() : null,
-      ...(approved ? {} : { receiptUrl: null }),
-    },
-    include: {
-      items: { include: { product: true } },
-      client: true,
-    },
+  let assignedAgentId: string | null = null
+  if (approved) {
+    assignedAgentId = await assignDeliveryAgent()
+  }
+
+  const updatedOrder = await prisma.$transaction(async (tx) => {
+    const updated = await tx.productOrder.update({
+      where: { id: productOrderId },
+      data: {
+        status: approved ? 'CONFIRMED' : 'PENDING',
+        paidAt: approved ? new Date() : null,
+        rejectionReason: approved ? null : rejectionReason,
+        ...(approved ? {} : { receiptUrl: null }),
+      },
+      include: {
+        items: { include: { product: true } },
+        client: true,
+      },
+    })
+
+    if (approved && assignedAgentId) {
+      await tx.productDelivery.create({
+        data: {
+          productOrderId,
+          agentId: assignedAgentId,
+        },
+      })
+    }
+
+    return updated
   })
 
-  // Notificar al cliente del resultado (si tiene cuenta de usuario vinculada)
+  if (approved && assignedAgentId) {
+    await incrementDeliveryLoad(assignedAgentId)
+  }
+
   if (order.client.user) {
     await prisma.notification.create({
       data: {
         type: 'PAYMENT_CONFIRMED',
         channel: 'PUSH',
         message: approved
-          ? `Tu pago para el pedido #${productOrderId.slice(0, 8)} fue confirmado. ¡Gracias por tu compra!`
-          : `No pudimos confirmar tu comprobante para el pedido #${productOrderId.slice(0, 8)}. Por favor sube un nuevo comprobante.`,
+          ? `Tu pago para el pedido #${productOrderId.slice(0, 8)} fue confirmado. Un motorizado fue asignado para tu entrega.`
+          : `No pudimos confirmar tu comprobante para el pedido #${productOrderId.slice(0, 8)}: ${rejectionReason}. Por favor sube un nuevo comprobante.`,
         userId: order.client.user.id,
         productOrderId,
       },
@@ -393,5 +412,70 @@ export const getProductOrderById = async (id: string, clientId: string) => {
       delivery: true,
       invoice: true,
     },
+  })
+}
+// ─────────────────────────────────────────────
+// ASIGNACIÓN AUTOMÁTICA DE MOTORIZADO (DELIVERY)
+// Mismo criterio que assignTechnician() en orders.service.ts:
+// menos carga activa primero. Reutiliza los campos genéricos de
+// User (activeOrderCount, maxOrderCapacity, technicianStatus).
+// ─────────────────────────────────────────────
+
+const assignDeliveryAgent = async (): Promise<string | null> => {
+  const available = await prisma.user.findMany({
+    where: {
+      role: 'DELIVERY',
+      isActive: true,
+      technicianStatus: 'AVAILABLE',
+    },
+    orderBy: [
+      { activeOrderCount: 'asc' },
+      { updatedAt: 'asc' },
+    ],
+  })
+
+  if (available.length > 0) {
+    return available[0].id
+  }
+
+  const busy = await prisma.user.findMany({
+    where: {
+      role: 'DELIVERY',
+      isActive: true,
+      technicianStatus: 'BUSY',
+    },
+    orderBy: { activeOrderCount: 'asc' },
+  })
+
+  const underCapacity = busy.filter(
+    (agent) => agent.activeOrderCount < agent.maxOrderCapacity
+  )
+
+  return underCapacity.length > 0 ? underCapacity[0].id : null
+}
+
+const incrementDeliveryLoad = async (agentId: string) => {
+  const agent = await prisma.user.findUnique({ where: { id: agentId } })
+  if (!agent) return
+
+  const newCount = agent.activeOrderCount + 1
+  const newStatus = newCount >= agent.maxOrderCapacity ? 'SATURATED' : 'BUSY'
+
+  await prisma.user.update({
+    where: { id: agentId },
+    data: { activeOrderCount: newCount, technicianStatus: newStatus },
+  })
+}
+
+export const decrementDeliveryLoad = async (agentId: string) => {
+  const agent = await prisma.user.findUnique({ where: { id: agentId } })
+  if (!agent) return
+
+  const newCount = Math.max(0, agent.activeOrderCount - 1)
+  const newStatus = newCount === 0 ? 'AVAILABLE' : 'BUSY'
+
+  await prisma.user.update({
+    where: { id: agentId },
+    data: { activeOrderCount: newCount, technicianStatus: newStatus },
   })
 }

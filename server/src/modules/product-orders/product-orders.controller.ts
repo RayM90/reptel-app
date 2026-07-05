@@ -87,7 +87,7 @@ export const createLinkedOrder = async (req: AuthRequest, res: Response): Promis
       return
     }
 
-    const { items, paymentMethod, linkedOrderId, receiptUrl, notes } = req.body
+    const { items, paymentMethod, linkedOrderId, address, notes } = req.body
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ success: false, message: 'El pedido debe contener al menos un producto' })
@@ -101,6 +101,11 @@ export const createLinkedOrder = async (req: AuthRequest, res: Response): Promis
 
     if (!linkedOrderId) {
       res.status(400).json({ success: false, message: 'linkedOrderId es requerido' })
+      return
+    }
+
+    if (!address) {
+      res.status(400).json({ success: false, message: 'La dirección de entrega es requerida' })
       return
     }
 
@@ -118,7 +123,7 @@ export const createLinkedOrder = async (req: AuthRequest, res: Response): Promis
       items,
       paymentMethod: mappedMethod,
       linkedOrderId,
-      receiptUrl,
+      address,
       notes,
     })
 
@@ -175,14 +180,22 @@ export const uploadReceipt = async (req: AuthRequest, res: Response): Promise<vo
 export const confirmPayment = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const id = String(req.params.id)
-    const { approved } = req.body
+    const { approved, rejectionReason } = req.body
 
     if (approved === undefined) {
       res.status(400).json({ success: false, message: 'approved es requerido (true o false)' })
       return
     }
 
-    const order = await productOrdersService.confirmPayment(id, Boolean(approved))
+    if (approved === false && !rejectionReason) {
+      res.status(400).json({
+        success: false,
+        message: 'rejectionReason es requerido cuando se rechaza el pago',
+      })
+      return
+    }
+
+    const order = await productOrdersService.confirmPayment(id, Boolean(approved), rejectionReason)
     res.json({ success: true, data: order })
   } catch (error) {
     console.error('ERROR CONFIRMAR PAGO:', error)
