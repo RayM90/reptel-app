@@ -321,3 +321,17 @@ export const confirmReceived = async (req: AuthRequest, res: Response): Promise<
     res.status(400).json({ success: false, message })
   }
 }
+
+// ─────────────────────────────────────────────
+// ADMIN — Listar todos los pedidos de tienda (Fase 4)
+// ─────────────────────────────────────────────
+
+export const getAllOrders = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const orders = await productOrdersService.getAllOrders()
+    res.json({ success: true, data: orders })
+  } catch (error) {
+    console.error('ERROR OBTENER TODOS LOS PEDIDOS:', error)
+    res.status(500).json({ success: false, message: 'Error al obtener los pedidos' })
+  }
+}

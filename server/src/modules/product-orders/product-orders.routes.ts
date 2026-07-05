@@ -56,6 +56,14 @@ router.patch(
   productOrdersController.confirmPayment
 )
 
+// Listar todos los pedidos de tienda (supervisión del ADMIN)
+router.get(
+  '/',
+  authenticate,
+  authorize('ADMIN'),
+  productOrdersController.getAllOrders
+)
+
 // Motorizado marca el pedido como entregado
 
 router.patch('/:id/deliver', authenticate, authorize('DELIVERY'), productOrdersController.markAsDelivered)
