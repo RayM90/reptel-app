@@ -414,6 +414,23 @@ export const getProductOrderById = async (id: string, clientId: string) => {
     },
   })
 }
+
+// ─────────────────────────────────────────────
+// ADMIN — Listar todos los pedidos de tienda, sin filtrar por cliente (Fase 4)
+// ─────────────────────────────────────────────
+
+export const getAllOrders = async () => {
+  return await prisma.productOrder.findMany({
+    include: {
+      items: { include: { product: true } },
+      client: true,
+      delivery: { include: { agent: { select: { id: true, name: true } } } },
+      linkedOrder: { select: { id: true, orderNumber: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
 // ─────────────────────────────────────────────
 // ASIGNACIÓN AUTOMÁTICA DE MOTORIZADO (DELIVERY)
 // Mismo criterio que assignTechnician() en orders.service.ts:
