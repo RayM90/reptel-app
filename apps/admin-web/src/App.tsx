@@ -1,10 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import Login from './pages/auth/Login'
 import ProtectedRoute from './components/ProtectedRoute'
-
-function AdminDashboard() {
-  return <h1>Panel de Administrador — Dashboard (pendiente)</h1>
-}
+import Dashboard from './pages/admin/Dashboard'
 
 function TechnicianDashboard() {
   return <h1>Panel de Técnico — Mis Órdenes (pendiente)</h1>
@@ -23,7 +20,7 @@ function App() {
         path="/admin"
         element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
-            <AdminDashboard />
+            <Dashboard />
           </ProtectedRoute>
         }
       />
