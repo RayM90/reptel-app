@@ -28,7 +28,14 @@ export default function Login() {
       }
 
       setUser(user, token)
-      navigate('/')
+
+      if (user.role === 'ADMIN') {
+      navigate('/admin')
+      } else if (user.role === 'TECHNICIAN_DELIVERY') {
+      navigate('/technician')
+      } else if (user.role === 'DELIVERY') {
+      navigate('/delivery')
+}
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Credenciales inválidas')
     } finally {
