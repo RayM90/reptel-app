@@ -253,6 +253,7 @@ export const updateBudget = async (req: AuthRequest, res: Response): Promise<voi
   }
 }
 
+
 export const getTodayOrders = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const orders = await ordersService.getTodayOrders()
@@ -278,5 +279,74 @@ export const getAvailableTechnicians = async (req: AuthRequest, res: Response): 
       message: 'Error al obtener técnicos',
       error: String(error),
     })
+  }
+}
+
+// ─────────────────────────────────────────────
+// TÉCNICO — Confirmar o corregir diagnóstico + presupuesto (Fase 4)
+// ─────────────────────────────────────────────
+
+export const submitDiagnosis = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const { diagnosis, serviceCatalogId, budget } = req.body
+
+    if (!diagnosis) {
+      res.status(400).json({ success: false, message: 'El diagnóstico es requerido' })
+      return
+    }
+
+    if (budget === undefined) {
+      res.status(400).json({ success: false, message: 'El presupuesto (budget) es requerido' })
+      return
+    }
+
+    const order = await ordersService.submitDiagnosis(id, diagnosis, budget, serviceCatalogId)
+
+    broadcastOrderUpdate({
+      type: 'ORDER_BUDGET_UPDATED',
+      data: order,
+    })
+
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR SUBMIT DIAGNOSIS:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al registrar el diagnóstico' })
+  }
+}
+
+// ─────────────────────────────────────────────
+// ADMIN — Confirmar o rechazar el pago anticipado (Fase 4)
+// ─────────────────────────────────────────────
+
+export const confirmAdvancePayment = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const { approved, rejectionReason } = req.body
+
+    if (approved === undefined) {
+      res.status(400).json({ success: false, message: 'approved es requerido (true o false)' })
+      return
+    }
+
+    if (approved === false && !rejectionReason) {
+      res.status(400).json({
+        success: false,
+        message: 'rejectionReason es requerido cuando se rechaza el pago',
+      })
+      return
+    }
+
+    const order = await ordersService.confirmAdvancePayment(id, Boolean(approved), rejectionReason)
+
+    broadcastOrderUpdate({
+      type: 'ORDER_STATUS_UPDATED',
+      data: order,
+    })
+
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR CONFIRM ADVANCE PAYMENT:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al confirmar el pago anticipado' })
   }
 }

@@ -42,9 +42,9 @@ router.patch('/:id/status', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNIC
 // Actualizar presupuesto de una orden
 router.patch('/:id/budget', authenticate, authorize('ADMIN', 'MANAGER'), ordersController.updateBudget)
 
-// TODO Fase 4: POST /:id/confirm-advance-payment (solo ADMIN)
-// Cuando exista el panel admin-web, este endpoint marcará
-// advancePaymentConfirmed = true y disparará la notificación al
-// técnico-delivery asignado para que salga.
+router.patch('/:id/diagnosis', authenticate, authorize('TECHNICIAN_DELIVERY'), ordersController.submitDiagnosis)
+
+// Confirmar o rechazar el pago anticipado (Fase 4 — ADMIN)
+router.post('/:id/confirm-advance-payment', authenticate, authorize('ADMIN'), ordersController.confirmAdvancePayment)
 
 export default router
