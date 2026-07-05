@@ -56,4 +56,16 @@ router.patch(
   productOrdersController.confirmPayment
 )
 
+// Motorizado marca el pedido como entregado
+
+router.patch('/:id/deliver', authenticate, authorize('DELIVERY'), productOrdersController.markAsDelivered)
+
+// Cliente confirma que recibió el pedido
+router.patch(
+  '/:id/confirm-received',
+  authenticate,
+  authorize('CLIENT'),
+  productOrdersController.confirmReceived
+)
+
 export default router
