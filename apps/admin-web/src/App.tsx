@@ -1,9 +1,12 @@
+import { Routes, Route } from 'react-router-dom'
+import Login from './pages/auth/Login'
+
 function App() {
   return (
-    <div>
-      <h1>RepTel Admin</h1>
-      <p>Panel de administración — en construcción</p>
-    </div>
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/" element={<h1>RepTel Admin — Dashboard (pendiente)</h1>} />
+    </Routes>
   )
 }
 
