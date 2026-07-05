@@ -490,3 +490,106 @@ export const getAvailableTechnicians = async () => {
     orderBy: { activeOrderCount: 'asc' },
   })
 }
+
+// ─────────────────────────────────────────────
+// TÉCNICO — Confirmar o corregir diagnóstico + presupuesto (Fase 4)
+// El técnico visita/revisa el equipo, confirma si la falla reportada por
+// el cliente es correcta o la corrige, y asigna el presupuesto. La orden
+// pasa a WAITING_APPROVAL a la espera de que el cliente decida (registrado
+// después por el ADMIN vía el endpoint /:id/budget ya existente).
+// ─────────────────────────────────────────────
+
+export const submitDiagnosis = async (
+  id: string,
+  diagnosis: string,
+  budget: number,
+  serviceCatalogId?: string
+) => {
+  return await prisma.order.update({
+    where: { id },
+    data: {
+      diagnosis,
+      budget,
+      serviceCatalogId: serviceCatalogId ?? null,
+      status: 'WAITING_APPROVAL',
+      statusHistory: {
+        create: {
+          status: 'WAITING_APPROVAL',
+          comment: `Diagnóstico registrado por el técnico. Presupuesto: $${budget}`,
+        },
+      },
+    },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      serviceCatalog: true,
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+}
+
+// ─────────────────────────────────────────────
+// ADMIN — Confirmar o rechazar el pago anticipado (Fase 4)
+// Al aprobar: la orden pasa de PENDING_PAYMENT a RECEIVED, quedando
+// lista para que el técnico-delivery asignado sea despachado.
+// Al rechazar: se guarda el motivo obligatorio, la orden permanece en
+// PENDING_PAYMENT, y se limpia el comprobante para que el cliente
+// pueda subir uno nuevo.
+// ─────────────────────────────────────────────
+
+export const confirmAdvancePayment = async (
+  id: string,
+  approved: boolean,
+  rejectionReason?: string
+) => {
+  const order = await prisma.order.findUnique({
+    where: { id },
+    include: { client: { include: { user: true } } },
+  })
+
+  if (!order) {
+    throw new Error('Orden no encontrada')
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: { id },
+    data: {
+      advancePaymentConfirmed: approved,
+      advancePaymentConfirmedAt: approved ? new Date() : null,
+      advancePaymentRejectionReason: approved ? null : rejectionReason,
+      ...(approved ? {} : { advanceReceiptUrl: null }),
+      status: approved ? 'RECEIVED' : 'PENDING_PAYMENT',
+      statusHistory: {
+        create: {
+          status: approved ? 'RECEIVED' : 'PENDING_PAYMENT',
+          comment: approved
+            ? 'Pago anticipado confirmado por el administrador'
+            : `Pago anticipado rechazado: ${rejectionReason}`,
+        },
+      },
+    },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+
+  if (order.client.user) {
+    await prisma.notification.create({
+      data: {
+        type: 'PAYMENT_CONFIRMED',
+        channel: 'PUSH',
+        message: approved
+          ? `Tu pago anticipado para la orden #${order.orderNumber} fue confirmado. El técnico será despachado pronto.`
+          : `No pudimos confirmar tu comprobante para la orden #${order.orderNumber}: ${rejectionReason}. Por favor sube un nuevo comprobante.`,
+        userId: order.client.user.id,
+        orderId: id,
+      },
+    })
+  }
+
+  return updatedOrder
+}
