@@ -190,9 +190,10 @@ export const createProductOrder = async (data: CreateProductOrderInput) => {
 
 // ─────────────────────────────────────────────
 // CREAR PEDIDO VINCULADO A ORDEN DE SERVICIO TÉCNICO
-// (Dirección B) — sin dirección/delivery propio, el técnico ya
-// asignado a la Order trae el repuesto en su próxima visita.
-// Solo permitido si la Order ya tiene presupuesto (budget != null).
+// (Dirección B) — ahora se comporta como una compra normal de tienda,
+// exige dirección de entrega y usa el motorizado (DELIVERY) igual que
+// cualquier otro pedido. Solo permitido si la Order ya tiene
+// presupuesto (budget != null).
 // ─────────────────────────────────────────────
 
 export const createLinkedProductOrder = async (
@@ -264,8 +265,9 @@ export const createLinkedProductOrder = async (
 }
 
 // ─────────────────────────────────────────────
-// SUBIR COMPROBANTE DE PAGO
-// Guarda la URL de la imagen y notifica a todos los administradores
+// SUBIR DATOS DE PAGO (Pago Móvil / Transferencia / Binance)
+// Guarda los datos ingresados por el cliente y notifica a los
+// administradores.
 // ─────────────────────────────────────────────
 
 export const uploadReceipt = async (
@@ -316,8 +318,12 @@ export const uploadReceipt = async (
 
 // ─────────────────────────────────────────────
 // CONFIRMAR O RECHAZAR PAGO (acción del administrador)
-// Notifica de vuelta al cliente con el resultado
+// Al aprobar: asigna motorizado automáticamente y crea su ProductDelivery.
+// Al rechazar: guarda el motivo, limpia los datos de pago viejos
+// (para que el botón "Aprobar" del admin no quede habilitado con
+// información incorrecta) y el cliente debe reenviar sus datos.
 // ─────────────────────────────────────────────
+
 export const confirmPayment = async (
   productOrderId: string,
   approved: boolean,
@@ -344,7 +350,9 @@ export const confirmPayment = async (
         status: approved ? 'CONFIRMED' : 'PENDING',
         paidAt: approved ? new Date() : null,
         rejectionReason: approved ? null : rejectionReason,
-        ...(approved ? {} : { receiptUrl: null }),
+        ...(approved
+          ? {}
+          : { receiptUrl: null, paymentDetails: Prisma.JsonNull }),
       },
       include: {
         items: { include: { product: true } },
@@ -375,7 +383,7 @@ export const confirmPayment = async (
         channel: 'PUSH',
         message: approved
           ? `Tu pago para el pedido #${productOrderId.slice(0, 8)} fue confirmado. Un motorizado fue asignado para tu entrega.`
-          : `No pudimos confirmar tu comprobante para el pedido #${productOrderId.slice(0, 8)}: ${rejectionReason}. Por favor sube un nuevo comprobante.`,
+          : `No pudimos confirmar tu pago para el pedido #${productOrderId.slice(0, 8)}: ${rejectionReason}. Por favor envía tus datos de pago nuevamente.`,
         userId: order.client.user.id,
         productOrderId,
       },

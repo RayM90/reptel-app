@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import prisma from '../../lib/prisma'
 import QRCode from 'qrcode'
 
@@ -249,7 +250,7 @@ export const createOrder = async (data: {
 // La orden nace en status PENDING_PAYMENT con los montos fijos ya
 // asignados. El técnico SÍ se asigna automáticamente (igual que antes),
 // pero no se notifica/despacha hasta que el pago quede confirmado por
-// el ADMIN (endpoint de confirmación pendiente para Fase 4).
+// el ADMIN.
 // ─────────────────────────────────────────────
 
 export const createSelfServiceOrder = async (data: {
@@ -339,12 +340,10 @@ export const createSelfServiceOrder = async (data: {
 }
 
 // ─────────────────────────────────────────────
-// PAGO ANTICIPADO — SUBIR COMPROBANTE (cliente)
+// PAGO ANTICIPADO — SUBIR DATOS DE PAGO (cliente)
 // Mismo patrón que product-orders.service.ts → uploadReceipt().
-// Guarda la URL del comprobante (simulado, sin S3 real por ahora) y
-// notifica a los administradores. La confirmación real del pago
-// (que dispara el despacho del técnico-delivery) queda para el
-// endpoint de ADMIN de Fase 4 — no incluida aquí todavía.
+// Guarda los datos ingresados por el cliente y notifica a los
+// administradores.
 // ─────────────────────────────────────────────
 
 export const submitAdvancePayment = async (
@@ -534,8 +533,9 @@ export const submitDiagnosis = async (
 // Al aprobar: la orden pasa de PENDING_PAYMENT a RECEIVED, quedando
 // lista para que el técnico-delivery asignado sea despachado.
 // Al rechazar: se guarda el motivo obligatorio, la orden permanece en
-// PENDING_PAYMENT, y se limpia el comprobante para que el cliente
-// pueda subir uno nuevo.
+// PENDING_PAYMENT, y se limpian los datos de pago viejos (para que el
+// botón "Aprobar" del admin no quede habilitado con información
+// incorrecta) — el cliente debe reenviar sus datos.
 // ─────────────────────────────────────────────
 
 export const confirmAdvancePayment = async (
@@ -558,7 +558,9 @@ export const confirmAdvancePayment = async (
       advancePaymentConfirmed: approved,
       advancePaymentConfirmedAt: approved ? new Date() : null,
       advancePaymentRejectionReason: approved ? null : rejectionReason,
-      ...(approved ? {} : { advanceReceiptUrl: null }),
+      ...(approved
+        ? {}
+        : { advanceReceiptUrl: null, advancePaymentDetails: Prisma.JsonNull }),
       status: approved ? 'RECEIVED' : 'PENDING_PAYMENT',
       statusHistory: {
         create: {
@@ -584,7 +586,7 @@ export const confirmAdvancePayment = async (
         channel: 'PUSH',
         message: approved
           ? `Tu pago anticipado para la orden #${order.orderNumber} fue confirmado. El técnico será despachado pronto.`
-          : `No pudimos confirmar tu comprobante para la orden #${order.orderNumber}: ${rejectionReason}. Por favor sube un nuevo comprobante.`,
+          : `No pudimos confirmar tu pago para la orden #${order.orderNumber}: ${rejectionReason}. Por favor envía tus datos de pago nuevamente.`,
         userId: order.client.user.id,
         orderId: id,
       },

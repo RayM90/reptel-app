@@ -9,6 +9,7 @@ interface Order {
   budget: string | null
   client: { name: string; lastName: string }
   technician: { id: string; name: string } | null
+  advancePaymentDetails: Record<string, string> | null
 }
 
 interface ProductOrderItem {
@@ -23,6 +24,20 @@ interface ProductOrder {
   client: { name: string; lastName: string }
   items: ProductOrderItem[]
   delivery: { agent: { name: string } } | null
+  paymentDetails: Record<string, string> | null
+}
+
+function PaymentDetailsView({ details }: { details: Record<string, string> | null }) {
+  if (!details) return <span>—</span>
+  return (
+    <div style={{ fontSize: '0.85em', lineHeight: 1.5 }}>
+      {Object.entries(details).map(([key, value]) => (
+        <div key={key}>
+          <strong>{key}:</strong> {value}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export default function Dashboard() {
@@ -55,9 +70,10 @@ export default function Dashboard() {
   const handleApproveAdvancePayment = async (orderId: string) => {
     try {
       await api.post(`/api/orders/${orderId}/confirm-advance-payment`, { approved: true })
+      alert('✅ Pago aprobado. La orden pasó a "Recibida".')
       fetchData()
     } catch (err) {
-      alert('Error al aprobar el pago')
+      alert('❌ Error al aprobar el pago')
     }
   }
 
@@ -69,18 +85,20 @@ export default function Dashboard() {
         approved: false,
         rejectionReason: reason,
       })
+      alert('✅ Pago rechazado. Se notificó al cliente para que reenvíe sus datos.')
       fetchData()
     } catch (err) {
-      alert('Error al rechazar el pago')
+      alert('❌ Error al rechazar el pago')
     }
   }
 
   const handleApproveProductPayment = async (id: string) => {
     try {
       await api.patch(`/api/product-orders/${id}/confirm-payment`, { approved: true })
+      alert('✅ Pago aprobado. Se asignó un motorizado automáticamente.')
       fetchData()
     } catch (err) {
-      alert('Error al aprobar el pago')
+      alert('❌ Error al aprobar el pago')
     }
   }
 
@@ -92,9 +110,10 @@ export default function Dashboard() {
         approved: false,
         rejectionReason: reason,
       })
+      alert('✅ Pago rechazado. Se notificó al cliente para que reenvíe sus datos.')
       fetchData()
     } catch (err) {
-      alert('Error al rechazar el pago')
+      alert('❌ Error al rechazar el pago')
     }
   }
 
@@ -127,6 +146,7 @@ export default function Dashboard() {
                 <th>Estado</th>
                 <th>Presupuesto</th>
                 <th>Técnico asignado</th>
+                <th>Datos de pago</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -139,10 +159,14 @@ export default function Dashboard() {
                   <td>{order.status}</td>
                   <td>{order.budget ? `$${order.budget}` : '—'}</td>
                   <td>{order.technician?.name || 'Sin asignar'}</td>
+                  <td><PaymentDetailsView details={order.advancePaymentDetails} /></td>
                   <td>
                     {order.status === 'PENDING_PAYMENT' ? (
                       <>
-                        <button onClick={() => handleApproveAdvancePayment(order.id)}>
+                        <button
+                          onClick={() => handleApproveAdvancePayment(order.id)}
+                          disabled={!order.advancePaymentDetails}
+                        >
                           Aprobar pago
                         </button>{' '}
                         <button onClick={() => handleRejectAdvancePayment(order.id)}>
@@ -173,6 +197,7 @@ export default function Dashboard() {
                 <th>Total</th>
                 <th>Estado</th>
                 <th>Motorizado asignado</th>
+                <th>Datos de pago</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -184,10 +209,14 @@ export default function Dashboard() {
                   <td>${po.total}</td>
                   <td>{po.status}</td>
                   <td>{po.delivery?.agent.name || 'Sin asignar'}</td>
+                  <td><PaymentDetailsView details={po.paymentDetails} /></td>
                   <td>
                     {po.status === 'PENDING' ? (
                       <>
-                        <button onClick={() => handleApproveProductPayment(po.id)}>
+                        <button
+                          onClick={() => handleApproveProductPayment(po.id)}
+                          disabled={!po.paymentDetails}
+                        >
                           Aprobar pago
                         </button>{' '}
                         <button onClick={() => handleRejectProductPayment(po.id)}>
