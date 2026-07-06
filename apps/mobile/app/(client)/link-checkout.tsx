@@ -91,9 +91,9 @@ export default function LinkCheckoutScreen() {
             text: 'OK',
             onPress: () =>
               router.replace({
-                pathname: '/(client)/upload-receipt',
-                params: { orderId: createdOrder.id },
-              }),
+              pathname: '/(client)/upload-receipt',
+              params: { orderId: createdOrder.id, paymentMethod: selectedMethod },
+          }),
           },
         ]
       )
