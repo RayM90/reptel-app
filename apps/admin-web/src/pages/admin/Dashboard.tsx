@@ -52,6 +52,52 @@ export default function Dashboard() {
     }
   }
 
+  const handleApproveAdvancePayment = async (orderId: string) => {
+    try {
+      await api.post(`/api/orders/${orderId}/confirm-advance-payment`, { approved: true })
+      fetchData()
+    } catch (err) {
+      alert('Error al aprobar el pago')
+    }
+  }
+
+  const handleRejectAdvancePayment = async (orderId: string) => {
+    const reason = window.prompt('Motivo del rechazo:')
+    if (!reason) return
+    try {
+      await api.post(`/api/orders/${orderId}/confirm-advance-payment`, {
+        approved: false,
+        rejectionReason: reason,
+      })
+      fetchData()
+    } catch (err) {
+      alert('Error al rechazar el pago')
+    }
+  }
+
+  const handleApproveProductPayment = async (id: string) => {
+    try {
+      await api.patch(`/api/product-orders/${id}/confirm-payment`, { approved: true })
+      fetchData()
+    } catch (err) {
+      alert('Error al aprobar el pago')
+    }
+  }
+
+  const handleRejectProductPayment = async (id: string) => {
+    const reason = window.prompt('Motivo del rechazo:')
+    if (!reason) return
+    try {
+      await api.patch(`/api/product-orders/${id}/confirm-payment`, {
+        approved: false,
+        rejectionReason: reason,
+      })
+      fetchData()
+    } catch (err) {
+      alert('Error al rechazar el pago')
+    }
+  }
+
   const activeOrders = orders.filter(
     (o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
   )
@@ -81,6 +127,7 @@ export default function Dashboard() {
                 <th>Estado</th>
                 <th>Presupuesto</th>
                 <th>Técnico asignado</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -92,6 +139,20 @@ export default function Dashboard() {
                   <td>{order.status}</td>
                   <td>{order.budget ? `$${order.budget}` : '—'}</td>
                   <td>{order.technician?.name || 'Sin asignar'}</td>
+                  <td>
+                    {order.status === 'PENDING_PAYMENT' ? (
+                      <>
+                        <button onClick={() => handleApproveAdvancePayment(order.id)}>
+                          Aprobar pago
+                        </button>{' '}
+                        <button onClick={() => handleRejectAdvancePayment(order.id)}>
+                          Rechazar
+                        </button>
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -112,6 +173,7 @@ export default function Dashboard() {
                 <th>Total</th>
                 <th>Estado</th>
                 <th>Motorizado asignado</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -122,6 +184,20 @@ export default function Dashboard() {
                   <td>${po.total}</td>
                   <td>{po.status}</td>
                   <td>{po.delivery?.agent.name || 'Sin asignar'}</td>
+                  <td>
+                    {po.status === 'PENDING' ? (
+                      <>
+                        <button onClick={() => handleApproveProductPayment(po.id)}>
+                          Aprobar pago
+                        </button>{' '}
+                        <button onClick={() => handleRejectProductPayment(po.id)}>
+                          Rechazar
+                        </button>
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

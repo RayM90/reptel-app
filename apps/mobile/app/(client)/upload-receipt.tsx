@@ -6,61 +6,45 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  Image,
+  TextInput,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
-import * as ImagePicker from 'expo-image-picker'
 import { productOrdersAPI } from '../../src/services/api'
+
+type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
 export default function UploadReceiptScreen() {
   const router = useRouter()
-  const { orderId } = useLocalSearchParams<{ orderId: string }>()
-  const [imageUri, setImageUri] = useState<string | null>(null)
+  const { orderId, paymentMethod } = useLocalSearchParams<{
+    orderId: string
+    paymentMethod: PaymentMethod
+  }>()
+
+  const [banco, setBanco] = useState('')
+  const [telefono, setTelefono] = useState('')
+  const [referencia, setReferencia] = useState('')
+  const [monto, setMonto] = useState('')
+  const [titular, setTitular] = useState('')
+  const [cedula, setCedula] = useState('')
+  const [correo, setCorreo] = useState('')
+  const [uid, setUid] = useState('')
+  const [nombre, setNombre] = useState('')
+
   const [loading, setLoading] = useState(false)
 
-  const requestPermissionAndPick = async (fromCamera: boolean) => {
-    if (fromCamera) {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync()
-      if (status !== 'granted') {
-        Alert.alert(
-          'Permiso requerido',
-          'Necesitamos acceso a tu cámara para tomar la foto del comprobante.'
-        )
-        return
-      }
-    } else {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
-      if (status !== 'granted') {
-        Alert.alert(
-          'Permiso requerido',
-          'Necesitamos acceso a tu galería para seleccionar el comprobante.'
-        )
-        return
-      }
-    }
-
-    const result = fromCamera
-      ? await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          quality: 0.8,
-          allowsEditing: true,
-        })
-      : await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          quality: 0.8,
-          allowsEditing: true,
-        })
-
-    if (!result.canceled && result.assets.length > 0) {
-      setImageUri(result.assets[0].uri)
-    }
+  const isFormValid = () => {
+    if (!monto) return false
+    if (paymentMethod === 'PAGO_MOVIL') return !!banco && !!telefono && !!referencia
+    if (paymentMethod === 'TRANSFERENCIA') return !!banco && !!titular && !!cedula && !!referencia
+    if (paymentMethod === 'BINANCE') return !!correo && !!uid && !!nombre
+    return false
   }
 
   const handleSubmit = async () => {
-    if (!imageUri) {
-      Alert.alert('Comprobante requerido', 'Selecciona o toma una foto del comprobante primero.')
+    if (!isFormValid()) {
+      Alert.alert('Datos incompletos', 'Completa todos los campos requeridos.')
       return
     }
     if (!orderId) {
@@ -68,12 +52,22 @@ export default function UploadReceiptScreen() {
       return
     }
 
+    let paymentDetails: Record<string, string> = { monto }
+
+    if (paymentMethod === 'PAGO_MOVIL') {
+      paymentDetails = { ...paymentDetails, banco, telefono, referencia }
+    } else if (paymentMethod === 'TRANSFERENCIA') {
+      paymentDetails = { ...paymentDetails, banco, titular, cedula, referencia }
+    } else if (paymentMethod === 'BINANCE') {
+      paymentDetails = { ...paymentDetails, correo, uid, nombre }
+    }
+
     setLoading(true)
     try {
-      await productOrdersAPI.uploadReceipt(orderId, imageUri)
+      await productOrdersAPI.uploadReceipt(orderId, paymentDetails)
       Alert.alert(
-        '✅ Comprobante enviado',
-        'Tu comprobante fue enviado. El equipo de RepTel lo revisará y confirmará tu pago pronto.',
+        '✅ Datos de pago enviados',
+        'Tus datos fueron enviados. El equipo de RepTel los revisará y confirmará tu pago pronto.',
         [
           {
             text: 'Ver mis pedidos',
@@ -84,8 +78,8 @@ export default function UploadReceiptScreen() {
     } catch (error: any) {
       const backendMessage = error?.response?.data?.message
       Alert.alert(
-        'No se pudo enviar el comprobante',
-        backendMessage || 'Ocurrió un error al enviar el comprobante. Intenta de nuevo.'
+        'No se pudo enviar la información',
+        backendMessage || 'Ocurrió un error al enviar los datos. Intenta de nuevo.'
       )
     } finally {
       setLoading(false)
@@ -99,12 +93,11 @@ export default function UploadReceiptScreen() {
         colors={['#ffffff', '#eef2ff', '#d5ddff', '#8fa5ff']}
         style={styles.container}
       >
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.step}>Paso 2 de 2</Text>
-          <Text style={styles.title}>Subir Comprobante</Text>
+          <Text style={styles.title}>Datos del Pago</Text>
           <Text style={styles.subtitle}>
-            Toma o selecciona la foto de tu comprobante de pago
+            Ingresa los datos de tu transferencia, Pago Móvil o Binance
           </Text>
         </View>
 
@@ -112,69 +105,53 @@ export default function UploadReceiptScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Instrucciones */}
           <View style={styles.infoCard}>
             <Text style={styles.infoText}>
-              📎 Sube el screenshot o foto del comprobante de tu transferencia, Pago Móvil o Binance. El equipo de RepTel lo revisará y confirmará tu pedido manualmente.
+              📝 Ingresa los datos exactos de tu pago. El equipo de RepTel los verificará y confirmará tu pedido manualmente.
             </Text>
           </View>
 
-          {/* Preview de imagen */}
-          {imageUri ? (
-            <View style={styles.previewContainer}>
-              <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="contain" />
-              <TouchableOpacity
-                style={styles.changeImageBtn}
-                onPress={() => setImageUri(null)}
-              >
-                <Text style={styles.changeImageText}>✕ Cambiar imagen</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.placeholderContainer}>
-              <Text style={styles.placeholderIcon}>🧾</Text>
-              <Text style={styles.placeholderText}>Ninguna imagen seleccionada</Text>
-            </View>
-          )}
+          <View style={styles.form}>
+            {paymentMethod === 'PAGO_MOVIL' && (
+              <>
+                <Field label="Banco" value={banco} onChangeText={setBanco} placeholder="Ej. Banesco" />
+                <Field label="Teléfono emisor" value={telefono} onChangeText={setTelefono} placeholder="Ej. 0414-1234567" keyboardType="phone-pad" />
+                <Field label="Últimos 4 dígitos de la referencia" value={referencia} onChangeText={setReferencia} placeholder="Ej. 1234" keyboardType="number-pad" maxLength={4} />
+              </>
+            )}
 
-          {/* Botones de selección */}
-          {!imageUri && (
-            <View style={styles.pickersRow}>
-              <TouchableOpacity
-                style={styles.pickerBtn}
-                onPress={() => requestPermissionAndPick(false)}
-              >
-                <Text style={styles.pickerBtnIcon}>🖼️</Text>
-                <Text style={styles.pickerBtnText}>Galería</Text>
-              </TouchableOpacity>
+            {paymentMethod === 'TRANSFERENCIA' && (
+              <>
+                <Field label="Banco" value={banco} onChangeText={setBanco} placeholder="Ej. Banesco" />
+                <Field label="Nombre del titular" value={titular} onChangeText={setTitular} placeholder="Nombre completo" />
+                <Field label="Cédula" value={cedula} onChangeText={setCedula} placeholder="Ej. V-12345678" />
+                <Field label="Número de referencia" value={referencia} onChangeText={setReferencia} placeholder="Referencia de la transferencia" keyboardType="number-pad" />
+              </>
+            )}
 
-              <TouchableOpacity
-                style={styles.pickerBtn}
-                onPress={() => requestPermissionAndPick(true)}
-              >
-                <Text style={styles.pickerBtnIcon}>📷</Text>
-                <Text style={styles.pickerBtnText}>Cámara</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+            {paymentMethod === 'BINANCE' && (
+              <>
+                <Field label="Correo de la cuenta" value={correo} onChangeText={setCorreo} placeholder="correo@ejemplo.com" keyboardType="email-address" />
+                <Field label="UID de Binance" value={uid} onChangeText={setUid} placeholder="Ej. 123456789" />
+                <Field label="Nombre del titular" value={nombre} onChangeText={setNombre} placeholder="Nombre completo" />
+              </>
+            )}
 
-          {/* Botón enviar */}
+            <Field label="Monto enviado ($)" value={monto} onChangeText={setMonto} placeholder="Ej. 45.00" keyboardType="decimal-pad" />
+          </View>
+
           <TouchableOpacity
-            style={[
-              styles.submitBtn,
-              (!imageUri || loading) && styles.submitBtnDisabled,
-            ]}
+            style={[styles.submitBtn, (!isFormValid() || loading) && styles.submitBtnDisabled]}
             onPress={handleSubmit}
-            disabled={!imageUri || loading}
+            disabled={!isFormValid() || loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.submitBtnText}>Enviar Comprobante</Text>
+              <Text style={styles.submitBtnText}>Enviar Datos de Pago</Text>
             )}
           </TouchableOpacity>
 
-          {/* Nota de espera */}
           <Text style={styles.waitNote}>
             ⏳ Una vez enviado, recibirás una notificación cuando tu pago sea confirmado.
           </Text>
@@ -184,13 +161,35 @@ export default function UploadReceiptScreen() {
   )
 }
 
+interface FieldProps {
+  label: string
+  value: string
+  onChangeText: (text: string) => void
+  placeholder?: string
+  keyboardType?: 'default' | 'phone-pad' | 'number-pad' | 'decimal-pad' | 'email-address'
+  maxLength?: number
+}
+
+function Field({ label, value, onChangeText, placeholder, keyboardType = 'default', maxLength }: FieldProps) {
+  return (
+    <View style={styles.fieldGroup}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        style={styles.fieldInput}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#9aa5cc"
+        keyboardType={keyboardType}
+        maxLength={maxLength}
+      />
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: 22,
-    paddingBottom: 20,
-  },
+  header: { paddingTop: 60, paddingHorizontal: 22, paddingBottom: 20 },
   step: { fontSize: 12, color: '#5364ad', fontWeight: '600', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 },
   title: { fontSize: 26, fontWeight: '800', color: '#17247a', marginBottom: 6 },
   subtitle: { fontSize: 14, color: '#5364ad', lineHeight: 20 },
@@ -204,65 +203,20 @@ const styles = StyleSheet.create({
     borderColor: '#ffe082',
   },
   infoText: { fontSize: 13, color: '#7a6000', lineHeight: 20 },
-  previewContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  previewImage: {
-    width: '100%',
-    height: 300,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#d0d8ff',
-    backgroundColor: '#f0f3ff',
-  },
-  changeImageBtn: {
-    marginTop: 12,
-    alignSelf: 'center',
-  },
-  changeImageText: { color: '#5364ad', fontSize: 13, fontWeight: '600' },
-  placeholderContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f0f3ff',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#d0d8ff',
-    borderStyle: 'dashed',
-    height: 200,
-    marginBottom: 20,
-  },
-  placeholderIcon: { fontSize: 48, marginBottom: 10 },
-  placeholderText: { fontSize: 14, color: '#9aa5cc' },
-  pickersRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 28,
-  },
-  pickerBtn: {
-    flex: 1,
+  form: { marginBottom: 8 },
+  fieldGroup: { marginBottom: 16 },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#17247a', marginBottom: 6 },
+  fieldInput: {
     backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingVertical: 20,
-    alignItems: 'center',
+    borderRadius: 12,
+    padding: 14,
     borderWidth: 1.5,
     borderColor: '#d0d8ff',
+    fontSize: 14,
+    color: '#17247a',
   },
-  pickerBtnIcon: { fontSize: 28, marginBottom: 6 },
-  pickerBtnText: { fontSize: 14, fontWeight: '700', color: '#17247a' },
-  submitBtn: {
-    backgroundColor: '#17247a',
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
+  submitBtn: { backgroundColor: '#17247a', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginBottom: 16, marginTop: 8 },
   submitBtnDisabled: { backgroundColor: '#c0c0c0' },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  waitNote: {
-    fontSize: 13,
-    color: '#5364ad',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  waitNote: { fontSize: 13, color: '#5364ad', textAlign: 'center', lineHeight: 20 },
 })
