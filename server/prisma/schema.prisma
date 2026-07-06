@@ -232,6 +232,7 @@ model Order {
   revisionAmount             Decimal?       @db.Decimal(10, 2)
   advancePaymentMethod       PaymentMethod?
   advanceReceiptUrl          String?
+  advancePaymentDetails      Json?
   advancePaymentConfirmed    Boolean        @default(false)
   advancePaymentConfirmedAt  DateTime?
   advancePaymentRejectionReason String?     @db.Text
@@ -469,6 +470,7 @@ model ProductOrder {
   paymentMethod  PaymentMethod
   paidAt         DateTime?
   receiptUrl     String?
+  paymentDetails Json?
   notes          String?            @db.Text
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt

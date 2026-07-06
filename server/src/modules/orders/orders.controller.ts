@@ -161,18 +161,18 @@ export const submitAdvancePayment = async (req: AuthRequest, res: Response): Pro
     }
 
     const id = String(req.params.id)
-    const { receiptUrl } = req.body
+    const { paymentDetails } = req.body
 
-    if (!receiptUrl) {
-      res.status(400).json({ success: false, message: 'receiptUrl es requerido' })
+    if (!paymentDetails || typeof paymentDetails !== 'object') {
+      res.status(400).json({ success: false, message: 'paymentDetails es requerido' })
       return
     }
 
-    const order = await ordersService.submitAdvancePayment(id, email, receiptUrl)
+    const order = await ordersService.submitAdvancePayment(id, email, paymentDetails)
     res.json({ success: true, data: order })
   } catch (error: any) {
-    console.error('ERROR SUBIR COMPROBANTE PAGO ANTICIPADO:', error)
-    res.status(400).json({ success: false, message: error.message || 'Error al subir el comprobante' })
+    console.error('ERROR REGISTRAR DATOS DE PAGO ANTICIPADO:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al registrar los datos de pago' })
   }
 }
 

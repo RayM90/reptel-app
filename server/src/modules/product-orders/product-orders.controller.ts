@@ -157,18 +157,18 @@ export const uploadReceipt = async (req: AuthRequest, res: Response): Promise<vo
     }
 
     const id = String(req.params.id)
-    const { receiptUrl } = req.body
+    const { paymentDetails } = req.body
 
-    if (!receiptUrl) {
-      res.status(400).json({ success: false, message: 'receiptUrl es requerido' })
+    if (!paymentDetails || typeof paymentDetails !== 'object') {
+      res.status(400).json({ success: false, message: 'paymentDetails es requerido' })
       return
     }
 
-    const order = await productOrdersService.uploadReceipt(id, clientId, receiptUrl)
+    const order = await productOrdersService.uploadReceipt(id, clientId, paymentDetails)
     res.json({ success: true, data: order })
   } catch (error) {
-    console.error('ERROR SUBIR COMPROBANTE:', error)
-    const message = error instanceof Error ? error.message : 'Error al subir el comprobante'
+    console.error('ERROR SUBIR DATOS DE PAGO:', error)
+    const message = error instanceof Error ? error.message : 'Error al registrar los datos de pago'
     res.status(400).json({ success: false, message })
   }
 }
