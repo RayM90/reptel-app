@@ -51,8 +51,8 @@ export const ordersAPI = {
   getMyOrders: () => api.get('/api/orders/my-orders'),
 
   // Pago anticipado (delivery + revisión) — sube el comprobante
-  submitAdvancePayment: (id: string, receiptUrl: string) =>
-    api.post(`/api/orders/${id}/advance-payment`, { receiptUrl }),
+    submitAdvancePayment: (id: string, paymentDetails: Record<string, string>) =>
+    api.post(`/api/orders/${id}/advance-payment`, { paymentDetails }),
 }
 
 export const productOrdersAPI = {
@@ -68,9 +68,8 @@ export const productOrdersAPI = {
 
   getById: (id: string) => api.get(`/api/product-orders/${id}`),
 
-  uploadReceipt: (id: string, receiptUrl: string) =>
-    api.patch(`/api/product-orders/${id}/receipt`, { receiptUrl }),
-
+  uploadReceipt: (id: string, paymentDetails: Record<string, string>) =>
+    api.patch(`/api/product-orders/${id}/receipt`, { paymentDetails }),
  // Uso futuro en admin-web (rol ADMIN)
   confirmPayment: (id: string, approved: boolean) =>
     api.patch(`/api/product-orders/${id}/confirm-payment`, { approved }),

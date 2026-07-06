@@ -105,11 +105,11 @@ export default function AdvancePaymentScreen() {
         [
           {
             text: 'OK',
-            onPress: () =>
-              router.replace({
-                pathname: '/(client)/upload-advance-receipt',
-                params: { orderId: orderData.id },
-              }),
+        onPress: () =>
+        router.replace({
+        pathname: '/(client)/upload-advance-receipt',
+        params: { orderId: orderData.id, paymentMethod: method },
+      }),
           },
         ]
       )
