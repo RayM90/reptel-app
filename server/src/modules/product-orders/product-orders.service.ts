@@ -271,7 +271,7 @@ export const createLinkedProductOrder = async (
 export const uploadReceipt = async (
   productOrderId: string,
   clientId: string,
-  receiptUrl: string
+  paymentDetails: Record<string, string>
 ) => {
   // Verificar que la orden exista y pertenezca al cliente autenticado
   const order = await prisma.productOrder.findFirst({
@@ -283,10 +283,10 @@ export const uploadReceipt = async (
     throw new Error('Pedido no encontrado')
   }
 
-  // Guardar la URL del comprobante
+  // Guardar los datos de pago
   const updatedOrder = await prisma.productOrder.update({
     where: { id: productOrderId },
-    data: { receiptUrl },
+    data: { paymentDetails },
     include: {
       items: { include: { product: true } },
       client: true,
@@ -304,7 +304,7 @@ export const uploadReceipt = async (
       data: admins.map((admin) => ({
         type: 'PAYMENT_CONFIRMED',
         channel: 'PUSH',
-        message: `${order.client.name} ${order.client.lastName} subió un comprobante de pago para el pedido #${productOrderId.slice(0, 8)}`,
+        message: `${order.client.name} ${order.client.lastName} registró datos de pago para el pedido #${productOrderId.slice(0, 8)}`,
         userId: admin.id,
         productOrderId,
       })),

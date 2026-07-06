@@ -350,7 +350,7 @@ export const createSelfServiceOrder = async (data: {
 export const submitAdvancePayment = async (
   orderId: string,
   email: string,
-  receiptUrl: string
+  paymentDetails: Record<string, string>
 ) => {
   const user = await prisma.user.findUnique({
     where: { email },
@@ -371,7 +371,7 @@ export const submitAdvancePayment = async (
 
   const updatedOrder = await prisma.order.update({
     where: { id: orderId },
-    data: { advanceReceiptUrl: receiptUrl },
+    data: { advancePaymentDetails: paymentDetails },
     include: {
       client: true,
       device: true,
@@ -390,7 +390,7 @@ export const submitAdvancePayment = async (
       data: admins.map((admin) => ({
         type: 'PAYMENT_CONFIRMED',
         channel: 'PUSH',
-        message: `Comprobante de pago anticipado subido para la orden de servicio técnico #${order.orderNumber}`,
+        message: `Datos de pago anticipado registrados para la orden de servicio técnico #${order.orderNumber}`,
         userId: admin.id,
         orderId,
       })),
