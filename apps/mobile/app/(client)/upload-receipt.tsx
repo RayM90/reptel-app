@@ -11,21 +11,24 @@ import {
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
-import { productOrdersAPI } from '../../src/services/api'
+import { ordersAPI } from '../../src/services/api'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
-export default function UploadReceiptScreen() {
+export default function UploadAdvanceReceiptScreen() {
   const router = useRouter()
-  const { orderId, paymentMethod } = useLocalSearchParams<{
+  const { orderId, paymentMethod, total } = useLocalSearchParams<{
     orderId: string
     paymentMethod: PaymentMethod
+    total: string
   }>()
+
+  const totalNumber = total ? Number(total) : null
 
   const [banco, setBanco] = useState('')
   const [telefono, setTelefono] = useState('')
   const [referencia, setReferencia] = useState('')
-  const [monto, setMonto] = useState('')
+  const [monto, setMonto] = useState(total || '')
   const [titular, setTitular] = useState('')
   const [cedula, setCedula] = useState('')
   const [correo, setCorreo] = useState('')
@@ -34,8 +37,12 @@ export default function UploadReceiptScreen() {
 
   const [loading, setLoading] = useState(false)
 
+  const montoNumber = monto ? Number(monto) : 0
+  const faltante = totalNumber != null ? totalNumber - montoNumber : 0
+  const montoInsuficiente = totalNumber != null && faltante > 0.009
+
   const isFormValid = () => {
-    if (!monto) return false
+    if (!monto || montoInsuficiente) return false
     if (paymentMethod === 'PAGO_MOVIL') return !!banco && !!telefono && !!referencia
     if (paymentMethod === 'TRANSFERENCIA') return !!banco && !!titular && !!cedula && !!referencia
     if (paymentMethod === 'BINANCE') return !!correo && !!uid && !!nombre
@@ -48,7 +55,7 @@ export default function UploadReceiptScreen() {
       return
     }
     if (!orderId) {
-      Alert.alert('Error', 'No se encontró el ID del pedido. Vuelve a intentarlo.')
+      Alert.alert('Error', 'No se encontró el ID de la orden. Vuelve a intentarlo.')
       return
     }
 
@@ -64,14 +71,14 @@ export default function UploadReceiptScreen() {
 
     setLoading(true)
     try {
-      await productOrdersAPI.uploadReceipt(orderId, paymentDetails)
+      await ordersAPI.submitAdvancePayment(orderId, paymentDetails)
       Alert.alert(
         '✅ Datos de pago enviados',
-        'Tus datos fueron enviados. El equipo de RepTel los revisará y confirmará tu pago pronto.',
+        'Tus datos fueron enviados. El equipo de RepTel los revisará y confirmará tu pago pronto. El técnico será despachado una vez confirmado.',
         [
           {
-            text: 'Ver mis pedidos',
-            onPress: () => router.replace('/(client)/my-orders'),
+            text: 'Ver mis órdenes',
+            onPress: () => router.replace('/(client)/my-technical-orders'),
           },
         ]
       )
@@ -97,7 +104,7 @@ export default function UploadReceiptScreen() {
           <Text style={styles.step}>Paso 2 de 2</Text>
           <Text style={styles.title}>Datos del Pago</Text>
           <Text style={styles.subtitle}>
-            Ingresa los datos de tu transferencia, Pago Móvil o Binance
+            Ingresa los datos de tu pago anticipado (delivery + revisión)
           </Text>
         </View>
 
@@ -107,7 +114,7 @@ export default function UploadReceiptScreen() {
         >
           <View style={styles.infoCard}>
             <Text style={styles.infoText}>
-              📝 Ingresa los datos exactos de tu pago. El equipo de RepTel los verificará y confirmará tu pedido manualmente.
+              📝 Ingresa los datos exactos de tu pago. El equipo de RepTel los verificará y confirmará el pago manualmente para despachar al técnico.
             </Text>
           </View>
 
@@ -137,7 +144,15 @@ export default function UploadReceiptScreen() {
               </>
             )}
 
-            <Field label="Monto enviado ($)" value={monto} onChangeText={setMonto} placeholder="Ej. 45.00" keyboardType="decimal-pad" />
+            <Field label="Monto enviado ($)" value={monto} onChangeText={setMonto} placeholder="Ej. 25.00" keyboardType="decimal-pad" />
+
+            {montoInsuficiente && (
+              <View style={styles.warningCard}>
+                <Text style={styles.warningText}>
+                  ⚠️ Faltan ${faltante.toFixed(2)} para completar el pago total de ${totalNumber?.toFixed(2)}
+                </Text>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity
@@ -153,7 +168,7 @@ export default function UploadReceiptScreen() {
           </TouchableOpacity>
 
           <Text style={styles.waitNote}>
-            ⏳ Una vez enviado, recibirás una notificación cuando tu pago sea confirmado.
+            ⏳ Una vez enviado, el técnico-delivery será notificado para salir tan pronto tu pago sea confirmado.
           </Text>
         </ScrollView>
       </LinearGradient>
@@ -215,6 +230,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#17247a',
   },
+  warningCard: {
+    backgroundColor: '#fee2e2',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: -4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  warningText: { fontSize: 13, color: '#b91c1c', fontWeight: '600' },
   submitBtn: { backgroundColor: '#17247a', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginBottom: 16, marginTop: 8 },
   submitBtnDisabled: { backgroundColor: '#c0c0c0' },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
