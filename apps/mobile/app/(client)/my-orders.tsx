@@ -34,6 +34,7 @@ interface ProductOrder {
   paymentMethod: string
   notes?: string
   paymentDetails?: Record<string, string>
+  rejectionReason?: string
   paidAt?: string
   items: ProductOrderItem[]
 }
@@ -60,6 +61,12 @@ const PAYMENT_LABEL: Record<string, string> = {
   MOBILE_PAYMENT: '📱 Pago Móvil',
   TRANSFER: '🏦 Transferencia',
   BINANCE: '₿ Binance',
+}
+
+const paymentMethodToFrontend: Record<string, string> = {
+  MOBILE_PAYMENT: 'PAGO_MOVIL',
+  TRANSFER: 'TRANSFERENCIA',
+  BINANCE: 'BINANCE',
 }
 
 export default function MyOrdersScreen() {
@@ -150,6 +157,8 @@ export default function MyOrdersScreen() {
             {orders.map((order) => {
               const isExpanded = expandedId === order.id
               const status = order.status as OrderStatus
+              const frontendPaymentMethod =
+                paymentMethodToFrontend[order.paymentMethod] ?? 'PAGO_MOVIL'
 
               return (
                 <TouchableOpacity
@@ -229,7 +238,15 @@ export default function MyOrdersScreen() {
                         </View>
                       ))}
 
-{/* Datos de pago */}
+                      {/* Motivo de rechazo, si aplica */}
+                      {order.rejectionReason && (
+                        <View style={styles.rejectionCard}>
+                          <Text style={styles.rejectionTitle}>❌ Pago rechazado</Text>
+                          <Text style={styles.rejectionText}>{order.rejectionReason}</Text>
+                        </View>
+                      )}
+
+                      {/* Datos de pago */}
                       {order.paymentDetails ? (
                         <View style={styles.receiptContainer}>
                           <Text style={styles.itemsTitle}>🧾 Datos de pago enviados</Text>
@@ -243,14 +260,20 @@ export default function MyOrdersScreen() {
                       ) : order.status === 'PENDING' ? (
                         <View style={styles.noReceiptCard}>
                           <Text style={styles.noReceiptText}>
-                            ⚠️ Aún no has enviado los datos de pago.
+                            {order.rejectionReason
+                              ? '⚠️ Envía tus datos de pago nuevamente.'
+                              : '⚠️ Aún no has enviado los datos de pago.'}
                           </Text>
                           <TouchableOpacity
                             style={styles.uploadBtn}
                             onPress={() =>
                               router.push({
                                 pathname: '/(client)/upload-receipt',
-                                params: { orderId: order.id, paymentMethod: order.paymentMethod === 'MOBILE_PAYMENT' ? 'PAGO_MOVIL' : order.paymentMethod === 'TRANSFER' ? 'TRANSFERENCIA' : 'BINANCE' },
+                                params: {
+                                  orderId: order.id,
+                                  paymentMethod: frontendPaymentMethod,
+                                  total: String(order.total),
+                                },
                               })
                             }
                           >
@@ -348,15 +371,17 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 13, fontWeight: '600', color: '#17247a' },
   itemQty: { fontSize: 11, color: '#9aa5cc', marginTop: 2 },
   itemSubtotal: { fontSize: 14, fontWeight: '800', color: '#17247a' },
-  receiptContainer: { marginTop: 12 },
-  receiptImage: {
-    width: '100%',
-    height: 220,
+  rejectionCard: {
+    marginTop: 12,
+    backgroundColor: '#fee2e2',
     borderRadius: 12,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#d0d8ff',
-    backgroundColor: '#f0f3ff',
+    borderColor: '#fca5a5',
   },
+  rejectionTitle: { fontSize: 13, fontWeight: '800', color: '#b91c1c', marginBottom: 4 },
+  rejectionText: { fontSize: 13, color: '#7f1d1d', lineHeight: 18 },
+  receiptContainer: { marginTop: 12 },
   noReceiptCard: {
     marginTop: 12,
     backgroundColor: '#fff8e1',
