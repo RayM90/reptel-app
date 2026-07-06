@@ -6,7 +6,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  Image,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter } from 'expo-router'
@@ -34,7 +33,7 @@ interface ProductOrder {
   address: string
   paymentMethod: string
   notes?: string
-  receiptUrl?: string
+  paymentDetails?: Record<string, string>
   paidAt?: string
   items: ProductOrderItem[]
 }
@@ -230,31 +229,32 @@ export default function MyOrdersScreen() {
                         </View>
                       ))}
 
-                      {/* Comprobante */}
-                      {order.receiptUrl ? (
+{/* Datos de pago */}
+                      {order.paymentDetails ? (
                         <View style={styles.receiptContainer}>
-                          <Text style={styles.itemsTitle}>🧾 Comprobante enviado</Text>
-                          <Image
-                            source={{ uri: order.receiptUrl }}
-                            style={styles.receiptImage}
-                            resizeMode="contain"
-                          />
+                          <Text style={styles.itemsTitle}>🧾 Datos de pago enviados</Text>
+                          {Object.entries(order.paymentDetails).map(([key, value]) => (
+                            <View key={key} style={styles.detailRow}>
+                              <Text style={styles.detailLabel}>{key}</Text>
+                              <Text style={styles.detailValue}>{value}</Text>
+                            </View>
+                          ))}
                         </View>
                       ) : order.status === 'PENDING' ? (
                         <View style={styles.noReceiptCard}>
                           <Text style={styles.noReceiptText}>
-                            ⚠️ Aún no has subido el comprobante de pago.
+                            ⚠️ Aún no has enviado los datos de pago.
                           </Text>
                           <TouchableOpacity
                             style={styles.uploadBtn}
                             onPress={() =>
                               router.push({
                                 pathname: '/(client)/upload-receipt',
-                                params: { orderId: order.id },
+                                params: { orderId: order.id, paymentMethod: order.paymentMethod === 'MOBILE_PAYMENT' ? 'PAGO_MOVIL' : order.paymentMethod === 'TRANSFER' ? 'TRANSFERENCIA' : 'BINANCE' },
                               })
                             }
                           >
-                            <Text style={styles.uploadBtnText}>Subir comprobante</Text>
+                            <Text style={styles.uploadBtnText}>Enviar datos de pago</Text>
                           </TouchableOpacity>
                         </View>
                       ) : null}

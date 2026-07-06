@@ -17,15 +17,18 @@ type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
 export default function UploadAdvanceReceiptScreen() {
   const router = useRouter()
-  const { orderId, paymentMethod } = useLocalSearchParams<{
+  const { orderId, paymentMethod, total } = useLocalSearchParams<{
     orderId: string
     paymentMethod: PaymentMethod
+    total: string
   }>()
+
+  const totalNumber = total ? Number(total) : null
 
   const [banco, setBanco] = useState('')
   const [telefono, setTelefono] = useState('')
   const [referencia, setReferencia] = useState('')
-  const [monto, setMonto] = useState('')
+  const [monto, setMonto] = useState(total || '')
   const [titular, setTitular] = useState('')
   const [cedula, setCedula] = useState('')
   const [correo, setCorreo] = useState('')
@@ -34,8 +37,12 @@ export default function UploadAdvanceReceiptScreen() {
 
   const [loading, setLoading] = useState(false)
 
+  const montoNumber = monto ? Number(monto) : 0
+  const faltante = totalNumber != null ? totalNumber - montoNumber : 0
+  const montoInsuficiente = totalNumber != null && faltante > 0.009
+
   const isFormValid = () => {
-    if (!monto) return false
+    if (!monto || montoInsuficiente) return false
     if (paymentMethod === 'PAGO_MOVIL') return !!banco && !!telefono && !!referencia
     if (paymentMethod === 'TRANSFERENCIA') return !!banco && !!titular && !!cedula && !!referencia
     if (paymentMethod === 'BINANCE') return !!correo && !!uid && !!nombre
@@ -138,6 +145,14 @@ export default function UploadAdvanceReceiptScreen() {
             )}
 
             <Field label="Monto enviado ($)" value={monto} onChangeText={setMonto} placeholder="Ej. 25.00" keyboardType="decimal-pad" />
+
+            {montoInsuficiente && (
+              <View style={styles.warningCard}>
+                <Text style={styles.warningText}>
+                  ⚠️ Faltan ${faltante.toFixed(2)} para completar el pago total de ${totalNumber?.toFixed(2)}
+                </Text>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity
@@ -215,6 +230,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#17247a',
   },
+  warningCard: {
+    backgroundColor: '#fee2e2',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: -4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  warningText: { fontSize: 13, color: '#b91c1c', fontWeight: '600' },
   submitBtn: { backgroundColor: '#17247a', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginBottom: 16, marginTop: 8 },
   submitBtnDisabled: { backgroundColor: '#c0c0c0' },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
