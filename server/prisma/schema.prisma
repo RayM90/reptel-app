@@ -237,6 +237,14 @@ model Order {
   advancePaymentConfirmedAt  DateTime?
   advancePaymentRejectionReason String?     @db.Text
 
+  // ── NUEVO: pago final (saldo restante) + comisión del técnico ──
+  finalPaymentDetails         Json?
+  finalPaymentConfirmed       Boolean        @default(false)
+  finalPaymentConfirmedAt     DateTime?
+  finalPaymentRejectionReason String?        @db.Text
+  technicianCommission        Decimal?       @db.Decimal(10, 2)
+  // ─────────────────────────────────────────────────────────────
+
   clientId     String
   client       Client @relation(fields: [clientId], references: [id])
 
