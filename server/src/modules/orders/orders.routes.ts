@@ -47,4 +47,10 @@ router.patch('/:id/diagnosis', authenticate, authorize('TECHNICIAN_DELIVERY'), o
 // Confirmar o rechazar el pago anticipado (Fase 4 — ADMIN)
 router.post('/:id/confirm-advance-payment', authenticate, authorize('ADMIN'), ordersController.confirmAdvancePayment)
 
+// Cliente envía los datos del pago final (saldo restante tras la reparación)
+router.post('/:id/final-payment', authenticate, authorize('CLIENT'), ordersController.submitFinalPayment)
+
+// ADMIN aprueba o rechaza el pago final (calcula comisión del técnico al aprobar)
+router.post('/:id/confirm-final-payment', authenticate, authorize('ADMIN'), ordersController.confirmFinalPayment)
+
 export default router
