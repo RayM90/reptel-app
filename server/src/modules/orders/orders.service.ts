@@ -595,3 +595,141 @@ export const confirmAdvancePayment = async (
 
   return updatedOrder
 }
+
+// ─────────────────────────────────────────────
+// CLIENTE — Enviar datos del pago final (saldo restante tras reparación)
+// ─────────────────────────────────────────────
+
+export const submitFinalPayment = async (
+  orderId: string,
+  email: string,
+  paymentDetails: Record<string, string>
+) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { clientId: true },
+  })
+
+  if (!user || !user.clientId) {
+    throw new Error('Cliente no encontrado para este usuario')
+  }
+
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, clientId: user.clientId },
+  })
+
+  if (!order) {
+    throw new Error('Orden no encontrada')
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: { id: orderId },
+    data: { finalPaymentDetails: paymentDetails },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+
+  const admins = await prisma.user.findMany({
+    where: { role: 'ADMIN', isActive: true },
+    select: { id: true },
+  })
+
+  if (admins.length > 0) {
+    await prisma.notification.createMany({
+      data: admins.map((admin) => ({
+        type: 'PAYMENT_CONFIRMED',
+        channel: 'PUSH',
+        message: `Datos de pago final registrados para la orden #${order.orderNumber}`,
+        userId: admin.id,
+        orderId,
+      })),
+    })
+  }
+
+  return updatedOrder
+}
+
+// ─────────────────────────────────────────────
+// ADMIN — Confirmar o rechazar el pago final (Fase 4 — comisión)
+// Al aprobar: orden pasa a DELIVERED y se calcula la comisión del técnico:
+//   comisión = deliveryAmount (100%) + 40% × (budget - revisionAmount)
+// Al rechazar: se guarda el motivo, se limpian los datos de pago viejos
+// (Prisma.JsonNull) para que el cliente reenvíe.
+// ─────────────────────────────────────────────
+
+export const confirmFinalPayment = async (
+  id: string,
+  approved: boolean,
+  rejectionReason?: string
+) => {
+  const order = await prisma.order.findUnique({
+    where: { id },
+    include: { client: { include: { user: true } } },
+  })
+
+  if (!order) {
+    throw new Error('Orden no encontrada')
+  }
+
+  let commission: number | null = null
+  if (approved) {
+    const budget = order.budget ? Number(order.budget) : 0
+    const deliveryAmount = order.deliveryAmount ? Number(order.deliveryAmount) : 0
+    const revisionAmount = order.revisionAmount ? Number(order.revisionAmount) : 0
+    const laborCommission = 0.4 * (budget - revisionAmount)
+    commission = deliveryAmount + laborCommission
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: { id },
+    data: {
+      finalPaymentConfirmed: approved,
+      finalPaymentConfirmedAt: approved ? new Date() : null,
+      finalPaymentRejectionReason: approved ? null : rejectionReason,
+      technicianCommission: approved ? commission : null,
+      ...(approved
+        ? {}
+        : { finalPaymentDetails: Prisma.JsonNull }),
+      status: approved ? 'DELIVERED' : 'READY',
+      deliveredAt: approved ? new Date() : null,
+      statusHistory: {
+        create: {
+          status: approved ? 'DELIVERED' : 'READY',
+          comment: approved
+            ? `Pago final confirmado por el administrador. Comisión del técnico: $${commission?.toFixed(2)}`
+            : `Pago final rechazado: ${rejectionReason}`,
+        },
+      },
+    },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+
+  if (approved && order.technicianId) {
+    await decrementTechnicianLoad(order.technicianId)
+  }
+
+  if (order.client.user) {
+    await prisma.notification.create({
+      data: {
+        type: 'PAYMENT_CONFIRMED',
+        channel: 'PUSH',
+        message: approved
+          ? `Tu pago fue confirmado. La orden #${order.orderNumber} fue completada. ¡Gracias por confiar en RepTel!`
+          : `No pudimos confirmar tu pago final para la orden #${order.orderNumber}: ${rejectionReason}. Por favor envía tus datos de pago nuevamente.`,
+        userId: order.client.user.id,
+        orderId: id,
+      },
+    })
+  }
+
+  return updatedOrder
+}

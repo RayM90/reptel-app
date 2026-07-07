@@ -350,3 +350,67 @@ export const confirmAdvancePayment = async (req: AuthRequest, res: Response): Pr
     res.status(400).json({ success: false, message: error.message || 'Error al confirmar el pago anticipado' })
   }
 }
+
+// ─────────────────────────────────────────────
+// CLIENTE — Enviar datos del pago final (saldo restante)
+// ─────────────────────────────────────────────
+
+export const submitFinalPayment = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const id = String(req.params.id)
+    const { paymentDetails } = req.body
+
+    if (!paymentDetails || typeof paymentDetails !== 'object') {
+      res.status(400).json({ success: false, message: 'paymentDetails es requerido' })
+      return
+    }
+
+    const order = await ordersService.submitFinalPayment(id, email, paymentDetails)
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR ENVIAR PAGO FINAL:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al registrar el pago final' })
+  }
+}
+
+// ─────────────────────────────────────────────
+// ADMIN — Confirmar o rechazar el pago final (calcula comisión al aprobar)
+// ─────────────────────────────────────────────
+
+export const confirmFinalPayment = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const { approved, rejectionReason } = req.body
+
+    if (approved === undefined) {
+      res.status(400).json({ success: false, message: 'approved es requerido (true o false)' })
+      return
+    }
+
+    if (approved === false && !rejectionReason) {
+      res.status(400).json({
+        success: false,
+        message: 'rejectionReason es requerido cuando se rechaza el pago',
+      })
+      return
+    }
+
+    const order = await ordersService.confirmFinalPayment(id, Boolean(approved), rejectionReason)
+
+    broadcastOrderUpdate({
+      type: 'ORDER_STATUS_UPDATED',
+      data: order,
+    })
+
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR CONFIRMAR PAGO FINAL:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al confirmar el pago final' })
+  }
+}
