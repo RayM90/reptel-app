@@ -2,10 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import Login from './pages/auth/Login'
 import ProtectedRoute from './components/ProtectedRoute'
 import Dashboard from './pages/admin/Dashboard'
-
-function TechnicianDashboard() {
-  return <h1>Panel de Técnico — Mis Órdenes (pendiente)</h1>
-}
+import TechnicianDashboard from './pages/technician/Dashboard'
 
 function DeliveryDashboard() {
   return <h1>Panel de Motorizado — Mis Entregas (pendiente)</h1>

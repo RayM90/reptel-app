@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 
 interface Order {
@@ -162,6 +163,7 @@ export default function Dashboard() {
   return (
     <div>
       <h1>Panel de Administrador</h1>
+      <p><Link to="/technician">🔧 (Prueba temporal) Ir al Panel del Técnico</Link></p>
 
       <section>
         <h2>Servicios Técnicos Activos ({activeOrders.length})</h2>
