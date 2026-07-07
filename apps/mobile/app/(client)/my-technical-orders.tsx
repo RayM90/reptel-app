@@ -38,6 +38,12 @@ interface TechOrder {
   observations?: string
   budget?: number | null
   budgetApproved?: boolean | null
+  deliveryAmount?: number | null
+  revisionAmount?: number | null
+  finalPaymentDetails?: Record<string, string> | null
+  finalPaymentConfirmed?: boolean
+  finalPaymentRejectionReason?: string | null
+  technicianCommission?: number | null
   receivedAt: string
   device: {
     type: string
@@ -276,6 +282,47 @@ export default function MyTechnicalOrdersScreen() {
                         </TouchableOpacity>
                       )}
 
+                      {/* Motivo de rechazo del pago final, si aplica */}
+                      {order.finalPaymentRejectionReason && (
+                        <View style={styles.rejectionCard}>
+                          <Text style={styles.rejectionTitle}>❌ Pago rechazado</Text>
+                          <Text style={styles.rejectionText}>{order.finalPaymentRejectionReason}</Text>
+                        </View>
+                      )}
+
+                      {/* Pago final — solo cuando la orden está lista (READY) */}
+                      {status === 'READY' && !order.finalPaymentConfirmed && (
+                        <TouchableOpacity
+                          style={styles.finalPaymentBtn}
+                          onPress={(e) => {
+                            e.stopPropagation()
+                            router.push({
+                              pathname: '/(client)/final-payment',
+                              params: {
+                                orderId: order.id,
+                                orderNumber: order.orderNumber,
+                                budget: String(order.budget ?? 0),
+                                revisionAmount: String(order.revisionAmount ?? 0),
+                              },
+                            })
+                          }}
+                        >
+                          <Text style={styles.finalPaymentBtnText}>
+                            {order.finalPaymentDetails
+                              ? '💰 Reenviar datos de pago final'
+                              : '💰 Pagar saldo final'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Comisión (solo informativo, orden ya entregada) */}
+                      {order.technicianCommission != null && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Servicio completado</Text>
+                          <Text style={styles.detailValue}>✅ Pago final confirmado</Text>
+                        </View>
+                      )}
+
                       {/* Historial de estados */}
                       <Text style={styles.itemsTitle}>📋 Historial</Text>
                       {order.statusHistory.map((entry) => (
@@ -374,6 +421,24 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   linkedProductBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  rejectionCard: {
+    marginBottom: 12,
+    backgroundColor: '#fee2e2',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  rejectionTitle: { fontSize: 13, fontWeight: '800', color: '#b91c1c', marginBottom: 4 },
+  rejectionText: { fontSize: 13, color: '#7f1d1d', lineHeight: 18 },
+  finalPaymentBtn: {
+    backgroundColor: '#0f766e',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  finalPaymentBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
