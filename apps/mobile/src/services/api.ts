@@ -53,6 +53,9 @@ export const ordersAPI = {
   // Pago anticipado (delivery + revisión) — sube el comprobante
     submitAdvancePayment: (id: string, paymentDetails: Record<string, string>) =>
     api.post(`/api/orders/${id}/advance-payment`, { paymentDetails }),
+
+    submitFinalPayment: (id: string, paymentDetails: Record<string, string>) =>
+    api.post(`/api/orders/${id}/final-payment`, { paymentDetails }),
 }
 
 export const productOrdersAPI = {
