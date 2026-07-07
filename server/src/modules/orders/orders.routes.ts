@@ -26,6 +26,9 @@ router.get('/today', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', '
 // Técnicos disponibles (para asignación al crear orden)
 router.get('/technicians', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', 'SELLER'), ordersController.getAvailableTechnicians)
 
+// Órdenes asignadas al técnico autenticado (Fase 4 — panel del técnico)
+router.get('/technician/my-orders', authenticate, authorize('TECHNICIAN_DELIVERY'), ordersController.getMyTechnicianOrders)
+
 // ─── Rutas con parámetros dinámicos (personal) ────────────────────
 // Obtener todas las órdenes
 router.get('/', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', 'SELLER'), ordersController.getOrders)
@@ -36,9 +39,8 @@ router.get('/:id', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', 'SE
 // Crear una nueva orden (uso interno/admin — no cliente)
 router.post('/', authenticate, authorize('ADMIN', 'MANAGER', 'SELLER'), ordersController.createOrder)
 
-// Actualizar el estado de una orden
-router.patch('/:id/status', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN'), ordersController.updateStatus)
-
+// Actualizar el estado de una orden (incluye comentarios de progreso del técnico)
+router.patch('/:id/status', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', 'TECHNICIAN_DELIVERY'), ordersController.updateStatus)
 // Actualizar presupuesto de una orden
 router.patch('/:id/budget', authenticate, authorize('ADMIN', 'MANAGER'), ordersController.updateBudget)
 

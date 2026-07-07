@@ -733,3 +733,20 @@ export const confirmFinalPayment = async (
 
   return updatedOrder
 }
+
+// ─────────────────────────────────────────────
+// TÉCNICO — Historial de sus órdenes asignadas (Fase 4)
+// ─────────────────────────────────────────────
+
+export const getOrdersByTechnician = async (technicianId: string) => {
+  return await prisma.order.findMany({
+    where: { technicianId },
+    include: {
+      client: true,
+      device: true,
+      serviceCatalog: true,
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+    orderBy: { receivedAt: 'desc' },
+  })
+}
