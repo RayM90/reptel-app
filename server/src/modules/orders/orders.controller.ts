@@ -414,3 +414,33 @@ export const confirmFinalPayment = async (req: AuthRequest, res: Response): Prom
     res.status(400).json({ success: false, message: error.message || 'Error al confirmar el pago final' })
   }
 }
+
+// ─────────────────────────────────────────────
+// TÉCNICO — Historial de sus órdenes asignadas (Fase 4)
+// ─────────────────────────────────────────────
+
+export const getMyTechnicianOrders = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const technician = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    })
+
+    if (!technician) {
+      res.status(404).json({ success: false, message: 'Técnico no encontrado' })
+      return
+    }
+
+    const orders = await ordersService.getOrdersByTechnician(technician.id)
+    res.json({ success: true, data: orders })
+  } catch (error) {
+    console.error('ERROR GET MY TECHNICIAN ORDERS:', error)
+    res.status(500).json({ success: false, message: 'Error al obtener tus órdenes', error: String(error) })
+  }
+}
