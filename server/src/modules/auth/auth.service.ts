@@ -1,11 +1,11 @@
 import {
   CognitoIdentityProviderClient,
   InitiateAuthCommand,
+  RespondToAuthChallengeCommand,
   SignUpCommand,
   AdminAddUserToGroupCommand,
   AdminConfirmSignUpCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
-
 import prisma from '../../lib/prisma';
 
 const client = new CognitoIdentityProviderClient({
@@ -55,13 +55,12 @@ export const registerUser = async (
 
   // 4. Si es CLIENT, crear registro en tabla Client primero
   let clientId: string | undefined = undefined;
-
   if (role === 'CLIENT') {
     const newClient = await prisma.client.create({
       data: {
         name,
-        lastName: '',       // se puede actualizar en el perfil
-        idNumber: email,    // temporal único usando email
+        lastName: '',
+        idNumber: email,
         phone: phone ?? '',
         email,
         address: address ?? null,
@@ -86,6 +85,11 @@ export const registerUser = async (
   return { message: 'Usuario registrado exitosamente', userId: user.id };
 };
 
+/**
+ * Login contra Cognito.
+ * Si Cognito exige cambio de contraseña (usuario creado por admin, primer login),
+ * devuelve challengeName + session en vez de tokens, sin lanzar error.
+ */
 export const loginUser = async (email: string, password: string) => {
   const response = await client.send(
     new InitiateAuthCommand({
@@ -94,6 +98,46 @@ export const loginUser = async (email: string, password: string) => {
       AuthParameters: {
         USERNAME: email,
         PASSWORD: password,
+      },
+    })
+  );
+
+  if (response.ChallengeName) {
+    return {
+      challengeName: response.ChallengeName,
+      session: response.Session,
+      accessToken: undefined,
+      refreshToken: undefined,
+      idToken: undefined,
+    };
+  }
+
+  return {
+    challengeName: undefined,
+    session: undefined,
+    accessToken: response.AuthenticationResult?.AccessToken,
+    refreshToken: response.AuthenticationResult?.RefreshToken,
+    idToken: response.AuthenticationResult?.IdToken,
+  };
+};
+
+/**
+ * Completa el challenge NEW_PASSWORD_REQUIRED: establece la contraseña definitiva
+ * y devuelve los tokens reales de Cognito.
+ */
+export const completeNewPasswordChallenge = async (
+  email: string,
+  newPassword: string,
+  session: string
+) => {
+  const response = await client.send(
+    new RespondToAuthChallengeCommand({
+      ClientId: CLIENT_ID,
+      ChallengeName: 'NEW_PASSWORD_REQUIRED',
+      Session: session,
+      ChallengeResponses: {
+        USERNAME: email,
+        NEW_PASSWORD: newPassword,
       },
     })
   );
@@ -115,7 +159,6 @@ export const refreshUserToken = async (refreshToken: string) => {
       },
     })
   );
-
   return {
     accessToken: response.AuthenticationResult?.AccessToken,
     idToken: response.AuthenticationResult?.IdToken,
