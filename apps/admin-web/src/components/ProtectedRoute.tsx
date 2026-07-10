@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth.store'
+import Header from './Header'
 
 type Role = 'ADMIN' | 'TECHNICIAN_DELIVERY' | 'DELIVERY'
 
@@ -19,5 +20,10 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
     return <Navigate to="/login" replace />
   }
 
-  return <>{children}</>
+  return (
+    <>
+      <Header />
+      <div className="page-container">{children}</div>
+    </>
+  )
 }
