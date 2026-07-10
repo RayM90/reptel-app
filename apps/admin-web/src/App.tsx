@@ -3,10 +3,7 @@ import Login from './pages/auth/Login'
 import ProtectedRoute from './components/ProtectedRoute'
 import Dashboard from './pages/admin/Dashboard'
 import TechnicianDashboard from './pages/technician/Dashboard'
-
-function DeliveryDashboard() {
-  return <h1>Panel de Motorizado — Mis Entregas (pendiente)</h1>
-}
+import DeliveryDashboard from './pages/delivery/Dashboard'
 
 function App() {
   return (
