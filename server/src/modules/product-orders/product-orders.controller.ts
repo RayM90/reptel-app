@@ -335,3 +335,32 @@ export const getAllOrders = async (req: AuthRequest, res: Response): Promise<voi
     res.status(500).json({ success: false, message: 'Error al obtener los pedidos' })
   }
 }
+
+// ─────────────────────────────────────────────
+// MOTORIZADO — Listar mis entregas asignadas (Fase 4)
+// ─────────────────────────────────────────────
+
+export const getMyDeliveries = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const agentId = await productOrdersService.resolveAgentIdFromEmail(email)
+    if (!agentId) {
+      res.status(404).json({
+        success: false,
+        message: 'No se encontró un motorizado vinculado a este usuario',
+      })
+      return
+    }
+
+    const deliveries = await productOrdersService.getDeliveriesByAgent(agentId)
+    res.json({ success: true, data: deliveries })
+  } catch (error) {
+    console.error('ERROR OBTENER MIS ENTREGAS:', error)
+    res.status(500).json({ success: false, message: 'Error al obtener las entregas' })
+  }
+}
