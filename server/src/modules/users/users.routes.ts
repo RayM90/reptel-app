@@ -9,16 +9,16 @@ import { authenticate, authorize } from '../../middleware/auth.middleware';
 
 const router = Router();
 
-// Listar usuarios — solo ADMIN y MANAGER
-router.get('/', authenticate, authorize('ADMIN', 'MANAGER'), getUsers);
+// Listar usuarios — solo ADMIN
+router.get('/', authenticate, authorize('ADMIN'), getUsers);
 
-// Obtener usuario por ID — ADMIN, MANAGER
-router.get('/:id', authenticate, authorize('ADMIN', 'MANAGER'), getUser);
+// Obtener usuario por ID — solo ADMIN
+router.get('/:id', authenticate, authorize('ADMIN'), getUser);
 
 // Registrar usuario en BD — solo ADMIN
 router.post('/', authenticate, authorize('ADMIN'), registerUserInDB);
 
-// Actualizar usuario — ADMIN, MANAGER
-router.patch('/:id', authenticate, authorize('ADMIN', 'MANAGER'), updateUserData);
+// Actualizar usuario — solo ADMIN
+router.patch('/:id', authenticate, authorize('ADMIN'), updateUserData);
 
 export default router;

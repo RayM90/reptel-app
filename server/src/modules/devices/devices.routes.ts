@@ -17,16 +17,16 @@ import { authenticate, authorize } from '../../middleware/auth.middleware';
 
 const router = Router();
 
-// Listar dispositivos — ADMIN, MANAGER, TECHNICIAN, SELLER
-router.get('/', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', 'SELLER'), getDevices);
+// Listar dispositivos — ADMIN, TECHNICIAN_DELIVERY
+router.get('/', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVERY'), getDevices);
 
-// Obtener dispositivo por ID — todos los roles
-router.get('/:id', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', 'SELLER', 'CLIENT'), getDevice);
+// Obtener dispositivo por ID — ADMIN, TECHNICIAN_DELIVERY, CLIENT
+router.get('/:id', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVERY', 'CLIENT'), getDevice);
 
-// Registrar dispositivo — ADMIN, MANAGER, SELLER
-router.post('/', authenticate, authorize('ADMIN', 'MANAGER', 'SELLER'), registerDevice);
+// Registrar dispositivo — ADMIN
+router.post('/', authenticate, authorize('ADMIN'), registerDevice);
 
-// Actualizar dispositivo — ADMIN, MANAGER
-router.patch('/:id', authenticate, authorize('ADMIN', 'MANAGER'), updateDeviceData);
+// Actualizar dispositivo — ADMIN
+router.patch('/:id', authenticate, authorize('ADMIN'), updateDeviceData);
 
 export default router;
