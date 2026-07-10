@@ -3,12 +3,30 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/auth.store'
 
+function EyeIcon({ open }: { open: boolean }) {
+  if (open) {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    )
+  }
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  )
+}
+
 export default function Login() {
   const navigate = useNavigate()
   const setUser = useAuthStore((state) => state.setUser)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -17,8 +35,8 @@ export default function Login() {
   const [session, setSession] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
-
-
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -105,64 +123,100 @@ export default function Login() {
 
   if (requiresNewPassword) {
     return (
-      <div>
-        <h1>RepTel Admin</h1>
-        <p>Debes establecer una nueva contraseña para continuar</p>
-        <form onSubmit={handleNewPasswordSubmit}>
-          <div>
-            <label>Nueva contraseña</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label>Confirmar nueva contraseña</label>
-            <input
-              type="password"
-              value={confirmNewPassword}
-              onChange={(e) => setConfirmNewPassword(e.target.value)}
-              required
-            />
-          </div>
-          {error && <p>{error}</p>}
-          <button type="submit" disabled={loading}>
-            {loading ? 'Guardando...' : 'Establecer contraseña'}
-          </button>
-        </form>
+      <div className="login-page">
+        <div className="login-card">
+          <img src="/logo-reptel.png" alt="RepTel" className="login-logo" />
+          <h1 className="login-title">Nueva contraseña</h1>
+          <p className="login-subtitle">Debes establecer una nueva contraseña para continuar</p>
+          <form onSubmit={handleNewPasswordSubmit}>
+            <div className="form-group">
+              <label>Nueva contraseña</label>
+              <div className="input-with-icon">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="input-icon-btn"
+                  onClick={() => setShowNewPassword((prev) => !prev)}
+                  aria-label={showNewPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  <EyeIcon open={showNewPassword} />
+                </button>
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Confirmar nueva contraseña</label>
+              <div className="input-with-icon">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="input-icon-btn"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  aria-label={showConfirmPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  <EyeIcon open={showConfirmPassword} />
+                </button>
+              </div>
+            </div>
+            {error && <p className="alert-error">{error}</p>}
+            <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%' }}>
+              {loading ? 'Guardando...' : 'Establecer contraseña'}
+            </button>
+          </form>
+        </div>
       </div>
     )
   }
 
   return (
-    <div>
-      <h1>RepTel Admin</h1>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label>Contraseña</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
-        {error && <p>{error}</p>}
-        <button type="submit" disabled={loading}>
-          {loading ? 'Ingresando...' : 'Ingresar'}
-        </button>
-      </form>
+    <div className="login-page">
+      <div className="login-card">
+        <img src="/logo-reptel.png" alt="RepTel" className="login-logo" />
+        <p className="login-subtitle">Acceso de personal</p>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>Contraseña</label>
+            <div className="input-with-icon">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="input-icon-btn"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                <EyeIcon open={showPassword} />
+              </button>
+            </div>
+          </div>
+          {error && <p className="alert-error">{error}</p>}
+          <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%' }}>
+            {loading ? 'Ingresando...' : 'Ingresar'}
+          </button>
+        </form>
+      </div>
     </div>
   )
 }
