@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { api } from '../services/api'
 
 type Role =
   | 'ADMIN'
@@ -35,11 +34,9 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   setUser: (user, token) => {
     set({ user, token, isAuthenticated: true })
-    api.defaults.headers.common['Authorization'] = `Bearer ${token}`
   },
 
   logout: () => {
-    delete api.defaults.headers.common['Authorization']
     set({ user: null, token: null, isAuthenticated: false })
   },
 }))
