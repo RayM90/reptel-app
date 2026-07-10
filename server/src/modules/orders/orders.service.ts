@@ -34,7 +34,7 @@ const ADVANCE_REVISION_AMOUNT = 15
 const assignTechnician = async (): Promise<string | null> => {
   const available = await prisma.user.findMany({
     where: {
-      role: { in: ['TECHNICIAN', 'TECHNICIAN_DELIVERY'] },
+      role: 'TECHNICIAN_DELIVERY',
       isActive: true,
       technicianStatus: 'AVAILABLE',
     },
@@ -50,7 +50,7 @@ const assignTechnician = async (): Promise<string | null> => {
 
   const busy = await prisma.user.findMany({
     where: {
-      role: { in: ['TECHNICIAN', 'TECHNICIAN_DELIVERY'] },
+      role: 'TECHNICIAN_DELIVERY',
       isActive: true,
       technicianStatus: 'BUSY',
     },
@@ -475,7 +475,7 @@ export const updateOrderBudget = async (
 export const getAvailableTechnicians = async () => {
   return await prisma.user.findMany({
     where: {
-      role: { in: ['TECHNICIAN', 'TECHNICIAN_DELIVERY'] },
+      role: 'TECHNICIAN_DELIVERY',
       isActive: true,
       technicianStatus: { in: ['AVAILABLE', 'BUSY'] },
     },

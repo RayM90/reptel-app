@@ -20,29 +20,29 @@ router.get('/my-orders', authenticate, authorize('CLIENT'), ordersController.get
 router.post('/:id/advance-payment', authenticate, authorize('CLIENT'), ordersController.submitAdvancePayment)
 
 // ─── Rutas estáticas (personal) — deben ir ANTES de /:id ──────────
-// Órdenes del día (para pantalla cajera)
-router.get('/today', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', 'SELLER'), ordersController.getTodayOrders)
+// Órdenes del día — ADMIN
+router.get('/today', authenticate, authorize('ADMIN'), ordersController.getTodayOrders)
 
-// Técnicos disponibles (para asignación al crear orden)
-router.get('/technicians', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', 'SELLER'), ordersController.getAvailableTechnicians)
+// Técnicos disponibles (para asignación al crear orden) — ADMIN
+router.get('/technicians', authenticate, authorize('ADMIN'), ordersController.getAvailableTechnicians)
 
 // Órdenes asignadas al técnico autenticado (Fase 4 — panel del técnico)
 router.get('/technician/my-orders', authenticate, authorize('TECHNICIAN_DELIVERY'), ordersController.getMyTechnicianOrders)
 
 // ─── Rutas con parámetros dinámicos (personal) ────────────────────
-// Obtener todas las órdenes
-router.get('/', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', 'SELLER'), ordersController.getOrders)
+// Obtener todas las órdenes — ADMIN
+router.get('/', authenticate, authorize('ADMIN'), ordersController.getOrders)
 
-// Obtener una orden por ID
-router.get('/:id', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', 'SELLER'), ordersController.getOrder)
+// Obtener una orden por ID — ADMIN
+router.get('/:id', authenticate, authorize('ADMIN'), ordersController.getOrder)
 
-// Crear una nueva orden (uso interno/admin — no cliente)
-router.post('/', authenticate, authorize('ADMIN', 'MANAGER', 'SELLER'), ordersController.createOrder)
+// Crear una nueva orden (uso interno/admin — no cliente) — ADMIN
+router.post('/', authenticate, authorize('ADMIN'), ordersController.createOrder)
 
 // Actualizar el estado de una orden (incluye comentarios de progreso del técnico)
-router.patch('/:id/status', authenticate, authorize('ADMIN', 'MANAGER', 'TECHNICIAN', 'TECHNICIAN_DELIVERY'), ordersController.updateStatus)
-// Actualizar presupuesto de una orden
-router.patch('/:id/budget', authenticate, authorize('ADMIN', 'MANAGER'), ordersController.updateBudget)
+router.patch('/:id/status', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVERY'), ordersController.updateStatus)
+// Actualizar presupuesto de una orden — ADMIN
+router.patch('/:id/budget', authenticate, authorize('ADMIN'), ordersController.updateBudget)
 
 router.patch('/:id/diagnosis', authenticate, authorize('TECHNICIAN_DELIVERY'), ordersController.submitDiagnosis)
 
