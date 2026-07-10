@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { registerUser, loginUser, refreshUserToken, completeNewPasswordChallenge } from './auth.service';
+import { registerUser, loginUser, refreshUserToken, completeNewPasswordChallenge, createStaffUser } from './auth.service';
 import prisma from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
 
@@ -181,5 +181,36 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error: any) {
     res.status(401).json({ message: error.message || 'Token inválido o expirado' });
+  }
+};
+
+/**
+ * ADMIN crea un usuario de personal (TECHNICIAN_DELIVERY o DELIVERY).
+ * Nunca permite crear otro ADMIN desde este endpoint — evita escalación
+ * de privilegios accidental o mal uso.
+ */
+export const createStaff = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, password, name, role, phone } = req.body;
+
+    if (!email || !password || !name || !role) {
+      res.status(400).json({ message: 'Todos los campos son requeridos' });
+      return;
+    }
+
+    if (role !== 'TECHNICIAN_DELIVERY' && role !== 'DELIVERY') {
+      res.status(403).json({ message: 'Este endpoint solo permite crear TECHNICIAN_DELIVERY o DELIVERY' });
+      return;
+    }
+
+    if (password.length < 8) {
+      res.status(400).json({ message: 'La contraseña temporal debe tener al menos 8 caracteres' });
+      return;
+    }
+
+    const result = await createStaffUser(email, name, password, role, phone);
+    res.status(201).json(result);
+  } catch (error: any) {
+    res.status(400).json({ message: error.message || 'Error al crear el empleado' });
   }
 };
