@@ -574,3 +574,39 @@ export const confirmReceived = async (productOrderId: string, clientId: string) 
     include: { productOrder: true },
   })
 }
+
+// ─────────────────────────────────────────────
+// RESOLVER agentId (User.id) DESDE EL USUARIO AUTENTICADO
+// A diferencia del cliente, el motorizado NO tiene un modelo
+// intermedio (Client) — el agentId de ProductDelivery ES el User.id.
+// ─────────────────────────────────────────────
+
+export const resolveAgentIdFromEmail = async (
+  email: string
+): Promise<string | null> => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, role: true },
+  })
+  if (!user || user.role !== 'DELIVERY') return null
+  return user.id
+}
+
+// ─────────────────────────────────────────────
+// MOTORIZADO — Listar entregas asignadas (Fase 4)
+// ─────────────────────────────────────────────
+
+export const getDeliveriesByAgent = async (agentId: string) => {
+  return await prisma.productDelivery.findMany({
+    where: { agentId },
+    include: {
+      productOrder: {
+        include: {
+          items: { include: { product: true } },
+          client: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+}

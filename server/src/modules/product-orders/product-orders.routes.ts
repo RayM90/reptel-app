@@ -31,6 +31,15 @@ router.get(
   productOrdersController.getMyOrders
 )
 
+// ─── Rutas del motorizado (DELIVERY) — deben ir ANTES de /:id ─────
+// Entregas asignadas al motorizado autenticado (Fase 4 — panel del motorizado)
+router.get(
+  '/my-deliveries',
+  authenticate,
+  authorize('DELIVERY'),
+  productOrdersController.getMyDeliveries
+)
+
 // Detalle de un pedido específico del cliente autenticado
 router.get(
   '/:id',
