@@ -178,158 +178,149 @@ export default function TechnicianDashboard() {
     0
   )
 
-  if (loading) return <p>Cargando...</p>
-  if (error) return <p>{error}</p>
+  if (loading) return <div className="page-container"><p>Cargando...</p></div>
+  if (error) return <div className="page-container"><p className="alert-error">{error}</p></div>
 
   return (
-    <div>
+    <div className="page-container">
       <h1>Panel del Técnico</h1>
       <p>Hola, {user?.name}</p>
 
-      <h2>Mis Órdenes ({orders.length})</h2>
+      <div className="card">
+        <h2>Mis Órdenes ({orders.length})</h2>
 
-      {orders.length === 0 ? (
-        <p>No tienes órdenes asignadas</p>
-      ) : (
-        orders.map((order) => {
-          const isExpanded = expandedId === order.id
-          const needsDiagnosis = order.budget == null
+        {orders.length === 0 ? (
+          <p>No tienes órdenes asignadas</p>
+        ) : (
+          orders.map((order) => {
+            const isExpanded = expandedId === order.id
+            const needsDiagnosis = order.budget == null
 
-          return (
-            <div
-              key={order.id}
-              style={{
-                border: '1px solid #ccc',
-                borderRadius: 8,
-                padding: 16,
-                marginBottom: 12,
-              }}
-            >
-              <div
-                style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
-                onClick={() => toggleExpand(order.id)}
-              >
-                <div>
-                  <strong>{order.orderNumber}</strong> — {order.client.name} {order.client.lastName}
-                  <br />
-                  {order.device.brand} {order.device.model} · {order.status}
-                  {order.technicianCommission != null && (
-                    <span> · Comisión: ${order.technicianCommission}</span>
-                  )}
+            return (
+              <div key={order.id} className="card">
+                <div
+                  style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+                  onClick={() => toggleExpand(order.id)}
+                >
+                  <div>
+                    <strong>{order.orderNumber}</strong> — {order.client.name} {order.client.lastName}
+                    <br />
+                    {order.device.brand} {order.device.model} · <span className="badge">{order.status}</span>
+                    {order.technicianCommission != null && (
+                      <span> · Comisión: ${order.technicianCommission}</span>
+                    )}
+                  </div>
+                  <span>{isExpanded ? '▲' : '▼'}</span>
                 </div>
-                <span>{isExpanded ? '▲' : '▼'}</span>
-              </div>
 
-              {isExpanded && (
-                <div style={{ marginTop: 12, borderTop: '1px solid #eee', paddingTop: 12 }}>
-                  <p><strong>Problema:</strong> {order.problem}</p>
-                  {order.diagnosis && <p><strong>Diagnóstico:</strong> {order.diagnosis}</p>}
-                  {order.budget && <p><strong>Presupuesto:</strong> ${order.budget}</p>}
+                {isExpanded && (
+                  <div style={{ marginTop: 12, borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
+                    <p><strong>Problema:</strong> {order.problem}</p>
+                    {order.diagnosis && <p><strong>Diagnóstico:</strong> {order.diagnosis}</p>}
+                    {order.budget && <p><strong>Presupuesto:</strong> ${order.budget}</p>}
 
-                  {needsDiagnosis && (
-                    <div style={{ background: '#f5f5f5', padding: 12, borderRadius: 8, marginBottom: 12 }}>
-                      <h4>Registrar diagnóstico</h4>
-                      <div>
-                        <label>Diagnóstico: </label>
-                        <br />
-                        <textarea
-                          value={diagnosisText[order.id] || ''}
-                          onChange={(e) =>
-                            setDiagnosisText((prev) => ({ ...prev, [order.id]: e.target.value }))
-                          }
-                          rows={3}
-                          style={{ width: '100%' }}
-                        />
+                    {needsDiagnosis && (
+                      <div className="card">
+                        <h4>Registrar diagnóstico</h4>
+                        <div className="form-group">
+                          <label>Diagnóstico</label>
+                          <textarea
+                            value={diagnosisText[order.id] || ''}
+                            onChange={(e) =>
+                              setDiagnosisText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                            }
+                            rows={3}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Servicio del catálogo (opcional)</label>
+                          <select
+                            value={catalogSelection[order.id] || ''}
+                            onChange={(e) =>
+                              setCatalogSelection((prev) => ({ ...prev, [order.id]: e.target.value }))
+                            }
+                          >
+                            <option value="">-- Ninguno / diagnóstico manual --</option>
+                            {catalog.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name} (${c.basePrice})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>Presupuesto ($)</label>
+                          <input
+                            type="number"
+                            value={budgetText[order.id] || ''}
+                            onChange={(e) =>
+                              setBudgetText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                            }
+                          />
+                        </div>
+                        <button className="btn btn-primary" onClick={() => handleSubmitDiagnosis(order.id)}>
+                          Enviar diagnóstico
+                        </button>
                       </div>
-                      <div>
-                        <label>Servicio del catálogo (opcional): </label>
+                    )}
+
+                    <div className="card">
+                      <h4>Agregar comentario de progreso</h4>
+                      <div className="form-group">
+                        <label>Estado</label>
                         <select
-                          value={catalogSelection[order.id] || ''}
+                          value={statusSelection[order.id] || order.status}
                           onChange={(e) =>
-                            setCatalogSelection((prev) => ({ ...prev, [order.id]: e.target.value }))
+                            setStatusSelection((prev) => ({
+                              ...prev,
+                              [order.id]: e.target.value as OrderStatus,
+                            }))
                           }
                         >
-                          <option value="">-- Ninguno / diagnóstico manual --</option>
-                          {catalog.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name} (${c.basePrice})
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
                             </option>
                           ))}
                         </select>
                       </div>
-                      <div>
-                        <label>Presupuesto ($): </label>
-                        <input
-                          type="number"
-                          value={budgetText[order.id] || ''}
+                      <div className="form-group">
+                        <textarea
+                          value={commentText[order.id] || ''}
                           onChange={(e) =>
-                            setBudgetText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                            setCommentText((prev) => ({ ...prev, [order.id]: e.target.value }))
                           }
+                          placeholder="Describe el avance del trabajo..."
+                          rows={2}
                         />
                       </div>
-                      <button onClick={() => handleSubmitDiagnosis(order.id)}>
-                        Enviar diagnóstico
+                      <button className="btn btn-primary" onClick={() => handleSubmitComment(order.id, order.status)}>
+                        Guardar comentario
                       </button>
                     </div>
-                  )}
 
-                  <div style={{ background: '#f5f5f5', padding: 12, borderRadius: 8, marginBottom: 12 }}>
-                    <h4>Agregar comentario de progreso</h4>
-                    <div>
-                      <label>Estado: </label>
-                      <select
-                        value={statusSelection[order.id] || order.status}
-                        onChange={(e) =>
-                          setStatusSelection((prev) => ({
-                            ...prev,
-                            [order.id]: e.target.value as OrderStatus,
-                          }))
-                        }
-                      >
-                        {STATUS_OPTIONS.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <textarea
-                        value={commentText[order.id] || ''}
-                        onChange={(e) =>
-                          setCommentText((prev) => ({ ...prev, [order.id]: e.target.value }))
-                        }
-                        placeholder="Describe el avance del trabajo..."
-                        rows={2}
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-                    <button onClick={() => handleSubmitComment(order.id, order.status)}>
-                      Guardar comentario
-                    </button>
+                    <h4>Historial</h4>
+                    {order.statusHistory.map((entry) => (
+                      <div key={entry.id} className="form-hint">
+                        <strong>{entry.status}</strong> — {formatDate(entry.createdAt)}
+                        {entry.comment && <div>{entry.comment}</div>}
+                      </div>
+                    ))}
                   </div>
+                )}
+              </div>
+            )
+          })
+        )}
+      </div>
 
-                  <h4>Historial</h4>
-                  {order.statusHistory.map((entry) => (
-                    <div key={entry.id} style={{ fontSize: '0.9em', marginBottom: 6 }}>
-                      <strong>{entry.status}</strong> — {formatDate(entry.createdAt)}
-                      {entry.comment && <div>{entry.comment}</div>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })
-      )}
-
-      <div style={{ display: 'flex', gap: 20, marginTop: 32 }}>
-        <div style={{ border: '1px solid #ccc', padding: 16, borderRadius: 8 }}>
+      <div style={{ display: 'flex', gap: 20, marginTop: 32, flexWrap: 'wrap' }}>
+        <div className="card">
           <h3>Resumen histórico</h3>
           <p>Servicios completados: {completedOrders.length}</p>
           <p>Comisión total ganada: ${totalCommission.toFixed(2)}</p>
         </div>
-        <div style={{ border: '1px solid #ccc', padding: 16, borderRadius: 8 }}>
+        <div className="card">
           <h3>Corte semanal (lun. a sáb.)</h3>
           <p>{monday.toLocaleDateString('es-VE')} — {saturday.toLocaleDateString('es-VE')}</p>
           <p>Servicios esta semana: {weeklyOrders.length}</p>

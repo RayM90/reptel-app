@@ -90,77 +90,71 @@ export default function DeliveryDashboard() {
   const pendingDeliveries = deliveries.filter((d) => d.status !== 'DELIVERED')
   const completedDeliveries = deliveries.filter((d) => d.status === 'DELIVERED')
 
-  if (loading) return <p>Cargando...</p>
-  if (error) return <p>{error}</p>
+  if (loading) return <div className="page-container"><p>Cargando...</p></div>
+  if (error) return <div className="page-container"><p className="alert-error">{error}</p></div>
 
   return (
-    <div>
+    <div className="page-container">
       <h1>Panel de Motorizado</h1>
       <p>Hola, {user?.name}</p>
 
-      <h2>Mis Entregas Pendientes ({pendingDeliveries.length})</h2>
+      <div className="card">
+        <h2>Mis Entregas Pendientes ({pendingDeliveries.length})</h2>
 
-      {pendingDeliveries.length === 0 ? (
-        <p>No tienes entregas pendientes</p>
-      ) : (
-        pendingDeliveries.map((delivery) => {
-          const isExpanded = expandedId === delivery.id
-          const order = delivery.productOrder
+        {pendingDeliveries.length === 0 ? (
+          <p>No tienes entregas pendientes</p>
+        ) : (
+          pendingDeliveries.map((delivery) => {
+            const isExpanded = expandedId === delivery.id
+            const order = delivery.productOrder
 
-          return (
-            <div
-              key={delivery.id}
-              style={{
-                border: '1px solid #ccc',
-                borderRadius: 8,
-                padding: 16,
-                marginBottom: 12,
-              }}
-            >
-              <div
-                style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
-                onClick={() => toggleExpand(delivery.id)}
-              >
-                <div>
-                  <strong>Pedido #{order.id.slice(0, 8)}</strong> — {order.client.name} {order.client.lastName}
-                  <br />
-                  {delivery.status} · Total: ${order.total}
+            return (
+              <div key={delivery.id} className="card">
+                <div
+                  style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+                  onClick={() => toggleExpand(delivery.id)}
+                >
+                  <div>
+                    <strong>Pedido #{order.id.slice(0, 8)}</strong> — {order.client.name} {order.client.lastName}
+                    <br />
+                    <span className="badge">{delivery.status}</span> · Total: ${order.total}
+                  </div>
+                  <span>{isExpanded ? '▲' : '▼'}</span>
                 </div>
-                <span>{isExpanded ? '▲' : '▼'}</span>
+
+                {isExpanded && (
+                  <div style={{ marginTop: 12, borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
+                    <p><strong>Dirección de entrega:</strong> {order.address || 'No especificada'}</p>
+                    <p><strong>Método de pago:</strong> {order.paymentMethod}</p>
+
+                    <h4>Productos</h4>
+                    <ul>
+                      {order.items.map((item, idx) => (
+                        <li key={idx}>
+                          {item.quantity}x {item.product.name}
+                        </li>
+                      ))}
+                    </ul>
+
+                    <p className="form-hint">
+                      Asignado: {formatDate(delivery.createdAt)}
+                    </p>
+
+                    <button className="btn btn-primary" onClick={() => handleMarkDelivered(order.id)}>
+                      Marcar como entregado
+                    </button>
+                  </div>
+                )}
               </div>
+            )
+          })
+        )}
+      </div>
 
-              {isExpanded && (
-                <div style={{ marginTop: 12, borderTop: '1px solid #eee', paddingTop: 12 }}>
-                  <p><strong>Dirección de entrega:</strong> {order.address || 'No especificada'}</p>
-                  <p><strong>Método de pago:</strong> {order.paymentMethod}</p>
-
-                  <h4>Productos</h4>
-                  <ul>
-                    {order.items.map((item, idx) => (
-                      <li key={idx}>
-                        {item.quantity}x {item.product.name}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <p style={{ fontSize: '0.9em', color: '#666' }}>
-                    Asignado: {formatDate(delivery.createdAt)}
-                  </p>
-
-                  <button onClick={() => handleMarkDelivered(order.id)}>
-                    Marcar como entregado
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        })
-      )}
-
-      <div style={{ marginTop: 32 }}>
+      <div className="card" style={{ marginTop: 32 }}>
         <h3>Entregas completadas ({completedDeliveries.length})</h3>
         {completedDeliveries.map((delivery) => (
-          <div key={delivery.id} style={{ fontSize: '0.9em', marginBottom: 6 }}>
+          <div key={delivery.id} className="form-hint">
             <strong>Pedido #{delivery.productOrder.id.slice(0, 8)}</strong> — {delivery.productOrder.client.name}{' '}
             {delivery.productOrder.client.lastName} — entregado {delivery.deliveredAt && formatDate(delivery.deliveredAt)}
           </div>

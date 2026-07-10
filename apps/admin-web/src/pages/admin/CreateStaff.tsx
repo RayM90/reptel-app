@@ -35,78 +35,70 @@ export default function CreateStaff() {
   }
 
   return (
-    <div>
+    <div className="page-container">
       <h1>Crear Usuario de Personal</h1>
       <p><Link to="/admin">← Volver al Panel de Administrador</Link></p>
 
-      <form onSubmit={handleSubmit} style={{ maxWidth: 400 }}>
-        <div>
-          <label>Nombre completo</label>
-          <br />
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            style={{ width: '100%' }}
-          />
-        </div>
-        <div>
-          <label>Email</label>
-          <br />
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={{ width: '100%' }}
-          />
-        </div>
-        <div>
-          <label>Teléfono (opcional)</label>
-          <br />
-          <input
-            type="text"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            style={{ width: '100%' }}
-          />
-        </div>
-        <div>
-          <label>Rol</label>
-          <br />
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as StaffRole)}
-            style={{ width: '100%' }}
-          >
-            <option value="TECHNICIAN_DELIVERY">Técnico</option>
-            <option value="DELIVERY">Motorizado</option>
-          </select>
-        </div>
-        <div>
-          <label>Contraseña temporal</label>
-          <br />
-          <input
-            type="text"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={8}
-            style={{ width: '100%' }}
-          />
-          <p style={{ fontSize: '0.85em', color: '#666' }}>
-            Mínimo 8 caracteres. El empleado deberá establecer su contraseña definitiva en su primer inicio de sesión.
-          </p>
-        </div>
+      <div className="card" style={{ maxWidth: 400 }}>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Nombre completo</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>Teléfono (opcional)</label>
+            <input
+              type="text"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label>Rol</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as StaffRole)}
+            >
+              <option value="TECHNICIAN_DELIVERY">Técnico</option>
+              <option value="DELIVERY">Motorizado</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Contraseña temporal</label>
+            <input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
+            />
+            <p className="form-hint">
+              Mínimo 8 caracteres. El empleado deberá establecer su contraseña definitiva en su primer inicio de sesión.
+            </p>
+          </div>
 
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        {success && <p style={{ color: 'green' }}>{success}</p>}
+          {error && <p className="alert-error">{error}</p>}
+          {success && <p className="alert-success">{success}</p>}
 
-        <button type="submit" disabled={loading}>
-          {loading ? 'Creando...' : 'Crear empleado'}
-        </button>
-      </form>
+          <button className="btn btn-primary" type="submit" disabled={loading}>
+            {loading ? 'Creando...' : 'Crear empleado'}
+          </button>
+        </form>
+      </div>
     </div>
   )
 }
