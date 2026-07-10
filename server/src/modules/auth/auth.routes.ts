@@ -4,7 +4,7 @@ import { register, login, refresh, completeNewPassword } from './auth.controller
 
 const router = Router();
 
-// Registro de usuario
+// Registro de usuario — endpoint público, pero el controller solo permite role: CLIENT
 router.post('/register', register);
 
 // Login
