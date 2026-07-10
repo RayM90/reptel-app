@@ -5,7 +5,9 @@ import {
   SignUpCommand,
   AdminAddUserToGroupCommand,
   AdminConfirmSignUpCommand,
+  AdminCreateUserCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
+
 import prisma from '../../lib/prisma';
 
 const client = new CognitoIdentityProviderClient({
@@ -162,5 +164,58 @@ export const refreshUserToken = async (refreshToken: string) => {
   return {
     accessToken: response.AuthenticationResult?.AccessToken,
     idToken: response.AuthenticationResult?.IdToken,
+  };
+};
+
+/**
+ * ADMIN crea un usuario de personal (técnico o motorizado).
+ * A diferencia de registerUser() (auto-registro del cliente con SignUpCommand),
+ * este usa AdminCreateUserCommand: el ADMIN define una contraseña temporal,
+ * MessageAction: 'SUPPRESS' evita que Cognito intente enviar un correo (no hay
+ * SES configurado), y el usuario queda en estado FORCE_CHANGE_PASSWORD —
+ * disparará el challenge NEW_PASSWORD_REQUIRED ya resuelto en el login.
+ */
+export const createStaffUser = async (
+  email: string,
+  name: string,
+  tempPassword: string,
+  role: string,
+  phone?: string,
+) => {
+  await client.send(
+    new AdminCreateUserCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+      TemporaryPassword: tempPassword,
+      MessageAction: 'SUPPRESS',
+      UserAttributes: [
+        { Name: 'email', Value: email },
+        { Name: 'email_verified', Value: 'true' },
+        { Name: 'name', Value: name },
+      ],
+    })
+  );
+
+  await client.send(
+    new AdminAddUserToGroupCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+      GroupName: role,
+    })
+  );
+
+  const user = await prisma.user.create({
+    data: {
+      email,
+      name,
+      role: role as any,
+      phone: phone ?? null,
+      password: 'no-usado-cognito',
+    },
+  });
+
+  return {
+    message: 'Empleado creado exitosamente. Deberá establecer su contraseña definitiva en el primer inicio de sesión.',
+    userId: user.id,
   };
 };
