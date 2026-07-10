@@ -12,9 +12,12 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const validRoles = ['ADMIN', 'TECHNICIAN', 'TECHNICIAN_DELIVERY', 'DELIVERY', 'SUPPORT', 'CLIENT'];
-    if (!validRoles.includes(role)) {
-      res.status(400).json({ message: 'Rol inválido' });
+    // Este endpoint es público (sin autenticación) — solo puede usarse para
+    // el auto-registro de clientes desde la app móvil. Crear personal
+    // (ADMIN, TECHNICIAN_DELIVERY, DELIVERY) requiere el endpoint protegido
+    // POST /staff (pendiente de construir), nunca este.
+    if (role !== 'CLIENT') {
+      res.status(403).json({ message: 'Este endpoint solo permite el registro de clientes' });
       return;
     }
 
