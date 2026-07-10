@@ -33,7 +33,7 @@ interface ProductOrder {
 function PaymentDetailsView({ details }: { details: Record<string, string> | null }) {
   if (!details) return <span>—</span>
   return (
-    <div style={{ fontSize: '0.85em', lineHeight: 1.5 }}>
+    <div className="form-hint">
       {Object.entries(details).map(([key, value]) => (
         <div key={key}>
           <strong>{key}:</strong> {value}
@@ -157,23 +157,21 @@ export default function Dashboard() {
     (po) => po.status !== 'DELIVERED' && po.status !== 'CANCELLED'
   )
 
-  if (loading) return <p>Cargando...</p>
-  if (error) return <p>{error}</p>
+  if (loading) return <div className="page-container"><p>Cargando...</p></div>
+  if (error) return <div className="page-container"><p className="alert-error">{error}</p></div>
 
   return (
-    <div>
+    <div className="page-container">
       <h1>Panel de Administrador</h1>
-      <p><Link to="/technician">🔧 (Prueba temporal) Ir al Panel del Técnico</Link></p>
       <p><Link to="/admin/create-staff">➕ Crear usuario de personal</Link></p>
-      
 
-      <section>
+      <section className="card">
         <h2>Servicios Técnicos Activos ({activeOrders.length})</h2>
         {activeOrders.length === 0 ? (
           <p>No hay servicios activos</p>
         ) : (
-          <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
-            <table border={1} cellPadding={8}>
+          <div className="table-wrapper">
+            <table className="styled-table">
               <thead>
                 <tr>
                   <th>Orden</th>
@@ -193,7 +191,7 @@ export default function Dashboard() {
                     <td>{order.orderNumber}</td>
                     <td>{order.client.name} {order.client.lastName}</td>
                     <td>{order.problem}</td>
-                    <td>{order.status}</td>
+                    <td><span className="badge">{order.status}</span></td>
                     <td>{order.budget ? `$${order.budget}` : '—'}</td>
                     <td>{order.technician?.name || 'Sin asignar'}</td>
                     <td><PaymentDetailsView details={order.advancePaymentDetails} /></td>
@@ -202,24 +200,26 @@ export default function Dashboard() {
                       {order.status === 'PENDING_PAYMENT' ? (
                         <>
                           <button
+                            className="btn btn-primary"
                             onClick={() => handleApproveAdvancePayment(order.id)}
                             disabled={!order.advancePaymentDetails}
                           >
                             Aprobar anticipo
                           </button>{' '}
-                          <button onClick={() => handleRejectAdvancePayment(order.id)}>
+                          <button className="btn btn-danger" onClick={() => handleRejectAdvancePayment(order.id)}>
                             Rechazar
                           </button>
                         </>
                       ) : order.status === 'READY' ? (
                         <>
                           <button
+                            className="btn btn-primary"
                             onClick={() => handleApproveFinalPayment(order.id)}
                             disabled={!order.finalPaymentDetails}
                           >
                             Aprobar pago final
                           </button>{' '}
-                          <button onClick={() => handleRejectFinalPayment(order.id)}>
+                          <button className="btn btn-danger" onClick={() => handleRejectFinalPayment(order.id)}>
                             Rechazar
                           </button>
                         </>
@@ -235,13 +235,13 @@ export default function Dashboard() {
         )}
       </section>
 
-      <section>
+      <section className="card">
         <h2>Pedidos de Tienda Activos ({activeProductOrders.length})</h2>
         {activeProductOrders.length === 0 ? (
           <p>No hay pedidos activos</p>
         ) : (
-          <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
-            <table border={1} cellPadding={8}>
+          <div className="table-wrapper">
+            <table className="styled-table">
               <thead>
                 <tr>
                   <th>Cliente</th>
@@ -259,19 +259,20 @@ export default function Dashboard() {
                     <td>{po.client.name} {po.client.lastName}</td>
                     <td>{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
                     <td>${po.total}</td>
-                    <td>{po.status}</td>
+                    <td><span className="badge">{po.status}</span></td>
                     <td>{po.delivery?.agent.name || 'Sin asignar'}</td>
                     <td><PaymentDetailsView details={po.paymentDetails} /></td>
                     <td>
                       {po.status === 'PENDING' ? (
                         <>
                           <button
+                            className="btn btn-primary"
                             onClick={() => handleApproveProductPayment(po.id)}
                             disabled={!po.paymentDetails}
                           >
                             Aprobar pago
                           </button>{' '}
-                          <button onClick={() => handleRejectProductPayment(po.id)}>
+                          <button className="btn btn-danger" onClick={() => handleRejectProductPayment(po.id)}>
                             Rechazar
                           </button>
                         </>
