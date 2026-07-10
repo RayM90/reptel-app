@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Dashboard from './pages/admin/Dashboard'
 import TechnicianDashboard from './pages/technician/Dashboard'
 import DeliveryDashboard from './pages/delivery/Dashboard'
+import CreateStaff from './pages/admin/CreateStaff'
 
 function App() {
   return (
@@ -15,6 +16,15 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/create-staff"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <CreateStaff />
           </ProtectedRoute>
         }
       />

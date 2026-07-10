@@ -164,6 +164,8 @@ export default function Dashboard() {
     <div>
       <h1>Panel de Administrador</h1>
       <p><Link to="/technician">🔧 (Prueba temporal) Ir al Panel del Técnico</Link></p>
+      <p><Link to="/admin/create-staff">➕ Crear usuario de personal</Link></p>
+      
 
       <section>
         <h2>Servicios Técnicos Activos ({activeOrders.length})</h2>
