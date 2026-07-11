@@ -38,11 +38,12 @@ export default function UploadReceiptScreen() {
   const [loading, setLoading] = useState(false)
 
   const montoNumber = monto ? Number(monto) : 0
-  const faltante = totalNumber != null ? totalNumber - montoNumber : 0
-  const montoInsuficiente = totalNumber != null && faltante > 0.009
+  const restante = totalNumber != null ? totalNumber - montoNumber : 0
+  const esPagoParcial = totalNumber != null && restante > 0.009
+  const excedeElTotal = totalNumber != null && montoNumber > totalNumber + 0.009
 
   const isFormValid = () => {
-    if (!monto || montoInsuficiente) return false
+    if (!monto || montoNumber <= 0 || excedeElTotal) return false
     if (paymentMethod === 'PAGO_MOVIL') return !!banco && !!telefono && !!referencia
     if (paymentMethod === 'TRANSFERENCIA') return !!banco && !!titular && !!cedula && !!referencia
     if (paymentMethod === 'BINANCE') return !!correo && !!uid && !!nombre
@@ -71,10 +72,12 @@ export default function UploadReceiptScreen() {
 
     setLoading(true)
     try {
-      await productOrdersAPI.uploadReceipt(orderId, paymentDetails)
+      await productOrdersAPI.uploadReceipt(orderId, paymentDetails, montoNumber)
       Alert.alert(
         '✅ Datos de pago enviados',
-        'Tus datos fueron enviados. El equipo de RepTel los revisará y confirmará tu pago pronto. Un motorizado será asignado una vez confirmado.',
+        esPagoParcial
+          ? `Tu abono de $${montoNumber.toFixed(2)} fue enviado. El equipo de RepTel lo revisará. Aún quedará un saldo pendiente de $${restante.toFixed(2)} por enviar.`
+          : 'Tus datos fueron enviados. El equipo de RepTel los revisará y confirmará tu pago pronto. Un motorizado será asignado una vez confirmado.',
         [
           {
             text: 'Ver mis pedidos',
@@ -114,7 +117,7 @@ export default function UploadReceiptScreen() {
         >
           <View style={styles.infoCard}>
             <Text style={styles.infoText}>
-              📝 Ingresa los datos exactos de tu pago. El equipo de RepTel los verificará y confirmará el pago manualmente para asignar tu entrega.
+              📝 Ingresa los datos exactos de tu pago. Puedes pagar el total de una vez o abonar por partes: el equipo de RepTel confirmará cada abono, y en cuanto se complete el monto se asignará tu entrega.
             </Text>
           </View>
 
@@ -146,10 +149,18 @@ export default function UploadReceiptScreen() {
 
             <Field label="Monto enviado ($)" value={monto} onChangeText={setMonto} placeholder="Ej. 25.00" keyboardType="decimal-pad" />
 
-            {montoInsuficiente && (
+            {esPagoParcial && (
+              <View style={styles.infoNoteCard}>
+                <Text style={styles.infoNoteText}>
+                  ℹ️ Este sería un abono parcial. Restante después de este pago: ${restante.toFixed(2)} de ${totalNumber?.toFixed(2)}
+                </Text>
+              </View>
+            )}
+
+            {excedeElTotal && (
               <View style={styles.warningCard}>
                 <Text style={styles.warningText}>
-                  ⚠️ Faltan ${faltante.toFixed(2)} para completar el pago total de ${totalNumber?.toFixed(2)}
+                  ⚠️ El monto no puede ser mayor al total del pedido (${totalNumber?.toFixed(2)})
                 </Text>
               </View>
             )}
@@ -168,7 +179,7 @@ export default function UploadReceiptScreen() {
           </TouchableOpacity>
 
           <Text style={styles.waitNote}>
-            ⏳ Una vez enviado, un motorizado será asignado tan pronto tu pago sea confirmado.
+            ⏳ Una vez enviado, un motorizado será asignado tan pronto tu pago sea confirmado por completo.
           </Text>
         </ScrollView>
       </LinearGradient>
@@ -230,6 +241,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#17247a',
   },
+  infoNoteCard: {
+    backgroundColor: '#e0e7ff',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: -4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+  },
+  infoNoteText: { fontSize: 13, color: '#17247a', fontWeight: '600' },
   warningCard: {
     backgroundColor: '#fee2e2',
     borderRadius: 12,

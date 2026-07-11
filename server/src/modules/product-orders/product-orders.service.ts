@@ -265,33 +265,51 @@ export const createLinkedProductOrder = async (
 }
 
 // ─────────────────────────────────────────────
-// SUBIR DATOS DE PAGO (Pago Móvil / Transferencia / Binance)
-// Guarda los datos ingresados por el cliente y notifica a los
-// administradores.
+// SUBIR DATOS DE PAGO (abono parcial o total)
+// Guarda cada envío como un registro independiente en
+// ProductOrderPaymentSubmission y notifica a los administradores.
 // ─────────────────────────────────────────────
 
 export const uploadReceipt = async (
   productOrderId: string,
   clientId: string,
-  paymentDetails: Record<string, string>
+  paymentDetails: Record<string, string>,
+  amount: number
 ) => {
   // Verificar que la orden exista y pertenezca al cliente autenticado
   const order = await prisma.productOrder.findFirst({
     where: { id: productOrderId, clientId },
-    include: { client: true },
+    include: {
+      client: true,
+      paymentSubmissions: { where: { status: 'CONFIRMED' } },
+    },
   })
 
   if (!order) {
     throw new Error('Pedido no encontrado')
   }
 
-  // Guardar los datos de pago
-  const updatedOrder = await prisma.productOrder.update({
-    where: { id: productOrderId },
-    data: { paymentDetails },
-    include: {
-      items: { include: { product: true } },
-      client: true,
+  if (amount == null || amount <= 0) {
+    throw new Error('El monto del pago debe ser mayor a cero')
+  }
+
+  const alreadyConfirmed = order.paymentSubmissions.reduce(
+    (sum, s) => sum + Number(s.amount),
+    0
+  )
+  const remaining = Number(order.total) - alreadyConfirmed
+
+  if (amount > remaining + 0.009) {
+    throw new Error(
+      `El monto excede lo pendiente por pagar. Restante: $${remaining.toFixed(2)}`
+    )
+  }
+
+  const submission = await prisma.productOrderPaymentSubmission.create({
+    data: {
+      productOrderId,
+      amount,
+      paymentDetails,
     },
   })
 
@@ -306,91 +324,135 @@ export const uploadReceipt = async (
       data: admins.map((admin) => ({
         type: 'PAYMENT_CONFIRMED',
         channel: 'PUSH',
-        message: `${order.client.name} ${order.client.lastName} registró datos de pago para el pedido #${productOrderId.slice(0, 8)}`,
+        message: `${order.client.name} ${order.client.lastName} envió un abono de $${amount.toFixed(2)} para el pedido #${productOrderId.slice(0, 8)}`,
         userId: admin.id,
         productOrderId,
       })),
     })
   }
 
-  return updatedOrder
+  return submission
 }
 
 // ─────────────────────────────────────────────
-// CONFIRMAR O RECHAZAR PAGO (acción del administrador)
-// Al aprobar: asigna motorizado automáticamente y crea su ProductDelivery.
-// Al rechazar: guarda el motivo, limpia los datos de pago viejos
-// (para que el botón "Aprobar" del admin no quede habilitado con
-// información incorrecta) y el cliente debe reenviar sus datos.
+// CONFIRMAR O RECHAZAR UN ABONO ESPECÍFICO (acción del administrador)
+// Al aprobar: si la suma de abonos confirmados alcanza el total,
+// el pedido pasa a CONFIRMED y se asigna motorizado automáticamente.
+// Al rechazar: guarda el motivo, el abono queda REJECTED y no cuenta
+// para la suma; el cliente puede reenviar un abono nuevo.
 // ─────────────────────────────────────────────
 
-export const confirmPayment = async (
-  productOrderId: string,
+export const confirmPartialPayment = async (
+  submissionId: string,
   approved: boolean,
   rejectionReason?: string
 ) => {
-  const order = await prisma.productOrder.findUnique({
-    where: { id: productOrderId },
-    include: { client: { include: { user: true } } },
+  const submission = await prisma.productOrderPaymentSubmission.findUnique({
+    where: { id: submissionId },
+    include: {
+      productOrder: {
+        include: {
+          client: { include: { user: true } },
+          paymentSubmissions: { where: { status: 'CONFIRMED' } },
+        },
+      },
+    },
   })
 
-  if (!order) {
-    throw new Error('Pedido no encontrado')
+  if (!submission) {
+    throw new Error('Abono de pago no encontrado')
+  }
+
+  if (submission.status !== 'PENDING') {
+    throw new Error('Este abono ya fue procesado')
+  }
+
+  const productOrderId = submission.productOrderId
+  const order = submission.productOrder
+
+  if (!approved && !rejectionReason) {
+    throw new Error('rejectionReason es requerido cuando se rechaza el abono')
   }
 
   let assignedAgentId: string | null = null
-  if (approved) {
-    assignedAgentId = await assignDeliveryAgent()
-  }
+  let orderNowComplete = false
 
-  const updatedOrder = await prisma.$transaction(async (tx) => {
-    const updated = await tx.productOrder.update({
-      where: { id: productOrderId },
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.productOrderPaymentSubmission.update({
+      where: { id: submissionId },
       data: {
-        status: approved ? 'CONFIRMED' : 'PENDING',
-        paidAt: approved ? new Date() : null,
+        status: approved ? 'CONFIRMED' : 'REJECTED',
         rejectionReason: approved ? null : rejectionReason,
-        ...(approved
-          ? {}
-          : { receiptUrl: null, paymentDetails: Prisma.JsonNull }),
-      },
-      include: {
-        items: { include: { product: true } },
-        client: true,
+        confirmedAt: approved ? new Date() : null,
       },
     })
 
-    if (approved && assignedAgentId) {
-      await tx.productDelivery.create({
-        data: {
-          productOrderId,
-          agentId: assignedAgentId,
-        },
-      })
+    if (approved) {
+      const alreadyConfirmed = order.paymentSubmissions.reduce(
+        (sum, s) => sum + Number(s.amount),
+        0
+      )
+      const newTotalConfirmed = alreadyConfirmed + Number(submission.amount)
+      orderNowComplete = newTotalConfirmed + 0.009 >= Number(order.total)
+
+      if (orderNowComplete) {
+        assignedAgentId = await assignDeliveryAgent()
+
+        await tx.productOrder.update({
+          where: { id: productOrderId },
+          data: {
+            status: 'CONFIRMED',
+            paidAt: new Date(),
+          },
+        })
+
+        if (assignedAgentId) {
+          await tx.productDelivery.create({
+            data: {
+              productOrderId,
+              agentId: assignedAgentId,
+            },
+          })
+        }
+      }
     }
 
-    return updated
+    return tx.productOrder.findUnique({
+      where: { id: productOrderId },
+      include: {
+        items: { include: { product: true } },
+        client: true,
+        paymentSubmissions: true,
+      },
+    })
   })
 
-  if (approved && assignedAgentId) {
+  if (assignedAgentId) {
     await incrementDeliveryLoad(assignedAgentId)
   }
 
   if (order.client.user) {
+    let message: string
+    if (!approved) {
+      message = `Tu abono de $${Number(submission.amount).toFixed(2)} para el pedido #${productOrderId.slice(0, 8)} fue rechazado: ${rejectionReason}. Por favor envía los datos nuevamente.`
+    } else if (orderNowComplete) {
+      message = `Tu pago para el pedido #${productOrderId.slice(0, 8)} fue confirmado por completo. Un motorizado fue asignado para tu entrega.`
+    } else {
+      message = `Tu abono de $${Number(submission.amount).toFixed(2)} para el pedido #${productOrderId.slice(0, 8)} fue confirmado. Aún queda un saldo pendiente.`
+    }
+
     await prisma.notification.create({
       data: {
         type: 'PAYMENT_CONFIRMED',
         channel: 'PUSH',
-        message: approved
-          ? `Tu pago para el pedido #${productOrderId.slice(0, 8)} fue confirmado. Un motorizado fue asignado para tu entrega.`
-          : `No pudimos confirmar tu pago para el pedido #${productOrderId.slice(0, 8)}: ${rejectionReason}. Por favor envía tus datos de pago nuevamente.`,
+        message,
         userId: order.client.user.id,
         productOrderId,
       },
     })
   }
 
-  return updatedOrder
+  return updated
 }
 
 // ─────────────────────────────────────────────
@@ -407,6 +469,9 @@ export const getOrdersByClient = async (clientId: string) => {
       delivery: {
         include: { agent: { select: { id: true, name: true, phone: true } } },
       },
+      paymentSubmissions: {
+        orderBy: { createdAt: 'asc' },
+      },
     },
     orderBy: { createdAt: 'desc' },
   })
@@ -419,8 +484,13 @@ export const getProductOrderById = async (id: string, clientId: string) => {
       items: {
         include: { product: true },
       },
-      delivery: true,
+      delivery: {
+        include: { agent: { select: { id: true, name: true, phone: true } } },
+      },
       invoice: true,
+      paymentSubmissions: {
+        orderBy: { createdAt: 'asc' },
+      },
     },
   })
 }
@@ -436,6 +506,9 @@ export const getAllOrders = async () => {
       client: true,
       delivery: { include: { agent: { select: { id: true, name: true } } } },
       linkedOrder: { select: { id: true, orderNumber: true } },
+      paymentSubmissions: {
+        orderBy: { createdAt: 'asc' },
+      },
     },
     orderBy: { createdAt: 'desc' },
   })

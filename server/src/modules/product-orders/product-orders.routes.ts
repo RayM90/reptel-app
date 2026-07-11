@@ -48,7 +48,7 @@ router.get(
   productOrdersController.getOrderDetail
 )
 
-// Subir comprobante de pago
+// Subir un abono de pago (parcial o total)
 router.patch(
   '/:id/receipt',
   authenticate,
@@ -57,12 +57,13 @@ router.patch(
 )
 
 // ─── Rutas del administrador ───────────────────────────────────────
-// Confirmar o rechazar el pago de un pedido
+// Confirmar o rechazar un abono específico
+// IMPORTANTE: usa submissionId (ID del abono), no el id del pedido.
 router.patch(
-  '/:id/confirm-payment',
+  '/payment-submissions/:submissionId/confirm',
   authenticate,
   authorize('ADMIN'),
-  productOrdersController.confirmPayment
+  productOrdersController.confirmPartialPayment
 )
 
 // Listar todos los pedidos de tienda (supervisión del ADMIN)
