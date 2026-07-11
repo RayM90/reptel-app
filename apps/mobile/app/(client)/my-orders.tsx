@@ -5,12 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter } from 'expo-router'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { productOrdersAPI } from '../../src/services/api'
+import { useToastStore } from '../../src/store/toast.store'
 
 // Mismo valor que apps/admin-web/src/config/constants.ts -> POLL_INTERVAL_MS.
 // Se define localmente porque mobile no comparte código con admin-web, pero
@@ -114,6 +114,7 @@ export default function MyOrdersScreen() {
   const [updatedIds, setUpdatedIds] = useState<Set<string>>(new Set())
   // Último estado conocido de cada pedido, para detectar cambios en el polling.
   const previousStatusRef = useRef<Record<string, OrderStatus>>({})
+  const showToast = useToastStore((state) => state.showToast)
 
   const fetchOrders = useCallback(async (isPoll = false) => {
     if (!isPoll) setLoading(true)
@@ -143,9 +144,9 @@ export default function MyOrdersScreen() {
       // cargados siguen visibles, solo se reintenta en el próximo ciclo.
       if (!isPoll) {
         const backendMessage = error?.response?.data?.message
-        Alert.alert(
-          'No se pudieron cargar los pedidos',
-          backendMessage || 'Ocurrió un error al obtener tus pedidos. Intenta de nuevo.'
+        showToast(
+          backendMessage || 'Ocurrió un error al obtener tus pedidos. Intenta de nuevo.',
+          'error'
         )
       }
     } finally {
