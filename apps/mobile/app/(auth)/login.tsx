@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Image,
@@ -20,6 +19,7 @@ import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth.store";
+import { useToastStore } from "../../src/store/toast.store";
 import { api } from "../../src/services/api";
 
 const { width } = Dimensions.get("window");
@@ -30,10 +30,11 @@ export default function LoginScreen() {
   const [loading, setLoading]         = useState(false);
   const [verPassword, setVerPassword] = useState(false);
   const { setUser } = useAuthStore();
+  const showToast = useToastStore((state) => state.showToast);
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert("Error", "Por favor completa todos los campos");
+      showToast("Por favor completa todos los campos", "error");
       return;
     }
     try {
@@ -44,9 +45,9 @@ export default function LoginScreen() {
 
       router.replace("/(client)/home-client");
     } catch (error: any) {
-      Alert.alert(
-        "Error",
-        error.response?.data?.message || "Credenciales incorrectas"
+      showToast(
+        error.response?.data?.message || "Credenciales incorrectas",
+        "error"
       );
     } finally {
       setLoading(false);
