@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/auth.store'
+import { useToastStore } from '../../store/toast.store'
 
 type OrderStatus =
   | 'PENDING_PAYMENT'
@@ -70,6 +71,7 @@ function getWeekRange(date = new Date()) {
 
 export default function TechnicianDashboard() {
   const user = useAuthStore((state) => state.user)
+  const showToast = useToastStore((state) => state.showToast)
   const [orders, setOrders] = useState<TechOrder[]>([])
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -114,7 +116,7 @@ export default function TechnicianDashboard() {
     const serviceCatalogId = catalogSelection[orderId] || undefined
 
     if (!diagnosis || !budget) {
-      alert('Completa el diagnóstico y el presupuesto antes de enviar.')
+      showToast('Completa el diagnóstico y el presupuesto antes de enviar.', 'error')
       return
     }
 
@@ -124,10 +126,10 @@ export default function TechnicianDashboard() {
         budget: Number(budget),
         serviceCatalogId,
       })
-      alert('✅ Diagnóstico registrado. La orden queda esperando aprobación del presupuesto.')
+      showToast('✅ Diagnóstico registrado. La orden queda esperando aprobación del presupuesto.', 'success')
       fetchData()
     } catch (err) {
-      alert('❌ Error al registrar el diagnóstico')
+      showToast('❌ Error al registrar el diagnóstico', 'error')
     }
   }
 
@@ -136,17 +138,17 @@ export default function TechnicianDashboard() {
     const status = statusSelection[orderId] || currentStatus
 
     if (!comment) {
-      alert('Escribe un comentario antes de enviar.')
+      showToast('Escribe un comentario antes de enviar.', 'error')
       return
     }
 
     try {
       await api.patch(`/api/orders/${orderId}/status`, { status, comment })
-      alert('✅ Comentario registrado.')
+      showToast('✅ Comentario registrado.', 'success')
       setCommentText((prev) => ({ ...prev, [orderId]: '' }))
       fetchData()
     } catch (err) {
-      alert('❌ Error al registrar el comentario')
+      showToast('❌ Error al registrar el comentario', 'error')
     }
   }
 

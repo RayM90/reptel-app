@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
+import { useToastStore } from '../../store/toast.store'
+import { useConfirm } from '../../hooks/useConfirm'
 
 interface Order {
   id: string
@@ -48,6 +50,8 @@ export default function Dashboard() {
   const [productOrders, setProductOrders] = useState<ProductOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const showToast = useToastStore((state) => state.showToast)
+  const confirmDialog = useConfirm()
 
   useEffect(() => {
     fetchData()
@@ -74,25 +78,30 @@ export default function Dashboard() {
   const handleApproveAdvancePayment = async (orderId: string) => {
     try {
       await api.post(`/api/orders/${orderId}/confirm-advance-payment`, { approved: true })
-      alert('✅ Pago anticipado aprobado. La orden pasó a "Recibida".')
+      showToast('✅ Pago anticipado aprobado. La orden pasó a "Recibida".', 'success')
       fetchData()
     } catch (err) {
-      alert('❌ Error al aprobar el pago')
+      showToast('❌ Error al aprobar el pago', 'error')
     }
   }
 
   const handleRejectAdvancePayment = async (orderId: string) => {
-    const reason = window.prompt('Motivo del rechazo:')
+    const reason = await confirmDialog({
+      title: 'Rechazar pago anticipado',
+      requireText: true,
+      textLabel: 'Motivo del rechazo',
+      confirmLabel: 'Rechazar',
+    })
     if (!reason) return
     try {
       await api.post(`/api/orders/${orderId}/confirm-advance-payment`, {
         approved: false,
         rejectionReason: reason,
       })
-      alert('✅ Pago rechazado. Se notificó al cliente para que reenvíe sus datos.')
+      showToast('✅ Pago rechazado. Se notificó al cliente para que reenvíe sus datos.', 'success')
       fetchData()
     } catch (err) {
-      alert('❌ Error al rechazar el pago')
+      showToast('❌ Error al rechazar el pago', 'error')
     }
   }
 
@@ -101,25 +110,30 @@ export default function Dashboard() {
     try {
       const response = await api.post(`/api/orders/${orderId}/confirm-final-payment`, { approved: true })
       const commission = response.data.data.technicianCommission
-      alert(`✅ Pago final aprobado. Orden completada. Comisión del técnico: $${commission}`)
+      showToast(`✅ Pago final aprobado. Orden completada. Comisión del técnico: $${commission}`, 'success')
       fetchData()
     } catch (err) {
-      alert('❌ Error al aprobar el pago final')
+      showToast('❌ Error al aprobar el pago final', 'error')
     }
   }
 
   const handleRejectFinalPayment = async (orderId: string) => {
-    const reason = window.prompt('Motivo del rechazo:')
+    const reason = await confirmDialog({
+      title: 'Rechazar pago final',
+      requireText: true,
+      textLabel: 'Motivo del rechazo',
+      confirmLabel: 'Rechazar',
+    })
     if (!reason) return
     try {
       await api.post(`/api/orders/${orderId}/confirm-final-payment`, {
         approved: false,
         rejectionReason: reason,
       })
-      alert('✅ Pago final rechazado. Se notificó al cliente para que reenvíe sus datos.')
+      showToast('✅ Pago final rechazado. Se notificó al cliente para que reenvíe sus datos.', 'success')
       fetchData()
     } catch (err) {
-      alert('❌ Error al rechazar el pago final')
+      showToast('❌ Error al rechazar el pago final', 'error')
     }
   }
 
@@ -127,25 +141,30 @@ export default function Dashboard() {
   const handleApproveProductPayment = async (id: string) => {
     try {
       await api.patch(`/api/product-orders/${id}/confirm-payment`, { approved: true })
-      alert('✅ Pago aprobado. Se asignó un motorizado automáticamente.')
+      showToast('✅ Pago aprobado. Se asignó un motorizado automáticamente.', 'success')
       fetchData()
     } catch (err) {
-      alert('❌ Error al aprobar el pago')
+      showToast('❌ Error al aprobar el pago', 'error')
     }
   }
 
   const handleRejectProductPayment = async (id: string) => {
-    const reason = window.prompt('Motivo del rechazo:')
+    const reason = await confirmDialog({
+      title: 'Rechazar pago de pedido',
+      requireText: true,
+      textLabel: 'Motivo del rechazo',
+      confirmLabel: 'Rechazar',
+    })
     if (!reason) return
     try {
       await api.patch(`/api/product-orders/${id}/confirm-payment`, {
         approved: false,
         rejectionReason: reason,
       })
-      alert('✅ Pago rechazado. Se notificó al cliente para que reenvíe sus datos.')
+      showToast('✅ Pago rechazado. Se notificó al cliente para que reenvíe sus datos.', 'success')
       fetchData()
     } catch (err) {
-      alert('❌ Error al rechazar el pago')
+      showToast('❌ Error al rechazar el pago', 'error')
     }
   }
 

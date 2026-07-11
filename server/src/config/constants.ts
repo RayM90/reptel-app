@@ -11,3 +11,6 @@ export const REVISION_COST = 15
 // Tienda — costo de instalación al comprar un producto marcado como
 // requiresInstallation (Dirección A: vínculo Tienda-Servicio).
 export const INSTALLATION_COST = 15
+
+// Comision de delivery 
+export const DELIVERY_COMMISSION = 5

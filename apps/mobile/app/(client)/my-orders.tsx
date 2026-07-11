@@ -12,7 +12,7 @@ import { Stack, useRouter } from 'expo-router'
 import { useState, useEffect, useCallback } from 'react'
 import { productOrdersAPI } from '../../src/services/api'
 
-type OrderStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED'
+type OrderStatus = 'PENDING' | 'CONFIRMED' | 'DELIVERED' | 'CANCELLED'
 
 interface ProductOrderItem {
   id: string
@@ -37,23 +37,31 @@ interface ProductOrder {
   rejectionReason?: string
   paidAt?: string
   items: ProductOrderItem[]
+  delivery?: {
+    status: string
+    deliveredAt: string | null
+    agent: { id: string; name: string; phone?: string } | null
+  } | null
 }
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   PENDING: '⏳ Pendiente de confirmación',
   CONFIRMED: '✅ Pago confirmado',
+  DELIVERED: '📦 Entregado',
   CANCELLED: '❌ Cancelado',
 }
 
 const STATUS_COLOR: Record<OrderStatus, string> = {
   PENDING: '#b45309',
   CONFIRMED: '#15803d',
+  DELIVERED: '#17247a',
   CANCELLED: '#b91c1c',
 }
 
 const STATUS_BG: Record<OrderStatus, string> = {
   PENDING: '#fef3c7',
   CONFIRMED: '#dcfce7',
+  DELIVERED: '#e0e7ff',
   CANCELLED: '#fee2e2',
 }
 
@@ -194,6 +202,39 @@ export default function MyOrdersScreen() {
                   {/* Detalle expandible */}
                   {isExpanded && (
                     <View style={styles.expandedContent}>
+                      {/* Línea de tiempo del pedido */}
+                      <Text style={styles.itemsTitle}>📋 Seguimiento</Text>
+                      <View style={styles.timeline}>
+                        <TimelineStep
+                          label="Pedido realizado"
+                          done
+                          date={formatDate(order.createdAt)}
+                          isLast={false}
+                        />
+                        <TimelineStep
+                          label="Pago confirmado"
+                          done={!!order.paidAt}
+                          date={order.paidAt ? formatDate(order.paidAt) : undefined}
+                          isLast={false}
+                        />
+                        <TimelineStep
+                          label="En camino"
+                          done={!!order.paidAt && !order.delivery?.deliveredAt}
+                          date={undefined}
+                          isLast={false}
+                        />
+                        <TimelineStep
+                          label="Entregado"
+                          done={!!order.delivery?.deliveredAt}
+                          date={
+                            order.delivery?.deliveredAt
+                              ? formatDate(order.delivery.deliveredAt)
+                              : undefined
+                          }
+                          isLast
+                        />
+                      </View>
+
                       {/* Método de pago */}
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Método de pago</Text>
@@ -216,11 +257,14 @@ export default function MyOrdersScreen() {
                         </View>
                       )}
 
-                      {/* Fecha de confirmación */}
-                      {order.paidAt && (
+                      {/* Motorizado asignado */}
+                      {order.delivery?.agent && (
                         <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Confirmado el</Text>
-                          <Text style={styles.detailValue}>{formatDate(order.paidAt)}</Text>
+                          <Text style={styles.detailLabel}>Motorizado</Text>
+                          <Text style={styles.detailValue}>{order.delivery.agent.name}</Text>
+                          {order.delivery.agent.phone && (
+                            <Text style={styles.detailValue}>📞 {order.delivery.agent.phone}</Text>
+                          )}
                         </View>
                       )}
 
@@ -290,6 +334,30 @@ export default function MyOrdersScreen() {
         )}
       </LinearGradient>
     </>
+  )
+}
+
+interface TimelineStepProps {
+  label: string
+  done: boolean
+  date?: string
+  isLast: boolean
+}
+
+function TimelineStep({ label, done, date, isLast }: TimelineStepProps) {
+  return (
+    <View style={styles.timelineStep}>
+      <View style={styles.timelineIconCol}>
+        <View style={[styles.timelineDot, done && styles.timelineDotDone]}>
+          {done && <Text style={styles.timelineCheck}>✓</Text>}
+        </View>
+        {!isLast && <View style={[styles.timelineLine, done && styles.timelineLineDone]} />}
+      </View>
+      <View style={styles.timelineTextCol}>
+        <Text style={[styles.timelineLabel, done && styles.timelineLabelDone]}>{label}</Text>
+        {date && <Text style={styles.timelineDate}>{date}</Text>}
+      </View>
+    </View>
   )
 }
 
@@ -398,4 +466,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   uploadBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  // ── Línea de tiempo ──
+  timeline: { marginBottom: 16 },
+  timelineStep: { flexDirection: 'row' },
+  timelineIconCol: { alignItems: 'center', width: 24 },
+  timelineDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#d0d8ff',
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timelineDotDone: { backgroundColor: '#17247a', borderColor: '#17247a' },
+  timelineCheck: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  timelineLine: { width: 2, flex: 1, minHeight: 24, backgroundColor: '#d0d8ff', marginTop: 2 },
+  timelineLineDone: { backgroundColor: '#17247a' },
+  timelineTextCol: { flex: 1, marginLeft: 10, paddingBottom: 16 },
+  timelineLabel: { fontSize: 13, color: '#9aa5cc', fontWeight: '600' },
+  timelineLabelDone: { color: '#17247a' },
+  timelineDate: { fontSize: 11, color: '#9aa5cc', marginTop: 2 },
 })
