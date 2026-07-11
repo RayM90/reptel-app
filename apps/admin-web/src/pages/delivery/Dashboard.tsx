@@ -139,8 +139,15 @@ export default function DeliveryDashboard() {
 
   return (
     <div className="page-container">
-      <h1>Panel de Motorizado</h1>
-      <p>Hola, {user?.name}</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1>Panel de Motorizado</h1>
+          <p>Hola, {user?.name}</p>
+        </div>
+        <button className="btn btn-secondary" onClick={fetchData}>
+          ↻ Actualizar
+        </button>
+      </div>
 
       <div className="card">
         <h2>Mis Entregas Pendientes ({pendingDeliveries.length})</h2>
