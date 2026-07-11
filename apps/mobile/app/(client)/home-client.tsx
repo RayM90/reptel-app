@@ -4,35 +4,32 @@ import {
   TouchableOpacity, 
   StyleSheet, 
   ScrollView,
-  Image,
-  Alert
+  Image
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack } from 'expo-router';
 import { useAuthStore } from '../../src/store/auth.store';
+import { useToastStore } from '../../src/store/toast.store';
+import { useConfirm } from '../../src/hooks/useConfirm';
 
 export default function HomeClient() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const showToast = useToastStore((state) => state.showToast);
+  const confirmDialog = useConfirm();
 
   const firstName = user?.name?.split(' ')[0] ?? 'Cliente';
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Cerrar sesión',
-      '¿Estás seguro de que deseas salir?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Salir',
-          style: 'destructive',
-          onPress: () => {
-            logout();
-            router.replace('/welcome');
-          },
-        },
-      ]
-    );
+  const handleLogout = async () => {
+    const confirmed = await confirmDialog({
+      title: 'Cerrar sesión',
+      message: '¿Estás seguro de que deseas salir?',
+      confirmLabel: 'Salir',
+    });
+    if (!confirmed) return;
+
+    logout();
+    router.replace('/welcome');
   };
 
 const primaryOptions = [
@@ -126,7 +123,7 @@ const secondaryOptions = [
                   if (option.route) {
                     router.push(option.route as any)
                   } else {
-                    Alert.alert('Próximamente', 'Esta función estará disponible pronto.')
+                    showToast('Esta función estará disponible pronto.', 'info')
                   }
                 }}
               >
@@ -152,7 +149,7 @@ const secondaryOptions = [
                   if (option.route) {
                   router.push(option.route as any)
                  } else {
-                    Alert.alert('Próximamente', 'Esta función estará disponible pronto.')
+                    showToast('Esta función estará disponible pronto.', 'info')
                  }
                 }}
               >

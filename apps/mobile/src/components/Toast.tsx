@@ -5,6 +5,7 @@ import { useToastStore } from '../store/toast.store'
 const COLORS = {
   success: { bg: '#dcfce7', text: '#15803d', border: '#86efac' },
   error: { bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5' },
+  info: { bg: '#e0e7ff', text: '#17247a', border: '#c7d2fe' },
 }
 
 export default function Toast() {
