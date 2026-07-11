@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/auth.store'
 import { useToastStore } from '../../store/toast.store'
+import { POLL_INTERVAL_MS } from '../../config/constants'
 
 type OrderStatus =
   | 'PENDING_PAYMENT'
@@ -57,6 +59,18 @@ interface TechOrder {
   statusHistory: StatusHistoryEntry[]
 }
 
+// Estilo del resaltado para órdenes nuevas — mismo criterio en los 3 paneles internos.
+const NEW_CARD_STYLE: CSSProperties = {
+  backgroundColor: '#fff8e1',
+  borderLeft: '4px solid #f59e0b',
+}
+
+const NEW_BADGE_STYLE: CSSProperties = {
+  backgroundColor: '#f59e0b',
+  color: '#fff',
+  marginLeft: 8,
+}
+
 function getWeekRange(date = new Date()) {
   const day = date.getDay()
   const diffToMonday = day === 0 ? -6 : 1 - day
@@ -77,6 +91,7 @@ export default function TechnicianDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [newIds, setNewIds] = useState<Set<string>>(new Set())
 
   const [diagnosisText, setDiagnosisText] = useState<Record<string, string>>({})
   const [budgetText, setBudgetText] = useState<Record<string, string>>({})
@@ -87,27 +102,56 @@ export default function TechnicianDashboard() {
 
   useEffect(() => {
     fetchData()
+    // Polling automático — mismo intervalo que Admin y Motorizado, para que los
+    // 3 paneles internos se mantengan coordinados entre sí.
+    const interval = setInterval(() => fetchData(true), POLL_INTERVAL_MS)
+    return () => clearInterval(interval)
   }, [])
 
-  const fetchData = async () => {
-    setLoading(true)
-    setError('')
+  const fetchData = async (isPoll = false) => {
+    if (!isPoll) {
+      setLoading(true)
+      setError('')
+    }
     try {
       const [ordersRes, catalogRes] = await Promise.all([
         api.get('/api/orders/technician/my-orders'),
         api.get('/api/catalog'),
       ])
-      setOrders(ordersRes.data.data)
+      const freshOrders: TechOrder[] = ordersRes.data.data
+
+      if (isPoll) {
+        setOrders((prev) => {
+          const prevIds = new Set(prev.map((o) => o.id))
+          const freshIds = freshOrders.filter((o) => !prevIds.has(o.id)).map((o) => o.id)
+          if (freshIds.length > 0) {
+            setNewIds((prevNew) => new Set([...prevNew, ...freshIds]))
+          }
+          return freshOrders
+        })
+      } else {
+        setOrders(freshOrders)
+      }
+
       setCatalog(catalogRes.data.data)
     } catch (err) {
-      setError('Error al cargar tus órdenes')
+      // En polling silencioso no mostramos el error de página completa —
+      // los datos ya cargados siguen visibles, solo se reintenta en el próximo ciclo.
+      if (!isPoll) setError('Error al cargar tus órdenes')
     } finally {
-      setLoading(false)
+      if (!isPoll) setLoading(false)
     }
   }
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id))
+    if (newIds.has(id)) {
+      setNewIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
   }
 
   const handleSubmitDiagnosis = async (orderId: string) => {
@@ -185,8 +229,15 @@ export default function TechnicianDashboard() {
 
   return (
     <div className="page-container">
-      <h1>Panel del Técnico</h1>
-      <p>Hola, {user?.name}</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1>Panel del Técnico</h1>
+          <p>Hola, {user?.name}</p>
+        </div>
+        <button className="btn btn-secondary" onClick={() => fetchData()}>
+          ↻ Actualizar
+        </button>
+      </div>
 
       <div className="card">
         <h2>Mis Órdenes ({orders.length})</h2>
@@ -196,16 +247,18 @@ export default function TechnicianDashboard() {
         ) : (
           orders.map((order) => {
             const isExpanded = expandedId === order.id
+            const isNew = newIds.has(order.id)
             const needsDiagnosis = order.budget == null
 
             return (
-              <div key={order.id} className="card">
+              <div key={order.id} className="card" style={isNew ? NEW_CARD_STYLE : undefined}>
                 <div
                   style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
                   onClick={() => toggleExpand(order.id)}
                 >
                   <div>
                     <strong>{order.orderNumber}</strong> — {order.client.name} {order.client.lastName}
+                    {isNew && <span className="badge" style={NEW_BADGE_STYLE}>🆕 Nuevo</span>}
                     <br />
                     {order.device.brand} {order.device.model} · <span className="badge">{order.status}</span>
                     {order.technicianCommission != null && (

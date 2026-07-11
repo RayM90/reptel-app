@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 import { useToastStore } from '../../store/toast.store'
 import { useConfirm } from '../../hooks/useConfirm'
+import { POLL_INTERVAL_MS } from '../../config/constants'
 
 interface Order {
   id: string
@@ -115,33 +117,95 @@ function PaymentSubmissionsView({
   )
 }
 
+// Estilo del resaltado para filas nuevas — mismo criterio en los 3 paneles internos.
+const NEW_ROW_STYLE: CSSProperties = {
+  backgroundColor: '#fff8e1',
+  borderLeft: '4px solid #f59e0b',
+}
+
+const NEW_BADGE_STYLE: CSSProperties = {
+  backgroundColor: '#f59e0b',
+  color: '#fff',
+  marginLeft: 8,
+}
+
 export default function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([])
   const [productOrders, setProductOrders] = useState<ProductOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set())
+  const [newProductOrderIds, setNewProductOrderIds] = useState<Set<string>>(new Set())
   const showToast = useToastStore((state) => state.showToast)
   const confirmDialog = useConfirm()
 
   useEffect(() => {
     fetchData()
+    // Polling automático — mismo intervalo que Motorizado y Técnico, para que
+    // los 3 paneles internos se mantengan coordinados entre sí.
+    const interval = setInterval(() => fetchData(true), POLL_INTERVAL_MS)
+    return () => clearInterval(interval)
   }, [])
 
-  const fetchData = async () => {
-    setLoading(true)
-    setError('')
+  const fetchData = async (isPoll = false) => {
+    if (!isPoll) {
+      setLoading(true)
+      setError('')
+    }
     try {
       const [ordersRes, productOrdersRes] = await Promise.all([
         api.get('/api/orders'),
         api.get('/api/product-orders'),
       ])
-      setOrders(ordersRes.data.data)
-      setProductOrders(productOrdersRes.data.data)
+      const freshOrders: Order[] = ordersRes.data.data
+      const freshProductOrders: ProductOrder[] = productOrdersRes.data.data
+
+      if (isPoll) {
+        setOrders((prev) => {
+          const prevIds = new Set(prev.map((o) => o.id))
+          const freshIds = freshOrders.filter((o) => !prevIds.has(o.id)).map((o) => o.id)
+          if (freshIds.length > 0) {
+            setNewOrderIds((prevNew) => new Set([...prevNew, ...freshIds]))
+          }
+          return freshOrders
+        })
+        setProductOrders((prev) => {
+          const prevIds = new Set(prev.map((po) => po.id))
+          const freshIds = freshProductOrders.filter((po) => !prevIds.has(po.id)).map((po) => po.id)
+          if (freshIds.length > 0) {
+            setNewProductOrderIds((prevNew) => new Set([...prevNew, ...freshIds]))
+          }
+          return freshProductOrders
+        })
+      } else {
+        setOrders(freshOrders)
+        setProductOrders(freshProductOrders)
+      }
     } catch (err) {
-      setError('Error al cargar los datos del panel')
+      // En polling silencioso no mostramos el error de página completa —
+      // los datos ya cargados siguen visibles, solo se reintenta en el próximo ciclo.
+      if (!isPoll) setError('Error al cargar los datos del panel')
     } finally {
-      setLoading(false)
+      if (!isPoll) setLoading(false)
     }
+  }
+
+  const clearNewOrder = (id: string) => {
+    setNewOrderIds((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }
+
+  const clearNewProductOrder = (id: string) => {
+    setNewProductOrderIds((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
   }
 
   // ── Pago anticipado (delivery + revisión) ──
@@ -253,6 +317,9 @@ export default function Dashboard() {
     <div className="page-container">
       <h1>Panel de Administrador</h1>
       <p><Link to="/admin/create-staff">➕ Crear usuario de personal</Link></p>
+      <button className="btn btn-outline" onClick={() => fetchData()} style={{ marginBottom: 16 }}>
+        ↻ Actualizar
+      </button>
 
       <section className="card">
         <h2>Servicios Técnicos Activos ({activeOrders.length})</h2>
@@ -276,8 +343,17 @@ export default function Dashboard() {
               </thead>
               <tbody>
                 {activeOrders.map((order) => (
-                  <tr key={order.id}>
-                    <td>{order.orderNumber}</td>
+                  <tr
+                    key={order.id}
+                    onClick={() => clearNewOrder(order.id)}
+                    style={newOrderIds.has(order.id) ? NEW_ROW_STYLE : undefined}
+                  >
+                    <td>
+                      {order.orderNumber}
+                      {newOrderIds.has(order.id) && (
+                        <span className="badge" style={NEW_BADGE_STYLE}>🆕 Nuevo</span>
+                      )}
+                    </td>
                     <td>{order.client.name} {order.client.lastName}</td>
                     <td>{order.problem}</td>
                     <td><span className="badge">{order.status}</span></td>
@@ -343,8 +419,17 @@ export default function Dashboard() {
               </thead>
               <tbody>
                 {activeProductOrders.map((po) => (
-                  <tr key={po.id}>
-                    <td>{po.client.name} {po.client.lastName}</td>
+                  <tr
+                    key={po.id}
+                    onClick={() => clearNewProductOrder(po.id)}
+                    style={newProductOrderIds.has(po.id) ? NEW_ROW_STYLE : undefined}
+                  >
+                    <td>
+                      {po.client.name} {po.client.lastName}
+                      {newProductOrderIds.has(po.id) && (
+                        <span className="badge" style={NEW_BADGE_STYLE}>🆕 Nuevo</span>
+                      )}
+                    </td>
                     <td>{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
                     <td>${po.total}</td>
                     <td><span className="badge">{po.status}</span></td>

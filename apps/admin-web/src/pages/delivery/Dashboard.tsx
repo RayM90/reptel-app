@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/auth.store'
 import { useToastStore } from '../../store/toast.store'
 import { useConfirm } from '../../hooks/useConfirm'
+import { POLL_INTERVAL_MS } from '../../config/constants'
 
 type DeliveryStatus =
   | 'ASSIGNED'
@@ -45,6 +47,18 @@ const PAYMENT_LABEL: Record<string, string> = {
   BINANCE: '₿ Binance',
 }
 
+// Estilo del resaltado para entregas nuevas — mismo criterio en los 3 paneles internos.
+const NEW_CARD_STYLE: CSSProperties = {
+  backgroundColor: '#fff8e1',
+  borderLeft: '4px solid #f59e0b',
+}
+
+const NEW_BADGE_STYLE: CSSProperties = {
+  backgroundColor: '#f59e0b',
+  color: '#fff',
+  marginLeft: 8,
+}
+
 function getWeekRange(date = new Date()) {
   const day = date.getDay()
   const diffToMonday = day === 0 ? -6 : 1 - day
@@ -65,26 +79,57 @@ export default function DeliveryDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [newIds, setNewIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchData()
+    // Polling automático — mismo intervalo que Admin y Técnico, para que los
+    // 3 paneles internos se mantengan coordinados entre sí.
+    const interval = setInterval(() => fetchData(true), POLL_INTERVAL_MS)
+    return () => clearInterval(interval)
   }, [])
 
-  const fetchData = async () => {
-    setLoading(true)
-    setError('')
+  const fetchData = async (isPoll = false) => {
+    if (!isPoll) {
+      setLoading(true)
+      setError('')
+    }
     try {
       const res = await api.get('/api/product-orders/my-deliveries')
-      setDeliveries(res.data.data)
+      const freshDeliveries: Delivery[] = res.data.data
+
+      if (isPoll) {
+        setDeliveries((prev) => {
+          const prevIds = new Set(prev.map((d) => d.id))
+          const freshIds = freshDeliveries
+            .filter((d) => !prevIds.has(d.id))
+            .map((d) => d.id)
+          if (freshIds.length > 0) {
+            setNewIds((prevNew) => new Set([...prevNew, ...freshIds]))
+          }
+          return freshDeliveries
+        })
+      } else {
+        setDeliveries(freshDeliveries)
+      }
     } catch (err) {
-      setError('Error al cargar tus entregas')
+      // En polling silencioso no mostramos el error de página completa —
+      // los datos ya cargados siguen visibles, solo se reintenta en el próximo ciclo.
+      if (!isPoll) setError('Error al cargar tus entregas')
     } finally {
-      setLoading(false)
+      if (!isPoll) setLoading(false)
     }
   }
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id))
+    if (newIds.has(id)) {
+      setNewIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
   }
 
   const handleMarkDelivered = async (productOrderId: string) => {
@@ -144,7 +189,7 @@ export default function DeliveryDashboard() {
           <h1>Panel de Motorizado</h1>
           <p>Hola, {user?.name}</p>
         </div>
-        <button className="btn btn-secondary" onClick={fetchData}>
+        <button className="btn btn-secondary" onClick={() => fetchData()}>
           ↻ Actualizar
         </button>
       </div>
@@ -157,16 +202,18 @@ export default function DeliveryDashboard() {
         ) : (
           pendingDeliveries.map((delivery) => {
             const isExpanded = expandedId === delivery.id
+            const isNew = newIds.has(delivery.id)
             const order = delivery.productOrder
 
             return (
-              <div key={delivery.id} className="card">
+              <div key={delivery.id} className="card" style={isNew ? NEW_CARD_STYLE : undefined}>
                 <div
                   style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
                   onClick={() => toggleExpand(delivery.id)}
                 >
                   <div>
                     <strong>Pedido #{order.id.slice(0, 8)}</strong> — {order.client.name} {order.client.lastName}
+                    {isNew && <span className="badge" style={NEW_BADGE_STYLE}>🆕 Nuevo</span>}
                     <br />
                     <span className="badge">{delivery.status}</span> · Total: ${order.total}
                   </div>
