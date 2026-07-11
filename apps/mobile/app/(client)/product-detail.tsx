@@ -5,12 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   Image,
-  Alert,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import { useCartStore } from '../../src/store/cart.store'
+import { useConfirm } from '../../src/hooks/useConfirm'
 
 interface Product {
   id: string
@@ -33,6 +33,7 @@ export default function ProductDetailScreen() {
   const { product: productParam } = useLocalSearchParams<{ product: string }>()
   const { addItem, totalItems } = useCartStore()
   const [quantity, setQuantity] = useState(1)
+  const confirmDialog = useConfirm()
 
   const product: Product = JSON.parse(productParam)
 
@@ -44,7 +45,7 @@ export default function ProductDetailScreen() {
     if (quantity > 1) setQuantity(quantity - 1)
   }
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     for (let i = 0; i < quantity; i++) {
       addItem({
         id: product.id,
@@ -56,14 +57,19 @@ export default function ProductDetailScreen() {
 })
 
     }
-    Alert.alert(
-      '✓ Agregado',
-      `${quantity} x ${product.name} se agregó al carrito`,
-      [
-        { text: 'Seguir viendo', style: 'cancel' },
-        { text: 'Ir al carrito', onPress: () => router.push('/(client)/checkout') },
-      ]
-    )
+
+    // A diferencia de otros casos, aquí sí hay dos opciones con resultado
+    // distinto (seguir viendo vs. ir al carrito), por eso usamos confirmDialog
+    // en vez de un simple toast.
+    const irAlCarrito = await confirmDialog({
+      title: '✓ Agregado',
+      message: `${quantity} x ${product.name} se agregó al carrito`,
+      confirmLabel: 'Ir al carrito',
+      cancelLabel: 'Seguir viendo',
+    })
+    if (irAlCarrito) {
+      router.push('/(client)/checkout')
+    }
   }
 
   return (
