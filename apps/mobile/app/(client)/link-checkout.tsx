@@ -4,7 +4,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   TextInput,
 } from 'react-native'
@@ -12,6 +11,8 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import { productOrdersAPI } from '../../src/services/api'
+import { useToastStore } from '../../src/store/toast.store'
+import { useConfirm } from '../../src/hooks/useConfirm'
 
 const REVISION_COST = 15 // mismo valor que el backend (constants.ts), duplicada intencionalmente en frontend
 
@@ -53,21 +54,23 @@ export default function LinkCheckoutScreen() {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
+  const showToast = useToastStore((state) => state.showToast)
+  const confirmDialog = useConfirm()
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!selectedMethod) {
-      Alert.alert('Método de pago', 'Selecciona un método de pago para continuar')
+      showToast('Selecciona un método de pago para continuar', 'error')
       return
     }
 
-    Alert.alert(
-      'Confirmar compra',
-      `Total: $${total.toFixed(2)}\nMétodo: ${PAYMENT_LABELS[selectedMethod]}\n\nEl técnico te traerá el repuesto en su próxima visita. ¿Confirmas?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Confirmar', onPress: submitOrder },
-      ]
-    )
+    const confirmed = await confirmDialog({
+      title: 'Confirmar compra',
+      message: `Total: $${total.toFixed(2)}\nMétodo: ${PAYMENT_LABELS[selectedMethod]}\n\nEl técnico te traerá el repuesto en su próxima visita. ¿Confirmas?`,
+      confirmLabel: 'Confirmar',
+    })
+    if (!confirmed) return
+
+    submitOrder()
   }
 
   const submitOrder = async () => {
@@ -83,25 +86,21 @@ export default function LinkCheckoutScreen() {
 
       const createdOrder = response.data.data
 
-      Alert.alert(
-        '✅ Pedido registrado',
-        'Tu pedido de repuesto fue registrado. Ahora sube el comprobante de pago.',
-        [
-          {
-            text: 'OK',
-            onPress: () =>
-              router.replace({
-                pathname: '/(client)/upload-receipt',
-                params: { orderId: createdOrder.id, paymentMethod: selectedMethod, total: String(total) },
-              }),
-          },
-        ]
+      // El Alert original solo tenía un botón OK que navegaba — mostramos el
+      // toast de éxito y navegamos directo, sin pedir un toque de más.
+      showToast(
+        '✅ Pedido de repuesto registrado. Ahora ingresa los datos de tu pago.',
+        'success'
       )
+      router.replace({
+        pathname: '/(client)/upload-receipt',
+        params: { orderId: createdOrder.id, paymentMethod: selectedMethod, total: String(total) },
+      })
     } catch (error: any) {
       const backendMessage = error?.response?.data?.message
-      Alert.alert(
-        'No se pudo registrar el pedido',
-        backendMessage || 'Ocurrió un error al procesar tu pedido. Intenta de nuevo.'
+      showToast(
+        backendMessage || 'Ocurrió un error al procesar tu pedido. Intenta de nuevo.',
+        'error'
       )
     } finally {
       setLoading(false)

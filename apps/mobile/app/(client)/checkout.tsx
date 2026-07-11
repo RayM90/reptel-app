@@ -4,7 +4,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   TextInput,
 } from 'react-native'
@@ -14,6 +13,8 @@ import { useState } from 'react'
 import { useCartStore } from '../../src/store/cart.store'
 import { useAuthStore } from '../../src/store/auth.store'
 import { productOrdersAPI } from '../../src/services/api'
+import { useToastStore } from '../../src/store/toast.store'
+import { useConfirm } from '../../src/hooks/useConfirm'
 
 // Mismos montos fijos que el backend (server/src/config/constants.ts).
 // Prototipo de tesis, no configurables todavía.
@@ -46,6 +47,8 @@ export default function CheckoutScreen() {
   const [customAddress, setCustomAddress] = useState('')
   const [notes, setNotes] = useState('')
   const [wantsInstallation, setWantsInstallation] = useState(false)
+  const showToast = useToastStore((state) => state.showToast)
+  const confirmDialog = useConfirm()
 
   if (items.length === 0) {
     return (
@@ -75,16 +78,14 @@ export default function CheckoutScreen() {
   const installationCost = wantsInstallation ? INSTALLATION_COST : 0
   const finalTotal = totalPrice + installationCost + DELIVERY_COST
 
-  const handleDecrease = (id: string, quantity: number) => {
+  const handleDecrease = async (id: string, quantity: number) => {
     if (quantity === 1) {
-      Alert.alert(
-        'Eliminar producto',
-        '¿Deseas quitar este producto del carrito?',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Eliminar', style: 'destructive', onPress: () => removeItem(id) },
-        ]
-      )
+      const confirmed = await confirmDialog({
+        title: 'Eliminar producto',
+        message: '¿Deseas quitar este producto del carrito?',
+        confirmLabel: 'Eliminar',
+      })
+      if (confirmed) removeItem(id)
     } else {
       updateQuantity(id, quantity - 1)
     }
@@ -101,32 +102,29 @@ export default function CheckoutScreen() {
 
   const handleConfirmOrder = async () => {
     if (!selectedMethod) {
-      Alert.alert('Método de pago', 'Selecciona un método de pago para continuar')
+      showToast('Selecciona un método de pago para continuar', 'error')
       return
     }
 
     const address = getDeliveryAddress()
     if (!address) {
-      Alert.alert(
-        'Dirección requerida',
+      showToast(
         useOtherAddress
           ? 'Escribe la dirección donde quieres recibir tu pedido'
-          : 'No tienes una dirección registrada. Activa "usar otra dirección" para escribir una.'
+          : 'No tienes una dirección registrada. Activa "usar otra dirección" para escribir una.',
+        'error'
       )
       return
     }
 
-    Alert.alert(
-      'Confirmar pedido',
-      `Total: $${finalTotal.toFixed(2)}\nMétodo: ${PAYMENT_LABELS[selectedMethod]}\n\n¿Confirmas el pedido?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Confirmar',
-          onPress: () => submitOrder(address),
-        },
-      ]
-    )
+    const confirmed = await confirmDialog({
+      title: 'Confirmar pedido',
+      message: `Total: $${finalTotal.toFixed(2)}\nMétodo: ${PAYMENT_LABELS[selectedMethod]}\n\n¿Confirmas el pedido?`,
+      confirmLabel: 'Confirmar',
+    })
+    if (!confirmed) return
+
+    submitOrder(address)
   }
 
   const submitOrder = async (address: string) => {
@@ -147,25 +145,18 @@ export default function CheckoutScreen() {
       const createdOrder = response.data.data
       clearCart()
 
-      Alert.alert(
-        '✅ Pedido registrado',
-        'Tu pedido fue registrado. Ahora ingresa los datos de tu pago.',
-        [
-          {
-            text: 'OK',
-            onPress: () =>
-              router.replace({
-                pathname: '/(client)/upload-receipt',
-                params: { orderId: createdOrder.id, paymentMethod: selectedMethod, total: String(finalTotal) },
-              }),
-          },
-        ]
-      )
+      // El Alert original solo tenía un botón OK que navegaba — mostramos el
+      // toast de éxito y navegamos directo, sin pedir un toque de más.
+      showToast('✅ Pedido registrado. Ahora ingresa los datos de tu pago.', 'success')
+      router.replace({
+        pathname: '/(client)/upload-receipt',
+        params: { orderId: createdOrder.id, paymentMethod: selectedMethod, total: String(finalTotal) },
+      })
     } catch (error: any) {
       const backendMessage = error?.response?.data?.message
-      Alert.alert(
-        'No se pudo registrar el pedido',
-        backendMessage || 'Ocurrió un error al procesar tu pedido. Intenta de nuevo.'
+      showToast(
+        backendMessage || 'Ocurrió un error al procesar tu pedido. Intenta de nuevo.',
+        'error'
       )
     } finally {
       setLoading(false)
