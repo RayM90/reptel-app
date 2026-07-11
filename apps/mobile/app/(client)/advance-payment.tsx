@@ -4,13 +4,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import { ordersAPI } from '../../src/services/api'
+import { useToastStore } from '../../src/store/toast.store'
+import { useConfirm } from '../../src/hooks/useConfirm'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -70,21 +71,23 @@ export default function AdvancePaymentScreen() {
 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [loading, setLoading] = useState(false)
+  const showToast = useToastStore((state) => state.showToast)
+  const confirmDialog = useConfirm()
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!selectedMethod) {
-      Alert.alert('Método de pago', 'Selecciona un método de pago para continuar')
+      showToast('Selecciona un método de pago para continuar', 'error')
       return
     }
 
-    Alert.alert(
-      'Confirmar pago anticipado',
-      `Delivery: $${DELIVERY_AMOUNT}\nRevisión: $${REVISION_AMOUNT}\nTotal: $${TOTAL_ADVANCE}\nMétodo: ${PAYMENT_LABELS[selectedMethod]}\n\nEste monto no es reembolsable en caso de rechazar el presupuesto final. ¿Confirmas?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Confirmar', onPress: () => submitOrder(selectedMethod) },
-      ]
-    )
+    const confirmed = await confirmDialog({
+      title: 'Confirmar pago anticipado',
+      message: `Delivery: $${DELIVERY_AMOUNT}\nRevisión: $${REVISION_AMOUNT}\nTotal: $${TOTAL_ADVANCE}\nMétodo: ${PAYMENT_LABELS[selectedMethod]}\n\nEste monto no es reembolsable en caso de rechazar el presupuesto final. ¿Confirmas?`,
+      confirmLabel: 'Confirmar',
+    })
+    if (!confirmed) return
+
+    submitOrder(selectedMethod)
   }
 
   const submitOrder = async (method: PaymentMethod) => {
@@ -99,25 +102,21 @@ export default function AdvancePaymentScreen() {
 
       const orderData = response.data.data
 
-      Alert.alert(
-        '✅ Orden creada',
-        `Número: ${orderData.orderNumber}\n\nAhora sube el comprobante de pago para procesar tu orden.`,
-        [
-          {
-            text: 'OK',
-      onPress: () =>
-        router.replace({
+      // El Alert original solo tenía un botón OK que navegaba — mostramos el
+      // toast de éxito y navegamos directo, sin pedir un toque de más.
+      showToast(
+        `✅ Orden creada: ${orderData.orderNumber}. Ahora ingresa los datos de tu pago.`,
+        'success'
+      )
+      router.replace({
         pathname: '/(client)/upload-advance-receipt',
         params: { orderId: orderData.id, paymentMethod: method, total: String(TOTAL_ADVANCE) },
-      }),
-          },
-        ]
-      )
+      })
     } catch (error: any) {
       const backendMessage = error?.response?.data?.message
-      Alert.alert(
-        'No se pudo crear la orden',
-        backendMessage || 'Ocurrió un error al procesar tu orden. Intenta de nuevo.'
+      showToast(
+        backendMessage || 'Ocurrió un error al procesar tu orden. Intenta de nuevo.',
+        'error'
       )
     } finally {
       setLoading(false)
