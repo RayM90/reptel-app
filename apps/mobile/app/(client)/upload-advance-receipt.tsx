@@ -4,7 +4,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   TextInput,
 } from 'react-native'
@@ -12,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import { ordersAPI } from '../../src/services/api'
+import { useToastStore } from '../../src/store/toast.store'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -36,6 +36,7 @@ export default function UploadAdvanceReceiptScreen() {
   const [nombre, setNombre] = useState('')
 
   const [loading, setLoading] = useState(false)
+  const showToast = useToastStore((state) => state.showToast)
 
   const montoNumber = monto ? Number(monto) : 0
   const faltante = totalNumber != null ? totalNumber - montoNumber : 0
@@ -51,11 +52,11 @@ export default function UploadAdvanceReceiptScreen() {
 
   const handleSubmit = async () => {
     if (!isFormValid()) {
-      Alert.alert('Datos incompletos', 'Completa todos los campos requeridos.')
+      showToast('Completa todos los campos requeridos.', 'error')
       return
     }
     if (!orderId) {
-      Alert.alert('Error', 'No se encontró el ID de la orden. Vuelve a intentarlo.')
+      showToast('No se encontró el ID de la orden. Vuelve a intentarlo.', 'error')
       return
     }
 
@@ -72,21 +73,18 @@ export default function UploadAdvanceReceiptScreen() {
     setLoading(true)
     try {
       await ordersAPI.submitAdvancePayment(orderId, paymentDetails)
-      Alert.alert(
-        '✅ Datos de pago enviados',
-        'Tus datos fueron enviados. El equipo de RepTel los revisará y confirmará tu pago pronto. El técnico será despachado una vez confirmado.',
-        [
-          {
-            text: 'Ver mis órdenes',
-            onPress: () => router.replace('/(client)/my-technical-orders'),
-          },
-        ]
+      // El Alert original solo tenía un botón ("Ver mis órdenes") que
+      // navegaba — mostramos el toast de éxito y navegamos directo.
+      showToast(
+        '✅ Datos enviados. El equipo de RepTel los revisará y confirmará tu pago pronto. El técnico será despachado una vez confirmado.',
+        'success'
       )
+      router.replace('/(client)/my-technical-orders')
     } catch (error: any) {
       const backendMessage = error?.response?.data?.message
-      Alert.alert(
-        'No se pudo enviar la información',
-        backendMessage || 'Ocurrió un error al enviar los datos. Intenta de nuevo.'
+      showToast(
+        backendMessage || 'Ocurrió un error al enviar los datos. Intenta de nuevo.',
+        'error'
       )
     } finally {
       setLoading(false)
