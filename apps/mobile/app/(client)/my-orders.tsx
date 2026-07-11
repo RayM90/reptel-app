@@ -39,6 +39,8 @@ interface ProductOrder {
   id: string
   status: OrderStatus
   total: number
+  deliveryCost?: number | null
+  installationCost?: number | null
   createdAt: string
   address: string
   paymentMethod: string
@@ -324,6 +326,28 @@ export default function MyOrdersScreen() {
                         </View>
                       ))}
 
+                      {/* Desglose de costos adicionales */}
+                      {(order.installationCost != null || order.deliveryCost != null) && (
+                        <View style={styles.breakdownContainer}>
+                          {order.installationCost != null && (
+                            <View style={styles.breakdownRow}>
+                              <Text style={styles.breakdownLabel}>Instalación</Text>
+                              <Text style={styles.breakdownValue}>
+                                +${Number(order.installationCost).toFixed(2)}
+                              </Text>
+                            </View>
+                          )}
+                          {order.deliveryCost != null && (
+                            <View style={styles.breakdownRow}>
+                              <Text style={styles.breakdownLabel}>Costo de delivery</Text>
+                              <Text style={styles.breakdownValue}>
+                                +${Number(order.deliveryCost).toFixed(2)}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+
                       {/* Historial de abonos */}
                       {order.paymentSubmissions.length > 0 ? (
                         <View style={styles.receiptContainer}>
@@ -499,6 +523,21 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 13, fontWeight: '600', color: '#17247a' },
   itemQty: { fontSize: 11, color: '#9aa5cc', marginTop: 2 },
   itemSubtotal: { fontSize: 14, fontWeight: '800', color: '#17247a' },
+  breakdownContainer: {
+    marginTop: 4,
+    marginBottom: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#eef2ff',
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginBottom: 4,
+  },
+  breakdownLabel: { fontSize: 13, color: '#5364ad', fontWeight: '600' },
+  breakdownValue: { fontSize: 13, color: '#17247a', fontWeight: '700' },
   receiptContainer: { marginTop: 12 },
   submissionCard: {
     backgroundColor: '#f8f9ff',
