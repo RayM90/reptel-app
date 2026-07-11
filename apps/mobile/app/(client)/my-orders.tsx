@@ -261,7 +261,7 @@ export default function MyOrdersScreen() {
                         />
                         <TimelineStep
                           label="En camino"
-                          done={!!order.paidAt && !order.delivery?.deliveredAt}
+                          done={!!order.paidAt}
                           date={undefined}
                           isLast={false}
                         />
