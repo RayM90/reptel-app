@@ -15,9 +15,12 @@ import { useCartStore } from '../../src/store/cart.store'
 import { useAuthStore } from '../../src/store/auth.store'
 import { productOrdersAPI } from '../../src/services/api'
 
-// Mismo monto fijo que el backend (server/src/config/constants.ts -> INSTALLATION_COST).
-// Prototipo de tesis, no configurable todavía.
+// Mismos montos fijos que el backend (server/src/config/constants.ts).
+// Prototipo de tesis, no configurables todavía.
 const INSTALLATION_COST = 15
+// Costo de delivery cobrado al cliente en TODOS los pedidos de tienda
+// (server/src/config/constants.ts -> DELIVERY_COST).
+const DELIVERY_COST = 5
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -70,7 +73,7 @@ export default function CheckoutScreen() {
 
   const hasInstallableItem = items.some((item) => item.requiresInstallation)
   const installationCost = wantsInstallation ? INSTALLATION_COST : 0
-  const finalTotal = totalPrice + installationCost
+  const finalTotal = totalPrice + installationCost + DELIVERY_COST
 
   const handleDecrease = (id: string, quantity: number) => {
     if (quantity === 1) {
@@ -281,6 +284,11 @@ export default function CheckoutScreen() {
               </View>
             )}
 
+            <View style={styles.installationCostRow}>
+              <Text style={styles.installationCostLabel}>Costo de delivery</Text>
+              <Text style={styles.installationCostValue}>+${DELIVERY_COST.toFixed(2)}</Text>
+            </View>
+
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Total</Text>
               <Text style={styles.totalValue}>${finalTotal.toFixed(2)}</Text>
@@ -326,7 +334,7 @@ export default function CheckoutScreen() {
             />
           </View>
 
-          {/* Nota comprobante */}
+          {/* Nota datos de pago */}
           {selectedMethod && (
             <View style={styles.noteCard}>
               <Text style={styles.noteText}>
