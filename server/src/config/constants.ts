@@ -12,5 +12,14 @@ export const REVISION_COST = 15
 // requiresInstallation (Dirección A: vínculo Tienda-Servicio).
 export const INSTALLATION_COST = 15
 
-// Comision de delivery 
+// Tienda — costo de delivery cobrado al CLIENTE en todos los pedidos de
+// tienda (ProductOrder). Se suma al total y se guarda en
+// ProductOrder.deliveryCost para desglosarlo en el historial del pedido.
+export const DELIVERY_COST = 5
+
+// Motorizado — comisión fija que GANA el agente DELIVERY por cada entrega
+// completada (ProductDelivery.deliveryCommission). Coincide en monto con
+// DELIVERY_COST pero es un concepto distinto (lo que paga el cliente vs.
+// lo que gana el motorizado); se mantienen separados a propósito para no
+// acoplarlos si el monto de uno cambia sin el otro en el futuro.
 export const DELIVERY_COMMISSION = 5
