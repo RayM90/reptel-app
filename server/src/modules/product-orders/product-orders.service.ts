@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client'
 import prisma from '../../lib/prisma'
-import { INSTALLATION_COST, DELIVERY_COMMISSION } from '../../config/constants'
+import { INSTALLATION_COST, DELIVERY_COST, DELIVERY_COMMISSION } from '../../config/constants'
 
 // ─────────────────────────────────────────────
 // MAPEO DE MÉTODOS DE PAGO (frontend → enum Prisma)
@@ -71,6 +71,8 @@ interface ProcessedItem {
 // HELPER INTERNO — validar stock, calcular precios y total
 // Compartido entre createProductOrder (Tienda / Dirección A) y
 // createLinkedProductOrder (Dirección B). No exportado.
+// NOTA: el total que retorna es solo la suma de productos (itemsTotal);
+// el costo de delivery se suma después, en cada función que lo llama.
 // ─────────────────────────────────────────────
 
 const processOrderItems = async (
@@ -121,6 +123,7 @@ const processOrderItems = async (
 // y descuenta el stock. Si algo falla, todo se revierte.
 // Cubre el flujo normal de Tienda y la Dirección A
 // (compra de producto + instalación opcional).
+// Todo pedido de tienda incluye el costo fijo de delivery (DELIVERY_COST).
 // ─────────────────────────────────────────────
 
 export const createProductOrder = async (data: CreateProductOrderInput) => {
@@ -150,11 +153,15 @@ export const createProductOrder = async (data: CreateProductOrderInput) => {
       total += installationCost
     }
 
+    const deliveryCost = DELIVERY_COST
+    total += deliveryCost
+
     const order = await tx.productOrder.create({
       data: {
         clientId: data.clientId,
         deliveryMethod: 'HOME_DELIVERY',
         address: data.address,
+        deliveryCost,
         total,
         paymentMethod: data.paymentMethod as any,
         notes: data.notes,
@@ -194,6 +201,8 @@ export const createProductOrder = async (data: CreateProductOrderInput) => {
 // exige dirección de entrega y usa el motorizado (DELIVERY) igual que
 // cualquier otro pedido. Solo permitido si la Order ya tiene
 // presupuesto (budget != null).
+// También incluye el costo fijo de delivery (DELIVERY_COST), igual que
+// createProductOrder.
 // ─────────────────────────────────────────────
 
 export const createLinkedProductOrder = async (
@@ -218,7 +227,10 @@ export const createLinkedProductOrder = async (
   }
 
   return await prisma.$transaction(async (tx) => {
-    const { itemsToCreate, total } = await processOrderItems(tx, data.items)
+    const { itemsToCreate, total: itemsTotal } = await processOrderItems(
+      tx,
+      data.items
+    )
 
     const nonInstallable = itemsToCreate.find(
       (item) => !item.requiresInstallation
@@ -229,11 +241,15 @@ export const createLinkedProductOrder = async (
       )
     }
 
+    const deliveryCost = DELIVERY_COST
+    const total = itemsTotal + deliveryCost
+
     const order = await tx.productOrder.create({
       data: {
         clientId: data.clientId,
         deliveryMethod: 'HOME_DELIVERY',
         address: data.address,
+        deliveryCost,
         total,
         paymentMethod: data.paymentMethod as any,
         notes: data.notes,
