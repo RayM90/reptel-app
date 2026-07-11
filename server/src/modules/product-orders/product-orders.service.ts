@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client'
 import prisma from '../../lib/prisma'
-import { INSTALLATION_COST } from '../../config/constants'
+import { INSTALLATION_COST, DELIVERY_COMMISSION } from '../../config/constants'
 
 // ─────────────────────────────────────────────
 // MAPEO DE MÉTODOS DE PAGO (frontend → enum Prisma)
@@ -404,7 +404,9 @@ export const getOrdersByClient = async (clientId: string) => {
       items: {
         include: { product: true },
       },
-      delivery: true,
+      delivery: {
+        include: { agent: { select: { id: true, name: true, phone: true } } },
+      },
     },
     orderBy: { createdAt: 'desc' },
   })
@@ -529,13 +531,23 @@ export const markAsDelivered = async (productOrderId: string, email: string) => 
     throw new Error('No estás asignado a este pedido')
   }
 
-  const updated = await prisma.productDelivery.update({
-    where: { productOrderId },
-    data: {
-      status: 'DELIVERED',
-      deliveredAt: new Date(),
-    },
-    include: { productOrder: true },
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedDelivery = await tx.productDelivery.update({
+      where: { productOrderId },
+      data: {
+        status: 'DELIVERED',
+        deliveredAt: new Date(),
+        deliveryCommission: DELIVERY_COMMISSION,
+      },
+      include: { productOrder: true },
+    })
+
+    await tx.productOrder.update({
+      where: { id: productOrderId },
+      data: { status: 'DELIVERED' },
+    })
+
+    return updatedDelivery
   })
 
   await decrementDeliveryLoad(user.id)

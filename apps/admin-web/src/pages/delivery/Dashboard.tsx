@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/auth.store'
+import { useToastStore } from '../../store/toast.store'
+import { useConfirm } from '../../hooks/useConfirm'
 
 type DeliveryStatus =
   | 'ASSIGNED'
@@ -33,11 +35,26 @@ interface Delivery {
   status: DeliveryStatus
   deliveredAt: string | null
   createdAt: string
+  deliveryCommission: string | null
   productOrder: ProductOrder
+}
+
+function getWeekRange(date = new Date()) {
+  const day = date.getDay()
+  const diffToMonday = day === 0 ? -6 : 1 - day
+  const monday = new Date(date)
+  monday.setDate(date.getDate() + diffToMonday)
+  monday.setHours(0, 0, 0, 0)
+  const saturday = new Date(monday)
+  saturday.setDate(monday.getDate() + 5)
+  saturday.setHours(23, 59, 59, 999)
+  return { monday, saturday }
 }
 
 export default function DeliveryDashboard() {
   const user = useAuthStore((state) => state.user)
+  const showToast = useToastStore((state) => state.showToast)
+  const confirmDialog = useConfirm()
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -65,14 +82,18 @@ export default function DeliveryDashboard() {
   }
 
   const handleMarkDelivered = async (productOrderId: string) => {
-    if (!confirm('¿Confirmas que este pedido fue entregado?')) return
+    const confirmed = await confirmDialog({
+      title: '¿Confirmas que este pedido fue entregado?',
+      confirmLabel: 'Confirmar entrega',
+    })
+    if (!confirmed) return
 
     try {
       await api.patch(`/api/product-orders/${productOrderId}/deliver`)
-      alert('✅ Pedido marcado como entregado')
+      showToast('✅ Pedido marcado como entregado', 'success')
       fetchData()
     } catch (err) {
-      alert('❌ Error al marcar el pedido como entregado')
+      showToast('❌ Error al marcar el pedido como entregado', 'error')
     }
   }
 
@@ -89,6 +110,23 @@ export default function DeliveryDashboard() {
 
   const pendingDeliveries = deliveries.filter((d) => d.status !== 'DELIVERED')
   const completedDeliveries = deliveries.filter((d) => d.status === 'DELIVERED')
+
+  const completedWithCommission = completedDeliveries.filter((d) => d.deliveryCommission != null)
+  const totalCommission = completedWithCommission.reduce(
+    (sum, d) => sum + Number(d.deliveryCommission),
+    0
+  )
+
+  const { monday, saturday } = getWeekRange()
+  const weeklyDeliveries = completedWithCommission.filter((d) => {
+    if (!d.deliveredAt) return false
+    const dDate = new Date(d.deliveredAt)
+    return dDate >= monday && dDate <= saturday
+  })
+  const weeklyCommission = weeklyDeliveries.reduce(
+    (sum, d) => sum + Number(d.deliveryCommission),
+    0
+  )
 
   if (loading) return <div className="page-container"><p>Cargando...</p></div>
   if (error) return <div className="page-container"><p className="alert-error">{error}</p></div>
@@ -157,8 +195,23 @@ export default function DeliveryDashboard() {
           <div key={delivery.id} className="form-hint">
             <strong>Pedido #{delivery.productOrder.id.slice(0, 8)}</strong> — {delivery.productOrder.client.name}{' '}
             {delivery.productOrder.client.lastName} — entregado {delivery.deliveredAt && formatDate(delivery.deliveredAt)}
+            {delivery.deliveryCommission != null && <span> · Comisión: ${delivery.deliveryCommission}</span>}
           </div>
         ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 20, marginTop: 32, flexWrap: 'wrap' }}>
+        <div className="card">
+          <h3>Resumen histórico</h3>
+          <p>Entregas completadas: {completedDeliveries.length}</p>
+          <p>Comisión total ganada: ${totalCommission.toFixed(2)}</p>
+        </div>
+        <div className="card">
+          <h3>Corte semanal (lun. a sáb.)</h3>
+          <p>{monday.toLocaleDateString('es-VE')} — {saturday.toLocaleDateString('es-VE')}</p>
+          <p>Entregas esta semana: {weeklyDeliveries.length}</p>
+          <p>Comisión de esta semana: ${weeklyCommission.toFixed(2)}</p>
+        </div>
       </div>
     </div>
   )

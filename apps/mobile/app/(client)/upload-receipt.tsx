@@ -11,11 +11,11 @@ import {
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
-import { ordersAPI } from '../../src/services/api'
+import { productOrdersAPI } from '../../src/services/api'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
-export default function UploadAdvanceReceiptScreen() {
+export default function UploadReceiptScreen() {
   const router = useRouter()
   const { orderId, paymentMethod, total } = useLocalSearchParams<{
     orderId: string
@@ -55,7 +55,7 @@ export default function UploadAdvanceReceiptScreen() {
       return
     }
     if (!orderId) {
-      Alert.alert('Error', 'No se encontró el ID de la orden. Vuelve a intentarlo.')
+      Alert.alert('Error', 'No se encontró el ID del pedido. Vuelve a intentarlo.')
       return
     }
 
@@ -71,14 +71,14 @@ export default function UploadAdvanceReceiptScreen() {
 
     setLoading(true)
     try {
-      await ordersAPI.submitAdvancePayment(orderId, paymentDetails)
+      await productOrdersAPI.uploadReceipt(orderId, paymentDetails)
       Alert.alert(
         '✅ Datos de pago enviados',
-        'Tus datos fueron enviados. El equipo de RepTel los revisará y confirmará tu pago pronto. El técnico será despachado una vez confirmado.',
+        'Tus datos fueron enviados. El equipo de RepTel los revisará y confirmará tu pago pronto. Un motorizado será asignado una vez confirmado.',
         [
           {
-            text: 'Ver mis órdenes',
-            onPress: () => router.replace('/(client)/my-technical-orders'),
+            text: 'Ver mis pedidos',
+            onPress: () => router.replace('/(client)/my-orders'),
           },
         ]
       )
@@ -104,7 +104,7 @@ export default function UploadAdvanceReceiptScreen() {
           <Text style={styles.step}>Paso 2 de 2</Text>
           <Text style={styles.title}>Datos del Pago</Text>
           <Text style={styles.subtitle}>
-            Ingresa los datos de tu pago anticipado (delivery + revisión)
+            Ingresa los datos del pago de tu pedido
           </Text>
         </View>
 
@@ -114,7 +114,7 @@ export default function UploadAdvanceReceiptScreen() {
         >
           <View style={styles.infoCard}>
             <Text style={styles.infoText}>
-              📝 Ingresa los datos exactos de tu pago. El equipo de RepTel los verificará y confirmará el pago manualmente para despachar al técnico.
+              📝 Ingresa los datos exactos de tu pago. El equipo de RepTel los verificará y confirmará el pago manualmente para asignar tu entrega.
             </Text>
           </View>
 
@@ -168,7 +168,7 @@ export default function UploadAdvanceReceiptScreen() {
           </TouchableOpacity>
 
           <Text style={styles.waitNote}>
-            ⏳ Una vez enviado, el técnico-delivery será notificado para salir tan pronto tu pago sea confirmado.
+            ⏳ Una vez enviado, un motorizado será asignado tan pronto tu pago sea confirmado.
           </Text>
         </ScrollView>
       </LinearGradient>

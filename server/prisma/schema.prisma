@@ -524,6 +524,7 @@ model ProductDelivery {
   gpsLongitude   Decimal?       @db.Decimal(10, 7)
   photoUrl       String?
   deliveredAt    DateTime?
+  deliveryCommission Decimal?   @db.Decimal(10, 2)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 

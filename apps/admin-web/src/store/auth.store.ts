@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 type Role =
   | 'ADMIN'
@@ -27,16 +28,23 @@ interface AuthState {
   logout: () => void
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  token: null,
-  isAuthenticated: false,
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      token: null,
+      isAuthenticated: false,
 
-  setUser: (user, token) => {
-    set({ user, token, isAuthenticated: true })
-  },
+      setUser: (user, token) => {
+        set({ user, token, isAuthenticated: true })
+      },
 
-  logout: () => {
-    set({ user: null, token: null, isAuthenticated: false })
-  },
-}))
+      logout: () => {
+        set({ user: null, token: null, isAuthenticated: false })
+      },
+    }),
+    {
+      name: 'reptel-auth', // clave con la que se guarda en localStorage
+    }
+  )
+)
