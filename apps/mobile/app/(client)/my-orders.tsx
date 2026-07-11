@@ -9,8 +9,13 @@ import {
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter } from 'expo-router'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { productOrdersAPI } from '../../src/services/api'
+
+// Mismo valor que apps/admin-web/src/config/constants.ts -> POLL_INTERVAL_MS.
+// Se define localmente porque mobile no comparte código con admin-web, pero
+// debe coincidir para que los paneles internos y el cliente queden coordinados.
+const POLL_INTERVAL_MS = 20000
 
 type OrderStatus = 'PENDING' | 'CONFIRMED' | 'DELIVERED' | 'CANCELLED'
 type SubmissionStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED'
@@ -105,29 +110,66 @@ export default function MyOrdersScreen() {
   const [orders, setOrders] = useState<ProductOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  // IDs de pedidos cuyo estado cambió desde la última vez que el cliente los vio.
+  const [updatedIds, setUpdatedIds] = useState<Set<string>>(new Set())
+  // Último estado conocido de cada pedido, para detectar cambios en el polling.
+  const previousStatusRef = useRef<Record<string, OrderStatus>>({})
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true)
+  const fetchOrders = useCallback(async (isPoll = false) => {
+    if (!isPoll) setLoading(true)
     try {
       const response = await productOrdersAPI.getMyOrders()
-      setOrders(response.data.data)
-    } catch (error: any) {
-      const backendMessage = error?.response?.data?.message
-      Alert.alert(
-        'No se pudieron cargar los pedidos',
-        backendMessage || 'Ocurrió un error al obtener tus pedidos. Intenta de nuevo.'
+      const freshOrders: ProductOrder[] = response.data.data
+
+      if (isPoll) {
+        const changedIds = freshOrders
+          .filter((o) => {
+            const prevStatus = previousStatusRef.current[o.id]
+            return prevStatus !== undefined && prevStatus !== o.status
+          })
+          .map((o) => o.id)
+
+        if (changedIds.length > 0) {
+          setUpdatedIds((prev) => new Set([...prev, ...changedIds]))
+        }
+      }
+
+      previousStatusRef.current = Object.fromEntries(
+        freshOrders.map((o) => [o.id, o.status])
       )
+      setOrders(freshOrders)
+    } catch (error: any) {
+      // En polling silencioso no interrumpimos con un Alert — los pedidos ya
+      // cargados siguen visibles, solo se reintenta en el próximo ciclo.
+      if (!isPoll) {
+        const backendMessage = error?.response?.data?.message
+        Alert.alert(
+          'No se pudieron cargar los pedidos',
+          backendMessage || 'Ocurrió un error al obtener tus pedidos. Intenta de nuevo.'
+        )
+      }
     } finally {
-      setLoading(false)
+      if (!isPoll) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
     fetchOrders()
+    // Polling automático — mismo intervalo que los paneles internos (Admin,
+    // Motorizado, Técnico), para que todo el sistema quede coordinado.
+    const interval = setInterval(() => fetchOrders(true), POLL_INTERVAL_MS)
+    return () => clearInterval(interval)
   }, [fetchOrders])
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id))
+    if (updatedIds.has(id)) {
+      setUpdatedIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
   }
 
   const formatDate = (dateStr: string) => {
@@ -181,12 +223,13 @@ export default function MyOrdersScreen() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <TouchableOpacity style={styles.refreshBtn} onPress={fetchOrders}>
+            <TouchableOpacity style={styles.refreshBtn} onPress={() => fetchOrders()}>
               <Text style={styles.refreshText}>↻ Actualizar</Text>
             </TouchableOpacity>
 
             {orders.map((order) => {
               const isExpanded = expandedId === order.id
+              const isUpdated = updatedIds.has(order.id)
               const status = order.status as OrderStatus
               const frontendPaymentMethod =
                 paymentMethodToFrontend[order.paymentMethod] ?? 'PAGO_MOVIL'
@@ -208,7 +251,7 @@ export default function MyOrdersScreen() {
               return (
                 <TouchableOpacity
                   key={order.id}
-                  style={styles.orderCard}
+                  style={[styles.orderCard, isUpdated && styles.orderCardUpdated]}
                   onPress={() => toggleExpand(order.id)}
                   activeOpacity={0.85}
                 >
@@ -224,10 +267,17 @@ export default function MyOrdersScreen() {
                   </View>
 
                   {/* Badge de estado */}
-                  <View style={[styles.statusBadge, { backgroundColor: STATUS_BG[status] }]}>
-                    <Text style={[styles.statusText, { color: STATUS_COLOR[status] }]}>
-                      {STATUS_LABEL[status]}
-                    </Text>
+                  <View style={styles.statusRow}>
+                    <View style={[styles.statusBadge, { backgroundColor: STATUS_BG[status] }]}>
+                      <Text style={[styles.statusText, { color: STATUS_COLOR[status] }]}>
+                        {STATUS_LABEL[status]}
+                      </Text>
+                    </View>
+                    {isUpdated && (
+                      <View style={styles.updatedBadge}>
+                        <Text style={styles.updatedBadgeText}>🔔 Actualizado</Text>
+                      </View>
+                    )}
                   </View>
 
                   {/* Total siempre visible */}
@@ -473,6 +523,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#d0d8ff',
   },
+  orderCardUpdated: {
+    backgroundColor: '#fff8e1',
+    borderColor: '#f59e0b',
+  },
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -483,14 +537,28 @@ const styles = StyleSheet.create({
   orderId: { fontSize: 14, fontWeight: '800', color: '#17247a' },
   orderDate: { fontSize: 12, color: '#9aa5cc', marginTop: 2 },
   expandArrow: { fontSize: 12, color: '#9aa5cc', marginLeft: 8 },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
   statusBadge: {
     alignSelf: 'flex-start',
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 4,
-    marginBottom: 12,
   },
   statusText: { fontSize: 12, fontWeight: '700' },
+  updatedBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: '#f59e0b',
+  },
+  updatedBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff' },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
