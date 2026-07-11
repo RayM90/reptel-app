@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { productOrdersAPI } from '../../src/services/api'
 
 type OrderStatus = 'PENDING' | 'CONFIRMED' | 'DELIVERED' | 'CANCELLED'
+type SubmissionStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED'
 
 interface ProductOrderItem {
   id: string
@@ -25,6 +26,15 @@ interface ProductOrderItem {
   }
 }
 
+interface PaymentSubmission {
+  id: string
+  amount: number
+  paymentDetails: Record<string, string>
+  status: SubmissionStatus
+  rejectionReason: string | null
+  createdAt: string
+}
+
 interface ProductOrder {
   id: string
   status: OrderStatus
@@ -33,10 +43,9 @@ interface ProductOrder {
   address: string
   paymentMethod: string
   notes?: string
-  paymentDetails?: Record<string, string>
-  rejectionReason?: string
   paidAt?: string
   items: ProductOrderItem[]
+  paymentSubmissions: PaymentSubmission[]
   delivery?: {
     status: string
     deliveredAt: string | null
@@ -63,6 +72,18 @@ const STATUS_BG: Record<OrderStatus, string> = {
   CONFIRMED: '#dcfce7',
   DELIVERED: '#e0e7ff',
   CANCELLED: '#fee2e2',
+}
+
+const SUBMISSION_LABEL: Record<SubmissionStatus, string> = {
+  PENDING: '⏳ En revisión',
+  CONFIRMED: '✅ Confirmado',
+  REJECTED: '❌ Rechazado',
+}
+
+const SUBMISSION_COLOR: Record<SubmissionStatus, string> = {
+  PENDING: '#b45309',
+  CONFIRMED: '#15803d',
+  REJECTED: '#b91c1c',
 }
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -168,6 +189,20 @@ export default function MyOrdersScreen() {
               const frontendPaymentMethod =
                 paymentMethodToFrontend[order.paymentMethod] ?? 'PAGO_MOVIL'
 
+              const confirmedSubmissions = order.paymentSubmissions.filter(
+                (s) => s.status === 'CONFIRMED'
+              )
+              const confirmedTotal = confirmedSubmissions.reduce(
+                (sum, s) => sum + Number(s.amount),
+                0
+              )
+              const remaining = Number(order.total) - confirmedTotal
+              const hasPendingSubmission = order.paymentSubmissions.some(
+                (s) => s.status === 'PENDING'
+              )
+              const canSendMorePayment =
+                order.status === 'PENDING' && remaining > 0.009
+
               return (
                 <TouchableOpacity
                   key={order.id}
@@ -198,6 +233,13 @@ export default function MyOrdersScreen() {
                     <Text style={styles.totalLabel}>Total</Text>
                     <Text style={styles.totalValue}>${Number(order.total).toFixed(2)}</Text>
                   </View>
+
+                  {/* Progreso de pago, si aplica */}
+                  {order.status === 'PENDING' && order.paymentSubmissions.length > 0 && (
+                    <Text style={styles.progressText}>
+                      Recibido: ${confirmedTotal.toFixed(2)} de ${Number(order.total).toFixed(2)}
+                    </Text>
+                  )}
 
                   {/* Detalle expandible */}
                   {isExpanded && (
@@ -282,49 +324,65 @@ export default function MyOrdersScreen() {
                         </View>
                       ))}
 
-                      {/* Motivo de rechazo, si aplica */}
-                      {order.rejectionReason && (
-                        <View style={styles.rejectionCard}>
-                          <Text style={styles.rejectionTitle}>❌ Pago rechazado</Text>
-                          <Text style={styles.rejectionText}>{order.rejectionReason}</Text>
-                        </View>
-                      )}
-
-                      {/* Datos de pago */}
-                      {order.paymentDetails ? (
+                      {/* Historial de abonos */}
+                      {order.paymentSubmissions.length > 0 ? (
                         <View style={styles.receiptContainer}>
-                          <Text style={styles.itemsTitle}>🧾 Datos de pago enviados</Text>
-                          {Object.entries(order.paymentDetails).map(([key, value]) => (
-                            <View key={key} style={styles.detailRow}>
-                              <Text style={styles.detailLabel}>{key}</Text>
-                              <Text style={styles.detailValue}>{value}</Text>
+                          <Text style={styles.itemsTitle}>🧾 Historial de pagos enviados</Text>
+                          <Text style={styles.progressTextInline}>
+                            Recibido: ${confirmedTotal.toFixed(2)} de ${Number(order.total).toFixed(2)}
+                            {remaining > 0.009 ? ` · Restante: $${remaining.toFixed(2)}` : ''}
+                          </Text>
+                          {order.paymentSubmissions.map((s) => (
+                            <View key={s.id} style={styles.submissionCard}>
+                              <View style={styles.submissionHeader}>
+                                <Text style={[styles.submissionStatus, { color: SUBMISSION_COLOR[s.status] }]}>
+                                  {SUBMISSION_LABEL[s.status]}
+                                </Text>
+                                <Text style={styles.submissionAmount}>${Number(s.amount).toFixed(2)}</Text>
+                              </View>
+                              <Text style={styles.submissionDate}>{formatDate(s.createdAt)}</Text>
+                              {s.status === 'REJECTED' && s.rejectionReason && (
+                                <Text style={styles.submissionRejection}>Motivo: {s.rejectionReason}</Text>
+                              )}
                             </View>
                           ))}
                         </View>
                       ) : order.status === 'PENDING' ? (
                         <View style={styles.noReceiptCard}>
                           <Text style={styles.noReceiptText}>
-                            {order.rejectionReason
-                              ? '⚠️ Envía tus datos de pago nuevamente.'
-                              : '⚠️ Aún no has enviado los datos de pago.'}
+                            ⚠️ Aún no has enviado los datos de pago.
                           </Text>
-                          <TouchableOpacity
-                            style={styles.uploadBtn}
-                            onPress={() =>
-                              router.push({
-                                pathname: '/(client)/upload-receipt',
-                                params: {
-                                  orderId: order.id,
-                                  paymentMethod: frontendPaymentMethod,
-                                  total: String(order.total),
-                                },
-                              })
-                            }
-                          >
-                            <Text style={styles.uploadBtnText}>Enviar datos de pago</Text>
-                          </TouchableOpacity>
                         </View>
                       ) : null}
+
+                      {/* Botón para enviar pago (inicial o abono adicional) */}
+                      {canSendMorePayment && !hasPendingSubmission && (
+                        <TouchableOpacity
+                          style={styles.uploadBtn}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/(client)/upload-receipt',
+                              params: {
+                                orderId: order.id,
+                                paymentMethod: frontendPaymentMethod,
+                                total: String(remaining),
+                              },
+                            })
+                          }
+                        >
+                          <Text style={styles.uploadBtnText}>
+                            {order.paymentSubmissions.length > 0
+                              ? 'Enviar el saldo restante'
+                              : 'Enviar datos de pago'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {hasPendingSubmission && (
+                        <Text style={styles.pendingReviewNote}>
+                          ⏳ Tienes un abono en revisión. Espera la confirmación antes de enviar otro.
+                        </Text>
+                      )}
                     </View>
                   )}
                 </TouchableOpacity>
@@ -416,6 +474,8 @@ const styles = StyleSheet.create({
   },
   totalLabel: { fontSize: 13, color: '#5364ad', fontWeight: '600' },
   totalValue: { fontSize: 18, fontWeight: '900', color: '#17247a' },
+  progressText: { fontSize: 12, color: '#5364ad', marginTop: 8, fontWeight: '600' },
+  progressTextInline: { fontSize: 12, color: '#5364ad', fontWeight: '600', marginBottom: 10 },
   expandedContent: {
     marginTop: 14,
     paddingTop: 14,
@@ -439,17 +499,22 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 13, fontWeight: '600', color: '#17247a' },
   itemQty: { fontSize: 11, color: '#9aa5cc', marginTop: 2 },
   itemSubtotal: { fontSize: 14, fontWeight: '800', color: '#17247a' },
-  rejectionCard: {
-    marginTop: 12,
-    backgroundColor: '#fee2e2',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#fca5a5',
-  },
-  rejectionTitle: { fontSize: 13, fontWeight: '800', color: '#b91c1c', marginBottom: 4 },
-  rejectionText: { fontSize: 13, color: '#7f1d1d', lineHeight: 18 },
   receiptContainer: { marginTop: 12 },
+  submissionCard: {
+    backgroundColor: '#f8f9ff',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 6,
+  },
+  submissionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  submissionStatus: { fontSize: 12, fontWeight: '700' },
+  submissionAmount: { fontSize: 14, fontWeight: '800', color: '#17247a' },
+  submissionDate: { fontSize: 11, color: '#9aa5cc', marginTop: 2 },
+  submissionRejection: { fontSize: 12, color: '#b91c1c', marginTop: 4 },
   noReceiptCard: {
     marginTop: 12,
     backgroundColor: '#fff8e1',
@@ -458,12 +523,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ffe082',
   },
-  noReceiptText: { fontSize: 13, color: '#7a6000', marginBottom: 10 },
+  noReceiptText: { fontSize: 13, color: '#7a6000' },
+  pendingReviewNote: {
+    fontSize: 12,
+    color: '#b45309',
+    marginTop: 10,
+    textAlign: 'center',
+  },
   uploadBtn: {
     backgroundColor: '#17247a',
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',
+    marginTop: 12,
   },
   uploadBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   // ── Línea de tiempo ──

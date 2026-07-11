@@ -71,11 +71,13 @@ export const productOrdersAPI = {
 
   getById: (id: string) => api.get(`/api/product-orders/${id}`),
 
-  uploadReceipt: (id: string, paymentDetails: Record<string, string>) =>
-    api.patch(`/api/product-orders/${id}/receipt`, { paymentDetails }),
- // Uso futuro en admin-web (rol ADMIN)
-  confirmPayment: (id: string, approved: boolean) =>
-    api.patch(`/api/product-orders/${id}/confirm-payment`, { approved }),
+  // Enviar un abono (parcial o total) para un pedido de tienda
+  uploadReceipt: (id: string, paymentDetails: Record<string, string>, amount: number) =>
+    api.patch(`/api/product-orders/${id}/receipt`, { paymentDetails, amount }),
+
+  // Confirmar o rechazar un abono específico (rol ADMIN)
+  confirmPartialPayment: (submissionId: string, approved: boolean, rejectionReason?: string) =>
+    api.patch(`/api/product-orders/payment-submissions/${submissionId}/confirm`, { approved, rejectionReason }),
 
   // Dirección B — repuesto vinculado a una orden de Servicio Técnico en curso
   createLinked: (data: {

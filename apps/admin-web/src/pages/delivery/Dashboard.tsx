@@ -39,6 +39,12 @@ interface Delivery {
   productOrder: ProductOrder
 }
 
+const PAYMENT_LABEL: Record<string, string> = {
+  MOBILE_PAYMENT: '📱 Pago Móvil',
+  TRANSFER: '🏦 Transferencia',
+  BINANCE: '₿ Binance',
+}
+
 function getWeekRange(date = new Date()) {
   const day = date.getDay()
   const diffToMonday = day === 0 ? -6 : 1 - day
@@ -163,7 +169,7 @@ export default function DeliveryDashboard() {
                 {isExpanded && (
                   <div style={{ marginTop: 12, borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
                     <p><strong>Dirección de entrega:</strong> {order.address || 'No especificada'}</p>
-                    <p><strong>Método de pago:</strong> {order.paymentMethod}</p>
+                    <p><strong>Método de pago:</strong> {PAYMENT_LABEL[order.paymentMethod] ?? order.paymentMethod}</p>
 
                     <h4>Productos</h4>
                     <ul>

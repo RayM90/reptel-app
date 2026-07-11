@@ -22,6 +22,15 @@ interface ProductOrderItem {
   quantity: number
 }
 
+interface PaymentSubmission {
+  id: string
+  amount: string
+  paymentDetails: Record<string, string>
+  status: 'PENDING' | 'CONFIRMED' | 'REJECTED'
+  rejectionReason: string | null
+  createdAt: string
+}
+
 interface ProductOrder {
   id: string
   status: string
@@ -29,7 +38,7 @@ interface ProductOrder {
   client: { name: string; lastName: string }
   items: ProductOrderItem[]
   delivery: { agent: { name: string } } | null
-  paymentDetails: Record<string, string> | null
+  paymentSubmissions: PaymentSubmission[]
 }
 
 function PaymentDetailsView({ details }: { details: Record<string, string> | null }) {
@@ -39,6 +48,67 @@ function PaymentDetailsView({ details }: { details: Record<string, string> | nul
       {Object.entries(details).map(([key, value]) => (
         <div key={key}>
           <strong>{key}:</strong> {value}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const SUBMISSION_STATUS_LABEL: Record<PaymentSubmission['status'], string> = {
+  PENDING: 'Pendiente',
+  CONFIRMED: 'Confirmado',
+  REJECTED: 'Rechazado',
+}
+
+function PaymentSubmissionsView({
+  submissions,
+  total,
+  onApprove,
+  onReject,
+}: {
+  submissions: PaymentSubmission[]
+  total: string
+  onApprove: (submissionId: string) => void
+  onReject: (submissionId: string) => void
+}) {
+  if (submissions.length === 0) return <span>—</span>
+
+  const confirmedTotal = submissions
+    .filter((s) => s.status === 'CONFIRMED')
+    .reduce((sum, s) => sum + Number(s.amount), 0)
+
+  return (
+    <div>
+      <p className="form-hint" style={{ marginBottom: 8 }}>
+        <strong>Recibido: ${confirmedTotal.toFixed(2)} de ${Number(total).toFixed(2)}</strong>
+      </p>
+      {submissions.map((s) => (
+        <div
+          key={s.id}
+          style={{
+            marginBottom: 8,
+            paddingBottom: 8,
+            borderBottom: '1px solid var(--color-border)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <span className="badge">{SUBMISSION_STATUS_LABEL[s.status]}</span>
+            <strong>${Number(s.amount).toFixed(2)}</strong>
+          </div>
+          <PaymentDetailsView details={s.paymentDetails} />
+          {s.status === 'REJECTED' && s.rejectionReason && (
+            <p className="form-hint">Motivo: {s.rejectionReason}</p>
+          )}
+          {s.status === 'PENDING' && (
+            <div style={{ marginTop: 6 }}>
+              <button className="btn btn-primary" onClick={() => onApprove(s.id)}>
+                Aprobar abono
+              </button>{' '}
+              <button className="btn btn-danger" onClick={() => onReject(s.id)}>
+                Rechazar
+              </button>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -137,34 +207,34 @@ export default function Dashboard() {
     }
   }
 
-  // ── Pedidos de tienda ──
-  const handleApproveProductPayment = async (id: string) => {
+  // ── Pedidos de tienda — abonos individuales ──
+  const handleApprovePartialPayment = async (submissionId: string) => {
     try {
-      await api.patch(`/api/product-orders/${id}/confirm-payment`, { approved: true })
-      showToast('✅ Pago aprobado. Se asignó un motorizado automáticamente.', 'success')
+      await api.patch(`/api/product-orders/payment-submissions/${submissionId}/confirm`, { approved: true })
+      showToast('✅ Abono aprobado.', 'success')
       fetchData()
     } catch (err) {
-      showToast('❌ Error al aprobar el pago', 'error')
+      showToast('❌ Error al aprobar el abono', 'error')
     }
   }
 
-  const handleRejectProductPayment = async (id: string) => {
+  const handleRejectPartialPayment = async (submissionId: string) => {
     const reason = await confirmDialog({
-      title: 'Rechazar pago de pedido',
+      title: 'Rechazar abono de pago',
       requireText: true,
       textLabel: 'Motivo del rechazo',
       confirmLabel: 'Rechazar',
     })
     if (!reason) return
     try {
-      await api.patch(`/api/product-orders/${id}/confirm-payment`, {
+      await api.patch(`/api/product-orders/payment-submissions/${submissionId}/confirm`, {
         approved: false,
         rejectionReason: reason,
       })
-      showToast('✅ Pago rechazado. Se notificó al cliente para que reenvíe sus datos.', 'success')
+      showToast('✅ Abono rechazado. Se notificó al cliente para que reenvíe sus datos.', 'success')
       fetchData()
     } catch (err) {
-      showToast('❌ Error al rechazar el pago', 'error')
+      showToast('❌ Error al rechazar el abono', 'error')
     }
   }
 
@@ -268,8 +338,7 @@ export default function Dashboard() {
                   <th>Total</th>
                   <th>Estado</th>
                   <th>Motorizado asignado</th>
-                  <th>Datos de pago</th>
-                  <th>Acciones</th>
+                  <th>Pagos recibidos</th>
                 </tr>
               </thead>
               <tbody>
@@ -280,24 +349,13 @@ export default function Dashboard() {
                     <td>${po.total}</td>
                     <td><span className="badge">{po.status}</span></td>
                     <td>{po.delivery?.agent.name || 'Sin asignar'}</td>
-                    <td><PaymentDetailsView details={po.paymentDetails} /></td>
                     <td>
-                      {po.status === 'PENDING' ? (
-                        <>
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => handleApproveProductPayment(po.id)}
-                            disabled={!po.paymentDetails}
-                          >
-                            Aprobar pago
-                          </button>{' '}
-                          <button className="btn btn-danger" onClick={() => handleRejectProductPayment(po.id)}>
-                            Rechazar
-                          </button>
-                        </>
-                      ) : (
-                        '—'
-                      )}
+                      <PaymentSubmissionsView
+                        submissions={po.paymentSubmissions}
+                        total={po.total}
+                        onApprove={handleApprovePartialPayment}
+                        onReject={handleRejectPartialPayment}
+                      />
                     </td>
                   </tr>
                 ))}

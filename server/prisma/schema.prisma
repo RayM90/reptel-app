@@ -147,6 +147,12 @@ enum DeliveryMethod {
   TECHNICIAN_DELIVERY
 }
 
+enum PartialPaymentStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
 // ─────────────────────────────────────────────
 // MÓDULO USUARIOS Y CLIENTES
 // ─────────────────────────────────────────────
@@ -494,10 +500,11 @@ model ProductOrder {
   linkedOrderId String?
   linkedOrder   Order?  @relation("ProductOrderToServiceOrder", fields: [linkedOrderId], references: [id])
 
-  items          ProductOrderItem[]
-  delivery       ProductDelivery?
-  invoice        Invoice?
-  notifications  Notification[]
+  items              ProductOrderItem[]
+  delivery           ProductDelivery?
+  invoice            Invoice?
+  notifications      Notification[]
+  paymentSubmissions ProductOrderPaymentSubmission[]
 
   @@map("productorder")
 }
@@ -515,6 +522,21 @@ model ProductOrderItem {
   productOrder   ProductOrder @relation(fields: [productOrderId], references: [id])
 
   @@map("productorderitem")
+}
+
+model ProductOrderPaymentSubmission {
+  id              String               @id @default(uuid())
+  amount          Decimal              @db.Decimal(10, 2)
+  paymentDetails  Json
+  status          PartialPaymentStatus @default(PENDING)
+  rejectionReason String?              @db.Text
+  createdAt       DateTime             @default(now())
+  confirmedAt     DateTime?
+
+  productOrderId  String
+  productOrder    ProductOrder         @relation(fields: [productOrderId], references: [id])
+
+  @@map("productorderpaymentsubmission")
 }
 
 model ProductDelivery {

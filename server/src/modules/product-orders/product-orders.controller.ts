@@ -136,7 +136,7 @@ export const createLinkedOrder = async (req: AuthRequest, res: Response): Promis
 }
 
 // ─────────────────────────────────────────────
-// SUBIR COMPROBANTE DE PAGO
+// SUBIR DATOS DE PAGO (abono parcial o total)
 // ─────────────────────────────────────────────
 
 export const uploadReceipt = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -157,15 +157,20 @@ export const uploadReceipt = async (req: AuthRequest, res: Response): Promise<vo
     }
 
     const id = String(req.params.id)
-    const { paymentDetails } = req.body
+    const { paymentDetails, amount } = req.body
 
     if (!paymentDetails || typeof paymentDetails !== 'object') {
       res.status(400).json({ success: false, message: 'paymentDetails es requerido' })
       return
     }
 
-    const order = await productOrdersService.uploadReceipt(id, clientId, paymentDetails)
-    res.json({ success: true, data: order })
+    if (amount === undefined || amount === null || Number.isNaN(Number(amount))) {
+      res.status(400).json({ success: false, message: 'amount es requerido y debe ser numérico' })
+      return
+    }
+
+    const submission = await productOrdersService.uploadReceipt(id, clientId, paymentDetails, Number(amount))
+    res.status(201).json({ success: true, data: submission })
   } catch (error) {
     console.error('ERROR SUBIR DATOS DE PAGO:', error)
     const message = error instanceof Error ? error.message : 'Error al registrar los datos de pago'
@@ -174,12 +179,12 @@ export const uploadReceipt = async (req: AuthRequest, res: Response): Promise<vo
 }
 
 // ─────────────────────────────────────────────
-// CONFIRMAR O RECHAZAR PAGO (solo ADMIN)
+// CONFIRMAR O RECHAZAR UN ABONO ESPECÍFICO (solo ADMIN)
 // ─────────────────────────────────────────────
 
-export const confirmPayment = async (req: AuthRequest, res: Response): Promise<void> => {
+export const confirmPartialPayment = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const id = String(req.params.id)
+    const submissionId = String(req.params.submissionId)
     const { approved, rejectionReason } = req.body
 
     if (approved === undefined) {
@@ -190,16 +195,16 @@ export const confirmPayment = async (req: AuthRequest, res: Response): Promise<v
     if (approved === false && !rejectionReason) {
       res.status(400).json({
         success: false,
-        message: 'rejectionReason es requerido cuando se rechaza el pago',
+        message: 'rejectionReason es requerido cuando se rechaza el abono',
       })
       return
     }
 
-    const order = await productOrdersService.confirmPayment(id, Boolean(approved), rejectionReason)
+    const order = await productOrdersService.confirmPartialPayment(submissionId, Boolean(approved), rejectionReason)
     res.json({ success: true, data: order })
   } catch (error) {
-    console.error('ERROR CONFIRMAR PAGO:', error)
-    const message = error instanceof Error ? error.message : 'Error al confirmar el pago'
+    console.error('ERROR CONFIRMAR ABONO:', error)
+    const message = error instanceof Error ? error.message : 'Error al confirmar el abono'
     res.status(400).json({ success: false, message })
   }
 }
