@@ -146,7 +146,7 @@ export default function CheckoutScreen() {
 
       Alert.alert(
         '✅ Pedido registrado',
-        'Tu pedido fue registrado. Ahora sube el comprobante de pago.',
+        'Tu pedido fue registrado. Ahora ingresa los datos de tu pago.',
         [
           {
             text: 'OK',
@@ -330,7 +330,7 @@ export default function CheckoutScreen() {
           {selectedMethod && (
             <View style={styles.noteCard}>
               <Text style={styles.noteText}>
-                📎 Después de confirmar, deberás subir el comprobante de pago para procesar tu pedido.
+                📎 Después de confirmar, deberás ingresar los datos de tu pago para procesar tu pedido.
               </Text>
             </View>
           )}
