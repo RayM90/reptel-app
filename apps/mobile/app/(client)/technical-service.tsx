@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, KeyboardAvoidingView, Platform,
+  ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
+import { useToastStore } from '../../src/store/toast.store'
 
 // ── Tipos ────────────────────────────────────────────────────────
 interface FaultItem {
@@ -123,6 +124,7 @@ const DEVICE_TYPES = ['LAPTOP', 'PC']
 
 export default function TechnicalServiceScreen() {
   const router = useRouter()
+  const showToast = useToastStore((state) => state.showToast)
 
   // ── Datos del equipo ─────────────────────────────────────────────
   const [deviceType, setDeviceType] = useState<'LAPTOP' | 'PC'>('LAPTOP')
@@ -171,7 +173,7 @@ export default function TechnicalServiceScreen() {
 
   const addCustomFault = () => {
     if (!customFault.trim()) {
-      Alert.alert('Error', 'Describe la falla o servicio')
+      showToast('Describe la falla o servicio', 'error')
       return
     }
     const price = parseFloat(customPrice || '0')
@@ -208,23 +210,23 @@ export default function TechnicalServiceScreen() {
   // ahí sí se crea la orden — mismo patrón que checkout.tsx en la tienda.
   const handleSubmit = () => {
     if (!brand.trim() || !model.trim()) {
-      Alert.alert('Error', 'Marca y modelo son obligatorios')
+      showToast('Marca y modelo son obligatorios', 'error')
       return
     }
     if (!color.trim()) {
-      Alert.alert('Error', 'El color del equipo es obligatorio')
+      showToast('El color del equipo es obligatorio', 'error')
       return
     }
     if (!accessories.trim()) {
-      Alert.alert('Error', 'Indica los accesorios o marca "Sin accesorios"')
+      showToast('Indica los accesorios o marca "Sin accesorios"', 'error')
       return
     }
     if (!noPassword && !devicePassword.trim()) {
-      Alert.alert('Error', 'Indica la contraseña o marca "Sin contraseña"')
+      showToast('Indica la contraseña o marca "Sin contraseña"', 'error')
       return
     }
     if (selectedItems.length === 0) {
-      Alert.alert('Error', 'Selecciona al menos una falla o servicio')
+      showToast('Selecciona al menos una falla o servicio', 'error')
       return
     }
 

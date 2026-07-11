@@ -5,13 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Image,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { api } from '../../src/services/api'
+import { useToastStore } from '../../src/store/toast.store'
 
 interface Product {
   id: string
@@ -41,6 +41,7 @@ export default function SelectLinkedProductsScreen() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Record<string, number>>({})
+  const showToast = useToastStore((state) => state.showToast)
 
   useEffect(() => {
     fetchProducts()
@@ -52,7 +53,7 @@ export default function SelectLinkedProductsScreen() {
       const data: Product[] = response.data.data
       setProducts(data.filter((p) => p.requiresInstallation))
     } catch (error) {
-      Alert.alert('Error', 'No se pudieron cargar los repuestos disponibles')
+      showToast('No se pudieron cargar los repuestos disponibles', 'error')
     } finally {
       setLoading(false)
     }
@@ -87,7 +88,7 @@ export default function SelectLinkedProductsScreen() {
 
   const handleContinue = () => {
     if (selectedItems.length === 0) {
-      Alert.alert('Selecciona al menos un repuesto', 'Debes elegir al menos un producto para continuar')
+      showToast('Debes elegir al menos un producto para continuar', 'error')
       return
     }
       router.push({
