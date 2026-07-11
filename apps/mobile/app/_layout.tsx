@@ -1,8 +1,10 @@
 import { Stack, router } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { StatusBar } from 'expo-status-bar'
-import { TouchableOpacity, Text, StyleSheet } from 'react-native'
+import { TouchableOpacity, Text, StyleSheet, View } from 'react-native'
 import { useAuthStore } from '../src/store/auth.store'
+import Toast from '../src/components/Toast'
+import ConfirmDialog from '../src/components/ConfirmDialog'
 
 const queryClient = new QueryClient()
 
@@ -34,28 +36,35 @@ function HomeButton() {
 export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: true,
-          headerStyle: { backgroundColor: '#1a73e8' },
-          headerTintColor: '#fff',
-          headerTitleStyle: { fontWeight: 'bold', color: '#fff' },
-          headerLeft: () => <BackButton />,
-          headerRight: () => <HomeButton />,
-        }}
-      >
-        {/* Pantallas SIN header */}
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="welcome" options={{ headerShown: false }} />
+      {/* View envolvente para que Toast y ConfirmDialog puedan superponerse
+          sobre cualquier pantalla de la app, sin depender de cada Screen. */}
+      <View style={{ flex: 1 }}>
+        <StatusBar style="light" />
+        <Stack
+          screenOptions={{
+            headerShown: true,
+            headerStyle: { backgroundColor: '#1a73e8' },
+            headerTintColor: '#fff',
+            headerTitleStyle: { fontWeight: 'bold', color: '#fff' },
+            headerLeft: () => <BackButton />,
+            headerRight: () => <HomeButton />,
+          }}
+        >
+          {/* Pantallas SIN header */}
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="welcome" options={{ headerShown: false }} />
 
-        {/* Pantallas de auth SIN header */}
-        <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)/register" options={{ headerShown: false }} />
+          {/* Pantallas de auth SIN header */}
+          <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)/register" options={{ headerShown: false }} />
 
-        {/* Home del cliente — controla su propio header internamente */}
-        <Stack.Screen name="(client)/home-client" options={{ headerShown: false }} />
-      </Stack>
+          {/* Home del cliente — controla su propio header internamente */}
+          <Stack.Screen name="(client)/home-client" options={{ headerShown: false }} />
+        </Stack>
+
+        <Toast />
+        <ConfirmDialog />
+      </View>
     </QueryClientProvider>
   )
 }
