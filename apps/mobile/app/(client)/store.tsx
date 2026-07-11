@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Image,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -13,6 +12,7 @@ import { Stack, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { api } from '../../src/services/api'
 import { useCartStore } from '../../src/store/cart.store'
+import { useToastStore } from '../../src/store/toast.store'
 
 interface Product {
   id: string
@@ -37,6 +37,7 @@ export default function StoreScreen() {
   const [loading, setLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos')
   const [categories, setCategories] = useState<string[]>(['Todos'])
+  const showToast = useToastStore((state) => state.showToast)
 
   useEffect(() => {
     fetchProducts()
@@ -50,7 +51,7 @@ export default function StoreScreen() {
       const cats = ['Todos', ...new Set(data.map((p) => p.category.name))]
       setCategories(cats)
     } catch (error: any) {
-      Alert.alert('Error', 'No se pudieron cargar los productos')
+      showToast('No se pudieron cargar los productos', 'error')
     } finally {
       setLoading(false)
     }
@@ -65,7 +66,7 @@ const handleAddToCart = (product: Product) => {
     categoryName: product.category.name,
     requiresInstallation: product.requiresInstallation,
   })
-    Alert.alert('✓ Agregado', `${product.name} se agregó al carrito`)
+    showToast(`✓ ${product.name} se agregó al carrito`, 'success')
   }
 
   const filtered =
