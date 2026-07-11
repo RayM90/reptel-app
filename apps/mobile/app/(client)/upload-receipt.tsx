@@ -4,7 +4,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   TextInput,
 } from 'react-native'
@@ -12,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import { productOrdersAPI } from '../../src/services/api'
+import { useToastStore } from '../../src/store/toast.store'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -36,6 +36,7 @@ export default function UploadReceiptScreen() {
   const [nombre, setNombre] = useState('')
 
   const [loading, setLoading] = useState(false)
+  const showToast = useToastStore((state) => state.showToast)
 
   const montoNumber = monto ? Number(monto) : 0
   const restante = totalNumber != null ? totalNumber - montoNumber : 0
@@ -52,11 +53,11 @@ export default function UploadReceiptScreen() {
 
   const handleSubmit = async () => {
     if (!isFormValid()) {
-      Alert.alert('Datos incompletos', 'Completa todos los campos requeridos.')
+      showToast('Completa todos los campos requeridos.', 'error')
       return
     }
     if (!orderId) {
-      Alert.alert('Error', 'No se encontró el ID del pedido. Vuelve a intentarlo.')
+      showToast('No se encontró el ID del pedido. Vuelve a intentarlo.', 'error')
       return
     }
 
@@ -73,23 +74,20 @@ export default function UploadReceiptScreen() {
     setLoading(true)
     try {
       await productOrdersAPI.uploadReceipt(orderId, paymentDetails, montoNumber)
-      Alert.alert(
-        '✅ Datos de pago enviados',
+      // El Alert original solo tenía un botón ("Ver mis pedidos") que
+      // navegaba — mostramos el toast de éxito y navegamos directo.
+      showToast(
         esPagoParcial
           ? `Tu abono de $${montoNumber.toFixed(2)} fue enviado. El equipo de RepTel lo revisará. Aún quedará un saldo pendiente de $${restante.toFixed(2)} por enviar.`
-          : 'Tus datos fueron enviados. El equipo de RepTel los revisará y confirmará tu pago pronto. Un motorizado será asignado una vez confirmado.',
-        [
-          {
-            text: 'Ver mis pedidos',
-            onPress: () => router.replace('/(client)/my-orders'),
-          },
-        ]
+          : '✅ Datos enviados. El equipo de RepTel los revisará y confirmará tu pago pronto. Un motorizado será asignado una vez confirmado.',
+        'success'
       )
+      router.replace('/(client)/my-orders')
     } catch (error: any) {
       const backendMessage = error?.response?.data?.message
-      Alert.alert(
-        'No se pudo enviar la información',
-        backendMessage || 'Ocurrió un error al enviar los datos. Intenta de nuevo.'
+      showToast(
+        backendMessage || 'Ocurrió un error al enviar los datos. Intenta de nuevo.',
+        'error'
       )
     } finally {
       setLoading(false)
