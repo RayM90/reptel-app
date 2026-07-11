@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Image,
@@ -18,6 +17,7 @@ import {
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
+import { useToastStore } from "../../src/store/toast.store";
 import { api } from "../../src/services/api";
 
 const { width } = Dimensions.get("window");
@@ -52,18 +52,19 @@ export default function RegisterScreen() {
   const [loading,       setLoading]       = useState(false);
   const [verPassword,   setVerPassword]   = useState(false);
   const [verConfirmar,  setVerConfirmar]  = useState(false);
+  const showToast = useToastStore((state) => state.showToast);
 
   const handleRegister = async () => {
     if (!nombre || !correo || !telefono || !direccion || !password || !confirmar) {
-      Alert.alert("Error", "Por favor completa todos los campos");
+      showToast("Por favor completa todos los campos", "error");
       return;
     }
     if (password !== confirmar) {
-      Alert.alert("Error", "Las contraseñas no coinciden");
+      showToast("Las contraseñas no coinciden", "error");
       return;
     }
     if (password.length < 8) {
-      Alert.alert("Error", "La contraseña debe tener al menos 8 caracteres");
+      showToast("La contraseña debe tener al menos 8 caracteres", "error");
       return;
     }
 
@@ -78,14 +79,14 @@ export default function RegisterScreen() {
         role:     "CLIENT",
       });
 
-      Alert.alert(
-        "¡Cuenta creada!",
-        "Tu cuenta fue creada exitosamente. Ahora puedes iniciar sesión.",
-        [{ text: "Iniciar sesión", onPress: () => router.replace("/(auth)/login") }]
-      );
+      // El Alert original solo tenía un botón ("Iniciar sesión") que navegaba
+      // al login — como no hay una segunda opción real que elegir, mostramos
+      // el toast de éxito y navegamos directo, sin pedir un toque de más.
+      showToast("✅ Cuenta creada. Ahora puedes iniciar sesión.", "success");
+      router.replace("/(auth)/login");
     } catch (error: any) {
       const mensajeRaw = error.response?.data?.message || "No se pudo crear la cuenta";
-      Alert.alert("Error", traducirErrorCognito(mensajeRaw));
+      showToast(traducirErrorCognito(mensajeRaw), "error");
     } finally {
       setLoading(false);
     }
