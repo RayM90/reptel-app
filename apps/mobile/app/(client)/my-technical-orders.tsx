@@ -5,12 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter } from 'expo-router'
 import { useState, useEffect, useCallback } from 'react'
 import { ordersAPI } from '../../src/services/api'
+import { useToastStore } from '../../src/store/toast.store'
 
 type OrderStatus =
   | 'PENDING_PAYMENT'
@@ -102,6 +102,7 @@ export default function MyTechnicalOrdersScreen() {
   const [orders, setOrders] = useState<TechOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const showToast = useToastStore((state) => state.showToast)
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -110,9 +111,9 @@ export default function MyTechnicalOrdersScreen() {
       setOrders(response.data.data)
     } catch (error: any) {
       const backendMessage = error?.response?.data?.message
-      Alert.alert(
-        'No se pudieron cargar las órdenes',
-        backendMessage || 'Ocurrió un error al obtener tus órdenes. Intenta de nuevo.'
+      showToast(
+        backendMessage || 'Ocurrió un error al obtener tus órdenes. Intenta de nuevo.',
+        'error'
       )
     } finally {
       setLoading(false)
