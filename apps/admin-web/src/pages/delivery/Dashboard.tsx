@@ -28,7 +28,8 @@ interface ProductOrder {
   address: string | null
   total: string
   paymentMethod: string
-  client: { name: string; lastName: string }
+  notes: string | null
+  client: { name: string; lastName: string; phone: string }
   items: ProductInOrder[]
 }
 
@@ -80,6 +81,7 @@ export default function DeliveryDashboard() {
   const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [newIds, setNewIds] = useState<Set<string>>(new Set())
+  const [tab, setTab] = useState<'entregas' | 'resumen'>('entregas')
 
   useEffect(() => {
     fetchData()
@@ -194,6 +196,23 @@ export default function DeliveryDashboard() {
         </button>
       </div>
 
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <button
+          className={tab === 'entregas' ? 'btn btn-primary' : 'btn btn-outline'}
+          onClick={() => setTab('entregas')}
+        >
+          Entregas
+        </button>
+        <button
+          className={tab === 'resumen' ? 'btn btn-primary' : 'btn btn-outline'}
+          onClick={() => setTab('resumen')}
+        >
+          📊 Resumen y Comisiones
+        </button>
+      </div>
+
+      {tab === 'entregas' && (
+        <>
       <div className="card">
         <h2>Mis Entregas Pendientes ({pendingDeliveries.length})</h2>
 
@@ -222,8 +241,15 @@ export default function DeliveryDashboard() {
 
                 {isExpanded && (
                   <div style={{ marginTop: 12, borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
+                    <p><strong>Cliente:</strong> {order.client.name} {order.client.lastName}</p>
+                    <p><strong>Teléfono:</strong> {order.client.phone ? (
+                      <a href={`tel:${order.client.phone}`}>{order.client.phone}</a>
+                    ) : 'No registrado'}</p>
                     <p><strong>Dirección de entrega:</strong> {order.address || 'No especificada'}</p>
                     <p><strong>Método de pago:</strong> {PAYMENT_LABEL[order.paymentMethod] ?? order.paymentMethod}</p>
+                    {order.notes && (
+                      <p><strong>Notas del cliente:</strong> {order.notes}</p>
+                    )}
 
                     <h4>Productos</h4>
                     <ul>
@@ -258,9 +284,17 @@ export default function DeliveryDashboard() {
             {delivery.deliveryCommission != null && <span> · Comisión: ${delivery.deliveryCommission}</span>}
           </div>
         ))}
+        {completedDeliveries.length > 0 && (
+          <p style={{ textAlign: 'right', fontWeight: 700, marginTop: 12 }}>
+            Total comisiones: ${totalCommission.toFixed(2)}
+          </p>
+        )}
       </div>
+        </>
+      )}
 
-      <div style={{ display: 'flex', gap: 20, marginTop: 32, flexWrap: 'wrap' }}>
+      {tab === 'resumen' && (
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
         <div className="card">
           <h3>Resumen histórico</h3>
           <p>Entregas completadas: {completedDeliveries.length}</p>
@@ -273,6 +307,7 @@ export default function DeliveryDashboard() {
           <p>Comisión de esta semana: ${weeklyCommission.toFixed(2)}</p>
         </div>
       </div>
+      )}
     </div>
   )
 }
