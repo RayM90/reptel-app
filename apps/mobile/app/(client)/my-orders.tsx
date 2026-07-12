@@ -247,7 +247,14 @@ export default function MyOrdersScreen() {
                 (sum, s) => sum + Number(s.amount),
                 0
               )
-              const remaining = Number(order.total) - confirmedTotal
+              const pendingTotal = order.paymentSubmissions
+                .filter((s) => s.status === 'PENDING')
+                .reduce((sum, s) => sum + Number(s.amount), 0)
+              // El cliente puede seguir enviando abonos sin esperar a que el
+              // admin revise los anteriores — el límite considera lo ya
+              // confirmado MÁS lo pendiente de revisión, para que nunca pueda
+              // enviar de más aunque tenga abonos sin aprobar todavía.
+              const remaining = Number(order.total) - confirmedTotal - pendingTotal
               const hasPendingSubmission = order.paymentSubmissions.some(
                 (s) => s.status === 'PENDING'
               )
@@ -440,8 +447,10 @@ export default function MyOrdersScreen() {
                         </View>
                       ) : null}
 
-                      {/* Botón para enviar pago (inicial o abono adicional) */}
-                      {canSendMorePayment && !hasPendingSubmission && (
+                      {/* Botón para enviar pago (inicial o abono adicional) — ya
+                          no espera a que se revisen los abonos pendientes,
+                          el cliente puede seguir pagando a su ritmo */}
+                      {canSendMorePayment && (
                         <TouchableOpacity
                           style={styles.uploadBtn}
                           onPress={() =>
@@ -465,7 +474,7 @@ export default function MyOrdersScreen() {
 
                       {hasPendingSubmission && (
                         <Text style={styles.pendingReviewNote}>
-                          ⏳ Tienes un abono en revisión. Espera la confirmación antes de enviar otro.
+                          ⏳ Tienes {order.paymentSubmissions.filter((s) => s.status === 'PENDING').length} abono(s) en revisión por el equipo de RepTel.
                         </Text>
                       )}
                     </View>
