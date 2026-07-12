@@ -302,11 +302,10 @@ export default function DeliveryDashboard() {
             {delivery.deliveryCommission != null && <span> · Comisión: ${delivery.deliveryCommission}</span>}
           </div>
         ))}
-        {completedDeliveries.length > 0 && (
-          <p style={{ textAlign: 'right', fontWeight: 700, marginTop: 12 }}>
-            Total comisiones: ${totalCommission.toFixed(2)}
-          </p>
-        )}
+        {completedDeliveries.length === 0 && <p>Aún no tienes entregas completadas</p>}
+        <p style={{ textAlign: 'right', fontWeight: 700, marginTop: 12 }}>
+          Total comisiones: ${totalCommission.toFixed(2)}
+        </p>
       </div>
         </>
       )}
