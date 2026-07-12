@@ -292,12 +292,15 @@ export const uploadReceipt = async (
   paymentDetails: Record<string, string>,
   amount: number
 ) => {
-  // Verificar que la orden exista y pertenezca al cliente autenticado
+  // Verificar que la orden exista y pertenezca al cliente autenticado.
+  // Se incluyen abonos CONFIRMED y PENDING para calcular lo disponible —
+  // así el cliente nunca puede enviar de más aunque haya abonos aún sin
+  // revisar por el admin (puede seguir pagando a su ritmo sin esperar).
   const order = await prisma.productOrder.findFirst({
     where: { id: productOrderId, clientId },
     include: {
       client: true,
-      paymentSubmissions: { where: { status: 'CONFIRMED' } },
+      paymentSubmissions: { where: { status: { in: ['CONFIRMED', 'PENDING'] } } },
     },
   })
 
@@ -309,11 +312,11 @@ export const uploadReceipt = async (
     throw new Error('El monto del pago debe ser mayor a cero')
   }
 
-  const alreadyConfirmed = order.paymentSubmissions.reduce(
+  const alreadyAccounted = order.paymentSubmissions.reduce(
     (sum, s) => sum + Number(s.amount),
     0
   )
-  const remaining = Number(order.total) - alreadyConfirmed
+  const remaining = Number(order.total) - alreadyAccounted
 
   if (amount > remaining + 0.009) {
     throw new Error(
