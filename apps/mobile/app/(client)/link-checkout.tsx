@@ -6,6 +6,8 @@ import {
   ScrollView,
   ActivityIndicator,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
@@ -110,6 +112,10 @@ export default function LinkCheckoutScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <LinearGradient colors={['#ffffff', '#eef2ff', '#d5ddff', '#8fa5ff']} style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -206,6 +212,7 @@ export default function LinkCheckoutScreen() {
           </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
+      </KeyboardAvoidingView>
     </>
   )
 }

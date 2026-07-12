@@ -6,6 +6,8 @@ import {
   ScrollView,
   ActivityIndicator,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter } from 'expo-router'
@@ -166,6 +168,10 @@ export default function CheckoutScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <LinearGradient
         colors={['#ffffff', '#eef2ff', '#d5ddff', '#8fa5ff']}
         style={styles.container}
@@ -355,6 +361,7 @@ export default function CheckoutScreen() {
           </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
+      </KeyboardAvoidingView>
     </>
   )
 }
