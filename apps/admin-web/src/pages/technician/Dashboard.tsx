@@ -83,6 +83,12 @@ function getWeekRange(date = new Date()) {
   return { monday, saturday }
 }
 
+function getMonthRange(date = new Date()) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0)
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999)
+  return { start, end }
+}
+
 export default function TechnicianDashboard() {
   const user = useAuthStore((state) => state.user)
   const showToast = useToastStore((state) => state.showToast)
@@ -92,6 +98,7 @@ export default function TechnicianDashboard() {
   const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [newIds, setNewIds] = useState<Set<string>>(new Set())
+  const [tab, setTab] = useState<'ordenes' | 'resumen'>('ordenes')
 
   const [diagnosisText, setDiagnosisText] = useState<Record<string, string>>({})
   const [budgetText, setBudgetText] = useState<Record<string, string>>({})
@@ -207,6 +214,7 @@ export default function TechnicianDashboard() {
     })
   }
 
+  const activeOrders = orders.filter((o) => o.technicianCommission == null)
   const completedOrders = orders.filter((o) => o.technicianCommission != null)
   const totalCommission = completedOrders.reduce(
     (sum, o) => sum + Number(o.technicianCommission),
@@ -224,6 +232,18 @@ export default function TechnicianDashboard() {
     0
   )
 
+  const { start: monthStart, end: monthEnd } = getMonthRange()
+  const monthlyOrders = completedOrders.filter((o) => {
+    if (!o.finalPaymentConfirmedAt) return false
+    const d = new Date(o.finalPaymentConfirmedAt)
+    return d >= monthStart && d <= monthEnd
+  })
+  const monthlyCommission = monthlyOrders.reduce(
+    (sum, o) => sum + Number(o.technicianCommission),
+    0
+  )
+  const monthLabel = monthStart.toLocaleDateString('es-VE', { month: 'long', year: 'numeric' })
+
   if (loading) return <div className="page-container"><p>Cargando...</p></div>
   if (error) return <div className="page-container"><p className="alert-error">{error}</p></div>
 
@@ -239,13 +259,30 @@ export default function TechnicianDashboard() {
         </button>
       </div>
 
-      <div className="card">
-        <h2>Mis Órdenes ({orders.length})</h2>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <button
+          className={tab === 'ordenes' ? 'btn btn-primary' : 'btn btn-outline'}
+          onClick={() => setTab('ordenes')}
+        >
+          Órdenes
+        </button>
+        <button
+          className={tab === 'resumen' ? 'btn btn-primary' : 'btn btn-outline'}
+          onClick={() => setTab('resumen')}
+        >
+          📊 Resumen y Comisiones
+        </button>
+      </div>
 
-        {orders.length === 0 ? (
-          <p>No tienes órdenes asignadas</p>
+      {tab === 'ordenes' && (
+        <>
+      <div className="card">
+        <h2>Mis Órdenes Activas ({activeOrders.length})</h2>
+
+        {activeOrders.length === 0 ? (
+          <p>No tienes órdenes activas</p>
         ) : (
-          orders.map((order) => {
+          activeOrders.map((order) => {
             const isExpanded = expandedId === order.id
             const isNew = newIds.has(order.id)
             const needsDiagnosis = order.budget == null
@@ -369,11 +406,34 @@ export default function TechnicianDashboard() {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 20, marginTop: 32, flexWrap: 'wrap' }}>
+      <div className="card" style={{ marginTop: 32 }}>
+        <h3>Órdenes completadas ({completedOrders.length})</h3>
+        {completedOrders.length === 0 ? (
+          <p>Aún no tienes órdenes completadas</p>
+        ) : (
+          completedOrders.map((order) => (
+            <div key={order.id} className="form-hint">
+              <strong>{order.orderNumber}</strong> — {order.client.name} {order.client.lastName}{' '}
+              — {order.device.brand} {order.device.model}
+              {order.technicianCommission != null && (
+                <span> · Comisión: ${order.technicianCommission}</span>
+              )}
+            </div>
+          ))
+        )}
+        <p style={{ textAlign: 'right', fontWeight: 700, marginTop: 12 }}>
+          Total comisiones: ${totalCommission.toFixed(2)}
+        </p>
+      </div>
+        </>
+      )}
+
+      {tab === 'resumen' && (
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
         <div className="card">
-          <h3>Resumen histórico</h3>
-          <p>Servicios completados: {completedOrders.length}</p>
-          <p>Comisión total ganada: ${totalCommission.toFixed(2)}</p>
+          <h3>Resumen mensual — {monthLabel}</h3>
+          <p>Servicios completados: {monthlyOrders.length}</p>
+          <p>Comisión ganada: ${monthlyCommission.toFixed(2)}</p>
         </div>
         <div className="card">
           <h3>Corte semanal (lun. a sáb.)</h3>
@@ -382,6 +442,7 @@ export default function TechnicianDashboard() {
           <p>Comisión de esta semana: ${weeklyCommission.toFixed(2)}</p>
         </div>
       </div>
+      )}
     </div>
   )
 }
