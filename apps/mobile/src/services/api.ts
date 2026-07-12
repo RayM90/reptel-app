@@ -11,6 +11,13 @@ export const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
+  // Se usa require() en vez de import para evitar dependencia circular:
+  // auth.store.ts importa `api` de este mismo archivo.
+  const { useAuthStore } = require('../store/auth.store')
+  const token = useAuthStore.getState().token
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
   return config
 })
 

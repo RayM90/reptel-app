@@ -50,36 +50,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
 
   setUser: (user, token, refreshToken?) => {
-    set({ user, token, refreshToken: refreshToken ?? null, isAuthenticated: true });
-    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-    if (refreshToken) {
-      scheduleRefresh(() => get().refreshSession());
-    }
-  },
+  set({ user, token, refreshToken: refreshToken ?? null, isAuthenticated: true });
+  if (refreshToken) {
+    scheduleRefresh(() => get().refreshSession());
+  }
+},
 
-  logout: () => {
-    if (refreshTimer) {
-      clearTimeout(refreshTimer);
-      refreshTimer = null;
-    }
-    delete api.defaults.headers.common["Authorization"];
-    set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
-  },
+logout: () => {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+  set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
+},
 
-  refreshSession: async (): Promise<boolean> => {
-    const { refreshToken } = get();
-    if (!refreshToken) return false;
-    try {
-      const response = await api.post("/api/auth/refresh", { refreshToken });
-      const { token: newToken } = response.data.data;
-      set({ token: newToken });
-      api.defaults.headers.common["Authorization"] = `Bearer ${newToken}`;
-      console.log("✅ Token renovado automáticamente");
-      return true;
-    } catch (error) {
-      console.log("❌ No se pudo renovar el token — cerrando sesión");
-      get().logout();
-      return false;
-    }
-  },
+refreshSession: async (): Promise<boolean> => {
+  const { refreshToken } = get();
+  if (!refreshToken) return false;
+  try {
+    const response = await api.post("/api/auth/refresh", { refreshToken });
+    const { token: newToken } = response.data.data;
+    set({ token: newToken });
+    console.log("✅ Token renovado automáticamente");
+    return true;
+  } catch (error) {
+    console.log("❌ No se pudo renovar el token — cerrando sesión");
+    get().logout();
+    return false;
+  }
+},
 }));
