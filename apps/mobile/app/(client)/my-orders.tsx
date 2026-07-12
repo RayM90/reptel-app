@@ -235,6 +235,11 @@ export default function MyOrdersScreen() {
               const frontendPaymentMethod =
                 paymentMethodToFrontend[order.paymentMethod] ?? 'PAGO_MOVIL'
 
+              const itemsSubtotal = order.items.reduce(
+                (sum, item) => sum + Number(item.subtotal),
+                0
+              )
+
               const confirmedSubmissions = order.paymentSubmissions.filter(
                 (s) => s.status === 'CONFIRMED'
               )
@@ -378,26 +383,31 @@ export default function MyOrdersScreen() {
                       ))}
 
                       {/* Desglose de costos adicionales */}
-                      {(order.installationCost != null || order.deliveryCost != null) && (
-                        <View style={styles.breakdownContainer}>
-                          {order.installationCost != null && (
-                            <View style={styles.breakdownRow}>
-                              <Text style={styles.breakdownLabel}>Instalación</Text>
-                              <Text style={styles.breakdownValue}>
-                                +${Number(order.installationCost).toFixed(2)}
-                              </Text>
-                            </View>
-                          )}
-                          {order.deliveryCost != null && (
-                            <View style={styles.breakdownRow}>
-                              <Text style={styles.breakdownLabel}>Costo de delivery</Text>
-                              <Text style={styles.breakdownValue}>
-                                +${Number(order.deliveryCost).toFixed(2)}
-                              </Text>
-                            </View>
-                          )}
+                      <View style={styles.breakdownContainer}>
+                        <View style={styles.breakdownRow}>
+                          <Text style={styles.breakdownLabel}>Subtotal</Text>
+                          <Text style={styles.breakdownValue}>
+                            ${itemsSubtotal.toFixed(2)}
+                          </Text>
                         </View>
-                      )}
+                        {order.installationCost != null && (
+                          <View style={styles.breakdownRow}>
+                            <Text style={styles.breakdownLabel}>Instalación</Text>
+                            <Text style={styles.breakdownValue}>
+                              +${Number(order.installationCost).toFixed(2)}
+                            </Text>
+                          </View>
+                        )}
+                        {order.deliveryCost != null && (
+                          <View style={styles.breakdownRow}>
+                            <Text style={styles.breakdownLabel}>Costo de delivery</Text>
+                            <Text style={styles.breakdownValue}>
+                              +${Number(order.deliveryCost).toFixed(2)}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
 
                       {/* Historial de abonos */}
                       {order.paymentSubmissions.length > 0 ? (
