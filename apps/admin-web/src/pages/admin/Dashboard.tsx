@@ -83,11 +83,13 @@ function PaymentSubmissionsView({
   const confirmedTotal = submissions
     .filter((s) => s.status === 'CONFIRMED')
     .reduce((sum, s) => sum + Number(s.amount), 0)
+  const remaining = Number(total) - confirmedTotal
 
   return (
     <div>
       <p className="form-hint" style={{ marginBottom: 8 }}>
         <strong>Recibido: ${confirmedTotal.toFixed(2)} de ${Number(total).toFixed(2)}</strong>
+        {remaining > 0.009 && <span> · Restante: ${remaining.toFixed(2)}</span>}
       </p>
       {submissions.map((s) => (
         <div
