@@ -17,6 +17,16 @@ import { useToastStore } from '../../src/store/toast.store'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
+// Filtros de entrada — restringen los campos numéricos a lo que realmente
+// deben contener, en vez de solo cambiar el tipo de teclado mostrado.
+const onlyDigits = (text: string) => text.replace(/[^0-9]/g, '')
+const onlyDecimal = (text: string) => {
+  const cleaned = text.replace(/[^0-9.]/g, '')
+  const parts = cleaned.split('.')
+  if (parts.length <= 2) return cleaned
+  return parts[0] + '.' + parts.slice(1).join('')
+}
+
 export default function UploadAdvanceReceiptScreen() {
   const router = useRouter()
   const { orderId, paymentMethod, total } = useLocalSearchParams<{
@@ -32,7 +42,9 @@ export default function UploadAdvanceReceiptScreen() {
   const [referencia, setReferencia] = useState('')
   const [monto, setMonto] = useState(total || '')
   const [titular, setTitular] = useState('')
-  const [cedula, setCedula] = useState('')
+  const [cedulaLetter, setCedulaLetter] = useState<'V' | 'E'>('V')
+  const [cedulaNumber, setCedulaNumber] = useState('')
+  const cedula = cedulaNumber ? `${cedulaLetter}-${cedulaNumber}` : ''
   const [correo, setCorreo] = useState('')
   const [uid, setUid] = useState('')
   const [nombre, setNombre] = useState('')
@@ -126,8 +138,8 @@ export default function UploadAdvanceReceiptScreen() {
             {paymentMethod === 'PAGO_MOVIL' && (
               <>
                 <Field label="Banco" value={banco} onChangeText={setBanco} placeholder="Ej. Banesco" />
-                <Field label="Teléfono emisor" value={telefono} onChangeText={setTelefono} placeholder="Ej. 0414-1234567" keyboardType="phone-pad" />
-                <Field label="Últimos 4 dígitos de la referencia" value={referencia} onChangeText={setReferencia} placeholder="Ej. 1234" keyboardType="number-pad" maxLength={4} />
+                <Field label="Teléfono emisor" value={telefono} onChangeText={(text) => setTelefono(onlyDigits(text))} placeholder="Ej. 0414-1234567" keyboardType="phone-pad" />
+                <Field label="Últimos 4 dígitos de la referencia" value={referencia} onChangeText={(text) => setReferencia(onlyDigits(text))} placeholder="Ej. 1234" keyboardType="number-pad" maxLength={4} />
               </>
             )}
 
@@ -135,20 +147,46 @@ export default function UploadAdvanceReceiptScreen() {
               <>
                 <Field label="Banco" value={banco} onChangeText={setBanco} placeholder="Ej. Banesco" />
                 <Field label="Nombre del titular" value={titular} onChangeText={setTitular} placeholder="Nombre completo" />
-                <Field label="Cédula" value={cedula} onChangeText={setCedula} placeholder="Ej. V-12345678" />
-                <Field label="Número de referencia" value={referencia} onChangeText={setReferencia} placeholder="Referencia de la transferencia" keyboardType="number-pad" />
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Cédula</Text>
+                  <View style={styles.cedulaRow}>
+                    <View style={styles.cedulaLetterGroup}>
+                      <TouchableOpacity
+                        style={[styles.cedulaLetterBtn, cedulaLetter === 'V' && styles.cedulaLetterBtnActive]}
+                        onPress={() => setCedulaLetter('V')}
+                      >
+                        <Text style={[styles.cedulaLetterText, cedulaLetter === 'V' && styles.cedulaLetterTextActive]}>V</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.cedulaLetterBtn, cedulaLetter === 'E' && styles.cedulaLetterBtnActive]}
+                        onPress={() => setCedulaLetter('E')}
+                      >
+                        <Text style={[styles.cedulaLetterText, cedulaLetter === 'E' && styles.cedulaLetterTextActive]}>E</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <TextInput
+                      style={styles.cedulaInput}
+                      value={cedulaNumber}
+                      onChangeText={(text) => setCedulaNumber(onlyDigits(text))}
+                      placeholder="12345678"
+                      placeholderTextColor="#9aa5cc"
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                </View>
+                <Field label="Número de referencia" value={referencia} onChangeText={(text) => setReferencia(onlyDigits(text))} placeholder="Referencia de la transferencia" keyboardType="number-pad" />
               </>
             )}
 
             {paymentMethod === 'BINANCE' && (
               <>
                 <Field label="Correo de la cuenta" value={correo} onChangeText={setCorreo} placeholder="correo@ejemplo.com" keyboardType="email-address" />
-                <Field label="UID de Binance" value={uid} onChangeText={setUid} placeholder="Ej. 123456789" />
+                <Field label="UID de Binance" value={uid} onChangeText={(text) => setUid(onlyDigits(text))} placeholder="Ej. 123456789" />
                 <Field label="Nombre del titular" value={nombre} onChangeText={setNombre} placeholder="Nombre completo" />
               </>
             )}
 
-            <Field label="Monto enviado ($)" value={monto} onChangeText={setMonto} placeholder="Ej. 25.00" keyboardType="decimal-pad" />
+            <Field label="Monto enviado ($)" value={monto} onChangeText={(text) => setMonto(onlyDecimal(text))} placeholder="Ej. 25.00" keyboardType="decimal-pad" />
 
             {montoInsuficiente && (
               <View style={styles.warningCard}>
@@ -227,6 +265,31 @@ const styles = StyleSheet.create({
   fieldGroup: { marginBottom: 16 },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#17247a', marginBottom: 6 },
   fieldInput: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#d0d8ff',
+    fontSize: 14,
+    color: '#17247a',
+  },
+  cedulaRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  cedulaLetterGroup: { flexDirection: 'row', gap: 6 },
+  cedulaLetterBtn: {
+    width: 44,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#d0d8ff',
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cedulaLetterBtnActive: { borderColor: '#17247a', backgroundColor: '#17247a' },
+  cedulaLetterText: { fontSize: 15, fontWeight: '700', color: '#17247a' },
+  cedulaLetterTextActive: { color: '#fff' },
+  cedulaInput: {
+    flex: 1,
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 14,
