@@ -12,6 +12,7 @@ interface Order {
   status: string
   problem: string
   budget: string | null
+  deliveredAt: string | null
   client: { name: string; lastName: string }
   technician: { id: string; name: string } | null
   advancePaymentDetails: Record<string, string> | null
@@ -39,7 +40,11 @@ interface ProductOrder {
   total: string
   client: { name: string; lastName: string }
   items: ProductOrderItem[]
-  delivery: { agent: { name: string } } | null
+  delivery: {
+    agent: { name: string }
+    deliveryCommission: string | null
+    deliveredAt: string | null
+  } | null
   paymentSubmissions: PaymentSubmission[]
 }
 
@@ -136,6 +141,7 @@ export default function Dashboard() {
   const [error, setError] = useState('')
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set())
   const [newProductOrderIds, setNewProductOrderIds] = useState<Set<string>>(new Set())
+  const [view, setView] = useState<'activos' | 'entregados'>('activos')
   const showToast = useToastStore((state) => state.showToast)
   const confirmDialog = useConfirm()
 
@@ -310,6 +316,53 @@ export default function Dashboard() {
     (po) => po.status !== 'DELIVERED' && po.status !== 'CANCELLED'
   )
 
+  // Total de presupuestos en curso — servicios activos aún no completados,
+  // por eso no tienen comisión todavía (esa solo se calcula al entregar).
+  const activeBudgetTotal = activeOrders.reduce(
+    (sum, o) => sum + (o.budget ? Number(o.budget) : 0),
+    0
+  )
+
+  // Historial — pedidos ya entregados o cancelados, para auditoría de quién
+  // atendió cada uno (técnico o motorizado) y cuánto ganó de comisión.
+  const completedOrders = orders.filter(
+    (o) => o.status === 'DELIVERED' || o.status === 'CANCELLED'
+  )
+
+  const completedProductOrders = productOrders.filter(
+    (po) => po.status === 'DELIVERED' || po.status === 'CANCELLED'
+  )
+
+  // Totales del historial — para ver de un vistazo cuánto se ha movido en
+  // comisiones y ventas sin tener que sumar fila por fila.
+  const totalTechnicianCommission = completedOrders.reduce(
+    (sum, o) => sum + (o.technicianCommission ? Number(o.technicianCommission) : 0),
+    0
+  )
+  const totalBudget = completedOrders.reduce(
+    (sum, o) => sum + (o.budget ? Number(o.budget) : 0),
+    0
+  )
+  const totalProductSales = completedProductOrders.reduce(
+    (sum, po) => sum + Number(po.total),
+    0
+  )
+  const totalDeliveryCommission = completedProductOrders.reduce(
+    (sum, po) => sum + (po.delivery?.deliveryCommission ? Number(po.delivery.deliveryCommission) : 0),
+    0
+  )
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '—'
+    return new Date(dateStr).toLocaleDateString('es-VE', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
   if (loading) return <div className="page-container"><p>Cargando...</p></div>
   if (error) return <div className="page-container"><p className="alert-error">{error}</p></div>
 
@@ -321,6 +374,23 @@ export default function Dashboard() {
         ↻ Actualizar
       </button>
 
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <button
+          className={view === 'activos' ? 'btn btn-primary' : 'btn btn-outline'}
+          onClick={() => setView('activos')}
+        >
+          Activos
+        </button>
+        <button
+          className={view === 'entregados' ? 'btn btn-primary' : 'btn btn-outline'}
+          onClick={() => setView('entregados')}
+        >
+          📦 Pedidos Entregados
+        </button>
+      </div>
+
+      {view === 'activos' ? (
+        <>
       <section className="card">
         <h2>Servicios Técnicos Activos ({activeOrders.length})</h2>
         {activeOrders.length === 0 ? (
@@ -395,6 +465,13 @@ export default function Dashboard() {
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>Total presupuesto</td>
+                  <td style={{ fontWeight: 700 }}>${activeBudgetTotal.toFixed(2)}</td>
+                  <td colSpan={4}></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}
@@ -449,6 +526,118 @@ export default function Dashboard() {
           </div>
         )}
       </section>
+        </>
+      ) : (
+        <>
+      <section className="card">
+        <h2>Servicios Técnicos — Historial ({completedOrders.length})</h2>
+        <div className="table-wrapper">
+          <table className="styled-table">
+            <thead>
+              <tr>
+                <th>Orden</th>
+                <th>Cliente</th>
+                <th>Estado</th>
+                <th>Técnico</th>
+                <th>Presupuesto</th>
+                <th>Comisión técnico</th>
+                <th>Fecha entrega</th>
+              </tr>
+            </thead>
+            <tbody>
+              {completedOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={7}>Aún no hay servicios entregados o cancelados</td>
+                </tr>
+              ) : (
+                completedOrders.map((order) => (
+                  <tr key={order.id}>
+                    <td>{order.orderNumber}</td>
+                    <td>{order.client.name} {order.client.lastName}</td>
+                    <td><span className="badge">{order.status}</span></td>
+                    <td>{order.technician?.name || 'Sin asignar'}</td>
+                    <td>{order.budget ? `$${order.budget}` : '—'}</td>
+                    <td>{order.technicianCommission ? `$${order.technicianCommission}` : '—'}</td>
+                    <td>{formatDate(order.deliveredAt)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>Totales</td>
+                <td style={{ fontWeight: 700 }}>${totalBudget.toFixed(2)}</td>
+                <td style={{ fontWeight: 700 }}>${totalTechnicianCommission.toFixed(2)}</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700 }}>
+                  Total general (presupuesto + comisión)
+                </td>
+                <td colSpan={2} style={{ fontWeight: 700 }}>
+                  ${(totalBudget + totalTechnicianCommission).toFixed(2)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+
+      <section className="card">
+        <h2>Pedidos de Tienda — Historial ({completedProductOrders.length})</h2>
+        {completedProductOrders.length === 0 ? (
+          <p>Aún no hay pedidos entregados o cancelados</p>
+        ) : (
+          <div className="table-wrapper">
+            <table className="styled-table">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Productos</th>
+                  <th>Total</th>
+                  <th>Estado</th>
+                  <th>Motorizado</th>
+                  <th>Comisión motorizado</th>
+                  <th>Fecha entrega</th>
+                </tr>
+              </thead>
+              <tbody>
+                {completedProductOrders.map((po) => (
+                  <tr key={po.id}>
+                    <td>{po.client.name} {po.client.lastName}</td>
+                    <td>{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
+                    <td>${po.total}</td>
+                    <td><span className="badge">{po.status}</span></td>
+                    <td>{po.delivery?.agent.name || 'Sin asignar'}</td>
+                    <td>{po.delivery?.deliveryCommission ? `$${po.delivery.deliveryCommission}` : '—'}</td>
+                    <td>{formatDate(po.delivery?.deliveredAt ?? null)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={2} style={{ textAlign: 'right', fontWeight: 700 }}>Totales</td>
+                  <td style={{ fontWeight: 700 }}>${totalProductSales.toFixed(2)}</td>
+                  <td></td>
+                  <td></td>
+                  <td style={{ fontWeight: 700 }}>${totalDeliveryCommission.toFixed(2)}</td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700 }}>
+                    Total general (ventas + comisión)
+                  </td>
+                  <td colSpan={2} style={{ fontWeight: 700 }}>
+                    ${(totalProductSales + totalDeliveryCommission).toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </section>
+        </>
+      )}
     </div>
   )
 }
