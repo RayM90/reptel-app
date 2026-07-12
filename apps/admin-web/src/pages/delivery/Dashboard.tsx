@@ -72,6 +72,12 @@ function getWeekRange(date = new Date()) {
   return { monday, saturday }
 }
 
+function getMonthRange(date = new Date()) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0)
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999)
+  return { start, end }
+}
+
 export default function DeliveryDashboard() {
   const user = useAuthStore((state) => state.user)
   const showToast = useToastStore((state) => state.showToast)
@@ -180,6 +186,18 @@ export default function DeliveryDashboard() {
     (sum, d) => sum + Number(d.deliveryCommission),
     0
   )
+
+  const { start: monthStart, end: monthEnd } = getMonthRange()
+  const monthlyDeliveries = completedWithCommission.filter((d) => {
+    if (!d.deliveredAt) return false
+    const dDate = new Date(d.deliveredAt)
+    return dDate >= monthStart && dDate <= monthEnd
+  })
+  const monthlyCommission = monthlyDeliveries.reduce(
+    (sum, d) => sum + Number(d.deliveryCommission),
+    0
+  )
+  const monthLabel = monthStart.toLocaleDateString('es-VE', { month: 'long', year: 'numeric' })
 
   if (loading) return <div className="page-container"><p>Cargando...</p></div>
   if (error) return <div className="page-container"><p className="alert-error">{error}</p></div>
@@ -296,9 +314,9 @@ export default function DeliveryDashboard() {
       {tab === 'resumen' && (
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
         <div className="card">
-          <h3>Resumen histórico</h3>
-          <p>Entregas completadas: {completedDeliveries.length}</p>
-          <p>Comisión total ganada: ${totalCommission.toFixed(2)}</p>
+          <h3>Resumen mensual — {monthLabel}</h3>
+          <p>Entregas completadas: {monthlyDeliveries.length}</p>
+          <p>Comisión ganada: ${monthlyCommission.toFixed(2)}</p>
         </div>
         <div className="card">
           <h3>Corte semanal (lun. a sáb.)</h3>
