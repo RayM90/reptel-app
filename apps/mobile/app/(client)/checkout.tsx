@@ -268,6 +268,11 @@ export default function CheckoutScreen() {
               </TouchableOpacity>
             )}
 
+            <View style={styles.installationCostRow}>
+              <Text style={styles.installationCostLabel}>Subtotal</Text>
+              <Text style={styles.installationCostValue}>${totalPrice.toFixed(2)}</Text>
+            </View>
+
             {wantsInstallation && (
               <View style={styles.installationCostRow}>
                 <Text style={styles.installationCostLabel}>Instalación</Text>
