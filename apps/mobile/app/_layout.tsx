@@ -3,9 +3,14 @@ import { Stack, router } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { StatusBar } from 'expo-status-bar'
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native'
+import { useFonts } from 'expo-font'
+import * as SplashScreen from 'expo-splash-screen'
+import { fontsToLoad } from '../src/theme/fonts'
 import { useAuthStore } from '../src/store/auth.store'
 import Toast from '../src/components/Toast'
 import ConfirmDialog from '../src/components/ConfirmDialog'
+
+SplashScreen.preventAutoHideAsync().catch(() => {})
 
 const queryClient = new QueryClient()
 
@@ -35,6 +40,14 @@ function HomeButton() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded, fontsError] = useFonts(fontsToLoad)
+
+  useEffect(() => {
+    if (fontsLoaded || fontsError) {
+      SplashScreen.hideAsync().catch(() => {})
+    }
+  }, [fontsLoaded, fontsError])
+
   useEffect(() => {
     if (useAuthStore.persist.hasHydrated()) {
       useAuthStore.getState().resumeSession()
@@ -45,6 +58,10 @@ export default function RootLayout() {
       return unsubscribe
     }
   }, [])
+
+  if (!fontsLoaded && !fontsError) {
+    return null
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
