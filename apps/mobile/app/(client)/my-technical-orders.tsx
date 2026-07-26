@@ -72,29 +72,29 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 }
 
 const STATUS_COLOR: Record<OrderStatus, string> = {
-  PENDING_PAYMENT: '#b45309',
-  RECEIVED: '#1d4ed8',
-  DIAGNOSING: '#9333ea',
-  WAITING_APPROVAL: '#b45309',
-  APPROVED: '#15803d',
-  REPAIRING: '#7c3aed',
-  WAITING_PART: '#c2410c',
-  READY: '#0f766e',
-  DELIVERED: '#15803d',
-  CANCELLED: '#b91c1c',
+  PENDING_PAYMENT: '#6B6B75',
+  RECEIVED: '#6B6B75',
+  DIAGNOSING: '#4B3E96',
+  WAITING_APPROVAL: '#4B3E96',
+  APPROVED: '#4B3E96',
+  REPAIRING: '#4B3E96',
+  WAITING_PART: '#4B3E96',
+  READY: '#1E7A3D',
+  DELIVERED: '#1E7A3D',
+  CANCELLED: '#B3261E',
 }
 
 const STATUS_BG: Record<OrderStatus, string> = {
-  PENDING_PAYMENT: '#fef3c7',
-  RECEIVED: '#dbeafe',
-  DIAGNOSING: '#f3e8ff',
-  WAITING_APPROVAL: '#fef3c7',
-  APPROVED: '#dcfce7',
-  REPAIRING: '#ede9fe',
-  WAITING_PART: '#ffedd5',
-  READY: '#ccfbf1',
-  DELIVERED: '#dcfce7',
-  CANCELLED: '#fee2e2',
+  PENDING_PAYMENT: '#EFEAE2',
+  RECEIVED: '#EFEAE2',
+  DIAGNOSING: '#ECEAF3',
+  WAITING_APPROVAL: '#ECEAF3',
+  APPROVED: '#ECEAF3',
+  REPAIRING: '#ECEAF3',
+  WAITING_PART: '#ECEAF3',
+  READY: '#E3F3E9',
+  DELIVERED: '#E3F3E9',
+  CANCELLED: '#FBE9E7',
 }
 
 export default function MyTechnicalOrdersScreen() {

@@ -68,17 +68,17 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 }
 
 const STATUS_COLOR: Record<OrderStatus, string> = {
-  PENDING: '#b45309',
-  CONFIRMED: '#15803d',
-  DELIVERED: '#17247a',
-  CANCELLED: '#b91c1c',
+  PENDING: '#6B6B75',
+  CONFIRMED: '#4B3E96',
+  DELIVERED: '#1E7A3D',
+  CANCELLED: '#B3261E',
 }
 
 const STATUS_BG: Record<OrderStatus, string> = {
-  PENDING: '#fef3c7',
-  CONFIRMED: '#dcfce7',
-  DELIVERED: '#e0e7ff',
-  CANCELLED: '#fee2e2',
+  PENDING: '#EFEAE2',
+  CONFIRMED: '#ECEAF3',
+  DELIVERED: '#E3F3E9',
+  CANCELLED: '#FBE9E7',
 }
 
 const SUBMISSION_LABEL: Record<SubmissionStatus, string> = {
@@ -88,9 +88,9 @@ const SUBMISSION_LABEL: Record<SubmissionStatus, string> = {
 }
 
 const SUBMISSION_COLOR: Record<SubmissionStatus, string> = {
-  PENDING: '#b45309',
-  CONFIRMED: '#15803d',
-  REJECTED: '#b91c1c',
+  PENDING: '#6B6B75',
+  CONFIRMED: '#4B3E96',
+  REJECTED: '#B3261E',
 }
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -202,7 +202,7 @@ export default function MyOrdersScreen() {
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#17247a" />
+            <ActivityIndicator size="large" color="#23262F" />
             <Text style={styles.loadingText}>Cargando pedidos...</Text>
           </View>
         ) : orders.length === 0 ? (
@@ -522,15 +522,15 @@ const styles = StyleSheet.create({
   },
   backBtn: { marginBottom: 8 },
   backText: { color: '#5364ad', fontSize: 14, fontWeight: '500' },
-  title: { fontSize: 26, fontWeight: '800', color: '#17247a', marginBottom: 2 },
+  title: { fontSize: 26, fontWeight: '800', color: '#23262F', marginBottom: 2 },
   subtitle: { fontSize: 14, color: '#5364ad' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   loadingText: { fontSize: 14, color: '#5364ad' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
   emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyTitle: { fontSize: 22, fontWeight: '800', color: '#17247a', marginBottom: 8 },
+  emptyTitle: { fontSize: 22, fontWeight: '800', color: '#23262F', marginBottom: 8 },
   emptySubtitle: { fontSize: 14, color: '#5364ad', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  goToStoreBtn: { backgroundColor: '#17247a', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32 },
+  goToStoreBtn: { backgroundColor: '#23262F', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32 },
   goToStoreBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   scrollContent: { paddingHorizontal: 22, paddingBottom: 40 },
   refreshBtn: { alignSelf: 'flex-end', marginBottom: 12 },
@@ -554,7 +554,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   orderHeaderLeft: { flex: 1 },
-  orderId: { fontSize: 14, fontWeight: '800', color: '#17247a' },
+  orderId: { fontSize: 14, fontWeight: '800', color: '#23262F' },
   orderDate: { fontSize: 12, color: '#9aa5cc', marginTop: 2 },
   expandArrow: { fontSize: 12, color: '#9aa5cc', marginLeft: 8 },
   statusRow: {
@@ -585,7 +585,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   totalLabel: { fontSize: 13, color: '#5364ad', fontWeight: '600' },
-  totalValue: { fontSize: 18, fontWeight: '900', color: '#17247a' },
+  totalValue: { fontSize: 18, fontWeight: '900', color: '#23262F' },
   progressText: { fontSize: 12, color: '#5364ad', marginTop: 8, fontWeight: '600' },
   progressTextInline: { fontSize: 12, color: '#5364ad', fontWeight: '600', marginBottom: 10 },
   expandedContent: {
@@ -596,8 +596,8 @@ const styles = StyleSheet.create({
   },
   detailRow: { marginBottom: 10 },
   detailLabel: { fontSize: 11, color: '#9aa5cc', fontWeight: '600', textTransform: 'uppercase', marginBottom: 2 },
-  detailValue: { fontSize: 13, color: '#17247a', lineHeight: 18 },
-  itemsTitle: { fontSize: 13, fontWeight: '700', color: '#17247a', marginBottom: 8, marginTop: 4 },
+  detailValue: { fontSize: 13, color: '#23262F', lineHeight: 18 },
+  itemsTitle: { fontSize: 13, fontWeight: '700', color: '#23262F', marginBottom: 8, marginTop: 4 },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -608,9 +608,9 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   itemInfo: { flex: 1 },
-  itemName: { fontSize: 13, fontWeight: '600', color: '#17247a' },
+  itemName: { fontSize: 13, fontWeight: '600', color: '#23262F' },
   itemQty: { fontSize: 11, color: '#9aa5cc', marginTop: 2 },
-  itemSubtotal: { fontSize: 14, fontWeight: '800', color: '#17247a' },
+  itemSubtotal: { fontSize: 14, fontWeight: '800', color: '#23262F' },
   breakdownContainer: {
     marginTop: 4,
     marginBottom: 10,
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   breakdownLabel: { fontSize: 13, color: '#5364ad', fontWeight: '600' },
-  breakdownValue: { fontSize: 13, color: '#17247a', fontWeight: '700' },
+  breakdownValue: { fontSize: 13, color: '#23262F', fontWeight: '700' },
   receiptContainer: { marginTop: 12 },
   submissionCard: {
     backgroundColor: '#f8f9ff',
@@ -639,7 +639,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   submissionStatus: { fontSize: 12, fontWeight: '700' },
-  submissionAmount: { fontSize: 14, fontWeight: '800', color: '#17247a' },
+  submissionAmount: { fontSize: 14, fontWeight: '800', color: '#23262F' },
   submissionDate: { fontSize: 11, color: '#9aa5cc', marginTop: 2 },
   submissionRejection: { fontSize: 12, color: '#b91c1c', marginTop: 4 },
   noReceiptCard: {
@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   uploadBtn: {
-    backgroundColor: '#17247a',
+    backgroundColor: '#23262F',
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',
@@ -679,12 +679,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  timelineDotDone: { backgroundColor: '#17247a', borderColor: '#17247a' },
+  timelineDotDone: { backgroundColor: '#23262F', borderColor: '#23262F' },
   timelineCheck: { color: '#fff', fontSize: 11, fontWeight: '800' },
   timelineLine: { width: 2, flex: 1, minHeight: 24, backgroundColor: '#d0d8ff', marginTop: 2 },
-  timelineLineDone: { backgroundColor: '#17247a' },
+  timelineLineDone: { backgroundColor: '#23262F' },
   timelineTextCol: { flex: 1, marginLeft: 10, paddingBottom: 16 },
   timelineLabel: { fontSize: 13, color: '#9aa5cc', fontWeight: '600' },
-  timelineLabelDone: { color: '#17247a' },
+  timelineLabelDone: { color: '#23262F' },
   timelineDate: { fontSize: 11, color: '#9aa5cc', marginTop: 2 },
 })
