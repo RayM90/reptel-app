@@ -5,6 +5,7 @@ let authToken: string
 let createdOrderId: string
 let clientId: string
 let deviceId: string
+let existingOrderNumber: string
 
 beforeAll(async () => {
   // Obtener token de admin
@@ -13,12 +14,12 @@ beforeAll(async () => {
     .send({ email: 'admin@reptel.com', password: 'RepTel2024*' })
   authToken = res.body.data.token
 
-  // Obtener usuarios — usar el admin como cliente para el test
-  const usersRes = await request(app)
-    .get('/api/users')
+  // Obtener un cliente real (Client, no User) para crear órdenes de prueba
+  const clientsRes = await request(app)
+    .get('/api/clients')
     .set('Authorization', `Bearer ${authToken}`)
-  const users = usersRes.body.data || []
-  clientId = users[0]?.id  // usar el primer usuario disponible
+  const clients = clientsRes.body.data || []
+  clientId = clients[0]?.id
 
   // Obtener dispositivos
   const devicesRes = await request(app)
@@ -27,8 +28,16 @@ beforeAll(async () => {
   const devices = devicesRes.body.data || []
   deviceId = devices[0]?.id
 
+  // Obtener un número de orden real existente para el test de tracking
+  const ordersRes = await request(app)
+    .get('/api/orders')
+    .set('Authorization', `Bearer ${authToken}`)
+  const orders = ordersRes.body.data || []
+  existingOrderNumber = orders[0]?.orderNumber
+
   console.log('clientId:', clientId)
   console.log('deviceId:', deviceId)
+  console.log('existingOrderNumber:', existingOrderNumber)
 }, 20000)
 
 // ── GET /api/orders ────────────────────────────────────────────────────────
@@ -37,6 +46,7 @@ describe('Orders — GET /api/orders', () => {
   it('debe retornar 200 y lista de órdenes', async () => {
     const res = await request(app)
       .get('/api/orders')
+      .set('Authorization', `Bearer ${authToken}`)
 
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
@@ -49,8 +59,13 @@ describe('Orders — GET /api/orders', () => {
 describe('Orders — GET /api/orders/track/:orderNumber', () => {
 
   it('debe retornar 200 con número de orden válido', async () => {
+    if (!existingOrderNumber) {
+      console.warn('Saltando: no hay ninguna orden existente para probar tracking')
+      return
+    }
+
     const res = await request(app)
-      .get('/api/orders/track/REP-260518-9027')
+      .get(`/api/orders/track/${existingOrderNumber}`)
 
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
