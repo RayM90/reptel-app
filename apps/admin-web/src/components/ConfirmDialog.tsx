@@ -15,12 +15,31 @@ export default function ConfirmDialog() {
   useEffect(() => {
     if (!isOpen) return
 
-    // Foco inicial: el campo de texto si existe, si no el propio contenedor
-    firstFieldRef.current?.focus()
+    if (firstFieldRef.current) {
+      firstFieldRef.current.focus()
+    } else {
+      boxRef.current?.focus()
+    }
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         handleCancel()
+        return
+      }
+      if (e.key === 'Tab') {
+        const focusables = boxRef.current?.querySelectorAll<HTMLElement>(
+          'button, textarea, input, [tabindex]:not([tabindex="-1"])'
+        )
+        if (!focusables || focusables.length === 0) return
+        const first = focusables[0]
+        const last = focusables[focusables.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
       }
     }
 
@@ -44,6 +63,7 @@ export default function ConfirmDialog() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
+        tabIndex={-1}
       >
         <h3 id="confirm-dialog-title">{options.title}</h3>
 
