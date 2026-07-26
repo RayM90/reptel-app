@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: 16,
-    color: '#5565ad',
+    color: colors.secondary,
     fontWeight: '500',
     textAlign: 'center',
   },
