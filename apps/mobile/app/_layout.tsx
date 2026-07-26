@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Stack, router } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { StatusBar } from 'expo-status-bar'
@@ -34,6 +35,10 @@ function HomeButton() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    useAuthStore.getState().resumeSession()
+  }, [])
+
   return (
     <QueryClientProvider client={queryClient}>
       {/* View envolvente para que Toast y ConfirmDialog puedan superponerse
