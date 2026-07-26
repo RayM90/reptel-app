@@ -367,11 +367,13 @@ export default function Dashboard() {
 
   return (
     <div className="page-container">
-      <h1>Panel de Administrador</h1>
-      <p><Link to="/admin/create-staff">➕ Crear usuario de personal</Link></p>
-      <button className="btn btn-outline" onClick={() => fetchData()} style={{ marginBottom: 16 }}>
-        ↻ Actualizar
-      </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <h1>Panel de Administrador</h1>
+        <button className="btn btn-secondary" onClick={() => fetchData()}>
+          ↻ Actualizar
+        </button>
+      </div>
+      <p><Link to="/admin/create-staff" className="btn btn-accent">➕ Crear usuario de personal</Link></p>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         <button
