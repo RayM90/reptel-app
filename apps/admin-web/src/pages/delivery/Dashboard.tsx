@@ -5,6 +5,7 @@ import { useAuthStore } from '../../store/auth.store'
 import { useToastStore } from '../../store/toast.store'
 import { useConfirm } from '../../hooks/useConfirm'
 import { POLL_INTERVAL_MS } from '../../config/constants'
+import { getStatusBadge, badgeClassName } from '../../utils/statusBadge'
 
 type DeliveryStatus =
   | 'ASSIGNED'
@@ -252,7 +253,9 @@ export default function DeliveryDashboard() {
                     <strong>Pedido #{order.id.slice(0, 8)}</strong> — {order.client.name} {order.client.lastName}
                     {isNew && <span className="badge" style={NEW_BADGE_STYLE}>🆕 Nuevo</span>}
                     <br />
-                    <span className="badge">{delivery.status}</span> · Total: ${order.total}
+                    <span className={badgeClassName(getStatusBadge('delivery', delivery.status).variant)}>
+                      {getStatusBadge('delivery', delivery.status).label}
+                    </span> · Total: ${order.total}
                   </div>
                   <span>{isExpanded ? '▲' : '▼'}</span>
                 </div>

@@ -5,6 +5,7 @@ import { api } from '../../services/api'
 import { useToastStore } from '../../store/toast.store'
 import { useConfirm } from '../../hooks/useConfirm'
 import { POLL_INTERVAL_MS } from '../../config/constants'
+import { getStatusBadge, badgeClassName } from '../../utils/statusBadge'
 
 interface Order {
   id: string
@@ -61,12 +62,6 @@ function PaymentDetailsView({ details }: { details: Record<string, string> | nul
   )
 }
 
-const SUBMISSION_STATUS_LABEL: Record<PaymentSubmission['status'], string> = {
-  PENDING: 'Pendiente',
-  CONFIRMED: 'Confirmado',
-  REJECTED: 'Rechazado',
-}
-
 function PaymentSubmissionsView({
   submissions,
   total,
@@ -101,7 +96,9 @@ function PaymentSubmissionsView({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span className="badge">{SUBMISSION_STATUS_LABEL[s.status]}</span>
+            <span className={badgeClassName(getStatusBadge('partialPayment', s.status).variant)}>
+              {getStatusBadge('partialPayment', s.status).label}
+            </span>
             <strong>${Number(s.amount).toFixed(2)}</strong>
           </div>
           <PaymentDetailsView details={s.paymentDetails} />
@@ -428,7 +425,11 @@ export default function Dashboard() {
                     </td>
                     <td>{order.client.name} {order.client.lastName}</td>
                     <td>{order.problem}</td>
-                    <td><span className="badge">{order.status}</span></td>
+                    <td>
+                      <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
+                        {getStatusBadge('order', order.status).label}
+                      </span>
+                    </td>
                     <td>{order.budget ? `$${order.budget}` : '—'}</td>
                     <td>{order.technician?.name || 'Sin asignar'}</td>
                     <td><PaymentDetailsView details={order.advancePaymentDetails} /></td>
@@ -511,7 +512,11 @@ export default function Dashboard() {
                     </td>
                     <td>{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
                     <td>${po.total}</td>
-                    <td><span className="badge">{po.status}</span></td>
+                    <td>
+                      <span className={badgeClassName(getStatusBadge('productOrder', po.status).variant)}>
+                        {getStatusBadge('productOrder', po.status).label}
+                      </span>
+                    </td>
                     <td>{po.delivery?.agent.name || 'Sin asignar'}</td>
                     <td>
                       <PaymentSubmissionsView
@@ -556,7 +561,11 @@ export default function Dashboard() {
                   <tr key={order.id}>
                     <td>{order.orderNumber}</td>
                     <td>{order.client.name} {order.client.lastName}</td>
-                    <td><span className="badge">{order.status}</span></td>
+                    <td>
+                      <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
+                        {getStatusBadge('order', order.status).label}
+                      </span>
+                    </td>
                     <td>{order.technician?.name || 'Sin asignar'}</td>
                     <td>{order.budget ? `$${order.budget}` : '—'}</td>
                     <td>{order.technicianCommission ? `$${order.technicianCommission}` : '—'}</td>
@@ -609,7 +618,11 @@ export default function Dashboard() {
                     <td>{po.client.name} {po.client.lastName}</td>
                     <td>{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
                     <td>${po.total}</td>
-                    <td><span className="badge">{po.status}</span></td>
+                    <td>
+                      <span className={badgeClassName(getStatusBadge('productOrder', po.status).variant)}>
+                        {getStatusBadge('productOrder', po.status).label}
+                      </span>
+                    </td>
                     <td>{po.delivery?.agent.name || 'Sin asignar'}</td>
                     <td>{po.delivery?.deliveryCommission ? `$${po.delivery.deliveryCommission}` : '—'}</td>
                     <td>{formatDate(po.delivery?.deliveredAt ?? null)}</td>
