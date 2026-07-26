@@ -89,7 +89,7 @@ const SUBMISSION_LABEL: Record<SubmissionStatus, string> = {
 
 const SUBMISSION_COLOR: Record<SubmissionStatus, string> = {
   PENDING: '#6B6B75',
-  CONFIRMED: '#4B3E96',
+  CONFIRMED: '#1E7A3D',
   REJECTED: '#B3261E',
 }
 

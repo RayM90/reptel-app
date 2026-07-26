@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 15,
-    color: colors.secondary,
+    color: colors.textMuted,
     fontWeight: '400',
   },
   primaryContainer: {
@@ -309,12 +309,12 @@ const styles = StyleSheet.create({
   },
   cardDescLeft: {
     fontSize: 12,
-    color: colors.secondary,
+    color: colors.textMuted,
     lineHeight: 16,
   },
   cardDesc: {
     fontSize: 11,
-    color: colors.secondary,
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 15,
   },
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    color: colors.secondary,
+    color: colors.textMuted,
     fontWeight: '500',
   },
 });
