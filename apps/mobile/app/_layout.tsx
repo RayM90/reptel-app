@@ -72,7 +72,7 @@ export default function RootLayout() {
         <Stack
           screenOptions={{
             headerShown: true,
-            headerStyle: { backgroundColor: '#1a73e8' },
+            headerStyle: { backgroundColor: '#23262F' },
             headerTintColor: '#fff',
             headerTitleStyle: { fontWeight: 'bold', color: '#fff' },
             headerLeft: () => <BackButton />,
