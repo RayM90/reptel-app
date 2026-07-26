@@ -1,18 +1,14 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
 import { api } from "../services/api";
 
 type Role =
   | "ADMIN"
-  | "CASHIER"
-  | "TECHNICIAN"
   | "TECHNICIAN_DELIVERY"
   | "DELIVERY"
-  | "CLIENT"
-  | "MANAGER"
-  | "SELLER"
-  | "SUPPORT";
+  | "CLIENT";
 
 interface User {
   id: string;
@@ -81,6 +77,7 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           console.log("❌ No se pudo renovar el token — cerrando sesión");
           get().logout();
+          router.replace('/welcome');
           return false;
         }
       },
