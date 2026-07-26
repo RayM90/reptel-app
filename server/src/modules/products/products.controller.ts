@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { getProductsWithCategories, getAllProducts } from './products.service';
+import { AuthRequest } from '../../middleware/auth.middleware';
+import { getProductsWithCategories, getAllProducts, getAllProductsForAdmin, getProductById } from './products.service';
 
 /**
  * GET /api/products
@@ -21,5 +22,28 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
     res.status(200).json({ success: true, data: categories });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Error al obtener categorías' });
+  }
+};
+
+export const getAdminProducts = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const products = await getAllProductsForAdmin();
+    res.status(200).json({ success: true, data: products });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Error al obtener el inventario' });
+  }
+};
+
+export const getProductByIdAdmin = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id);
+    const product = await getProductById(id);
+    if (!product) {
+      res.status(404).json({ success: false, message: 'Producto no encontrado' });
+      return;
+    }
+    res.status(200).json({ success: true, data: product });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Error al obtener el producto' });
   }
 };

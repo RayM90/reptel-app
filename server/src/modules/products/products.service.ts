@@ -42,3 +42,21 @@ export const getAllProducts = async () => {
 
   return products;
 };
+
+export const getAllProductsForAdmin = async () => {
+  return prisma.product.findMany({
+    include: {
+      category: { select: { id: true, name: true } },
+    },
+    orderBy: { name: 'asc' },
+  });
+};
+
+export const getProductById = async (id: string) => {
+  return prisma.product.findUnique({
+    where: { id },
+    include: {
+      category: { select: { id: true, name: true } },
+    },
+  });
+};
