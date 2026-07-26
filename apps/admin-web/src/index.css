@@ -99,6 +99,7 @@ a {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+  text-decoration: none;
   transition: opacity 0.15s ease;
 }
 
@@ -430,4 +431,8 @@ table.styled-table tr:last-child td {
 .money {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+table.styled-table th.money {
+  text-align: right;
 }
