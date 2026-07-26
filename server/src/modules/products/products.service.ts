@@ -60,3 +60,33 @@ export const getProductById = async (id: string) => {
     },
   });
 };
+
+export const createProduct = async (data: {
+  name: string;
+  description?: string;
+  price: number;
+  stock?: number;
+  minStock?: number;
+  imageUrl?: string;
+  categoryId: string;
+  requiresInstallation?: boolean;
+}) => {
+  return prisma.product.create({ data });
+};
+
+export const updateProduct = async (
+  id: string,
+  data: {
+    name?: string;
+    description?: string;
+    price?: number;
+    stock?: number;
+    minStock?: number;
+    imageUrl?: string;
+    categoryId?: string;
+    requiresInstallation?: boolean;
+    isActive?: boolean;
+  }
+) => {
+  return prisma.product.update({ where: { id }, data });
+};

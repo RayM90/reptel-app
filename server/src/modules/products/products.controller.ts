@@ -1,6 +1,13 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
-import { getProductsWithCategories, getAllProducts, getAllProductsForAdmin, getProductById } from './products.service';
+import {
+  getProductsWithCategories,
+  getAllProducts,
+  getAllProductsForAdmin,
+  getProductById,
+  createProduct,
+  updateProduct,
+} from './products.service';
 
 /**
  * GET /api/products
@@ -47,3 +54,92 @@ export const getProductByIdAdmin = async (req: AuthRequest, res: Response): Prom
     res.status(500).json({ success: false, message: error.message || 'Error al obtener el producto' });
   }
 };
+
+export const createProductHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { name, description, price, stock, minStock, imageUrl, categoryId, requiresInstallation } = req.body
+
+    if (!name || typeof name !== 'string') {
+      res.status(400).json({ success: false, message: 'El nombre del producto es requerido' })
+      return
+    }
+    if (price === undefined || price === null || Number(price) < 0) {
+      res.status(400).json({ success: false, message: 'El precio debe ser un número mayor o igual a 0' })
+      return
+    }
+    if (!categoryId || typeof categoryId !== 'string') {
+      res.status(400).json({ success: false, message: 'La categoría es requerida' })
+      return
+    }
+    if (stock !== undefined && Number(stock) < 0) {
+      res.status(400).json({ success: false, message: 'El stock debe ser mayor o igual a 0' })
+      return
+    }
+    if (minStock !== undefined && Number(minStock) < 0) {
+      res.status(400).json({ success: false, message: 'El stock mínimo debe ser mayor o igual a 0' })
+      return
+    }
+
+    const product = await createProduct({
+      name,
+      description,
+      price: Number(price),
+      stock: stock !== undefined ? Number(stock) : undefined,
+      minStock: minStock !== undefined ? Number(minStock) : undefined,
+      imageUrl,
+      categoryId,
+      requiresInstallation: Boolean(requiresInstallation),
+    })
+    res.status(201).json({ success: true, data: product })
+  } catch (error: any) {
+    if (error.code === 'P2003') {
+      res.status(400).json({ success: false, message: 'Categoría inválida' })
+      return
+    }
+    res.status(500).json({ success: false, message: error.message || 'Error al crear el producto' })
+  }
+}
+
+export const updateProductHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const { name, description, price, stock, minStock, imageUrl, categoryId, requiresInstallation, isActive } = req.body
+
+    if (price !== undefined && Number(price) < 0) {
+      res.status(400).json({ success: false, message: 'El precio debe ser un número mayor o igual a 0' })
+      return
+    }
+    if (stock !== undefined && Number(stock) < 0) {
+      res.status(400).json({ success: false, message: 'El stock debe ser mayor o igual a 0' })
+      return
+    }
+    if (minStock !== undefined && Number(minStock) < 0) {
+      res.status(400).json({ success: false, message: 'El stock mínimo debe ser mayor o igual a 0' })
+      return
+    }
+
+    const data: Record<string, unknown> = {}
+    if (name !== undefined) data.name = name
+    if (description !== undefined) data.description = description
+    if (price !== undefined) data.price = Number(price)
+    if (stock !== undefined) data.stock = Number(stock)
+    if (minStock !== undefined) data.minStock = Number(minStock)
+    if (imageUrl !== undefined) data.imageUrl = imageUrl
+    if (categoryId !== undefined) data.categoryId = categoryId
+    if (requiresInstallation !== undefined) data.requiresInstallation = Boolean(requiresInstallation)
+    if (isActive !== undefined) data.isActive = Boolean(isActive)
+
+    const product = await updateProduct(id, data)
+    res.status(200).json({ success: true, data: product })
+  } catch (error: any) {
+    if (error.code === 'P2003') {
+      res.status(400).json({ success: false, message: 'Categoría inválida' })
+      return
+    }
+    if (error.code === 'P2025') {
+      res.status(404).json({ success: false, message: 'Producto no encontrado' })
+      return
+    }
+    res.status(500).json({ success: false, message: error.message || 'Error al actualizar el producto' })
+  }
+}
