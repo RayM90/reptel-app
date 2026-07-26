@@ -94,7 +94,7 @@ export default function RegisterScreen() {
 
   return (
     <LinearGradient
-      colors={["#ffffff", "#dde4ff", "#a0b0ff", "#1a2a8a"]}
+      colors={["#ffffff", "#eef2ff", "#d5ddff", "#8fa5ff"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
       style={styles.gradient}
