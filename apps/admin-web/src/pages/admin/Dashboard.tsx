@@ -362,7 +362,7 @@ export default function Dashboard() {
     })
   }
 
-  if (loading) return <div className="page-container"><p>Cargando...</p></div>
+  if (loading) return <div className="page-container"><p>Cargando…</p></div>
   if (error) return <div className="page-container"><p className="alert-error">{error}</p></div>
 
   return (
@@ -405,7 +405,7 @@ export default function Dashboard() {
                   <th>Cliente</th>
                   <th>Problema</th>
                   <th>Estado</th>
-                  <th>Presupuesto</th>
+                  <th className="money">Presupuesto</th>
                   <th>Técnico asignado</th>
                   <th>Pago anticipado</th>
                   <th>Pago final</th>
@@ -432,7 +432,7 @@ export default function Dashboard() {
                         {getStatusBadge('order', order.status).label}
                       </span>
                     </td>
-                    <td>{order.budget ? `$${order.budget}` : '—'}</td>
+                    <td className="money">{order.budget ? `$${order.budget}` : '—'}</td>
                     <td>{order.technician?.name || 'Sin asignar'}</td>
                     <td><PaymentDetailsView details={order.advancePaymentDetails} /></td>
                     <td><PaymentDetailsView details={order.finalPaymentDetails} /></td>
@@ -493,7 +493,7 @@ export default function Dashboard() {
                 <tr>
                   <th>Cliente</th>
                   <th>Productos</th>
-                  <th>Total</th>
+                  <th className="money">Total</th>
                   <th>Estado</th>
                   <th>Motorizado asignado</th>
                   <th>Pagos recibidos</th>
@@ -513,7 +513,7 @@ export default function Dashboard() {
                       )}
                     </td>
                     <td>{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
-                    <td>${po.total}</td>
+                    <td className="money">${po.total}</td>
                     <td>
                       <span className={badgeClassName(getStatusBadge('productOrder', po.status).variant)}>
                         {getStatusBadge('productOrder', po.status).label}
@@ -548,7 +548,7 @@ export default function Dashboard() {
                 <th>Cliente</th>
                 <th>Estado</th>
                 <th>Técnico</th>
-                <th>Presupuesto</th>
+                <th className="money">Presupuesto</th>
                 <th>Comisión técnico</th>
                 <th>Fecha entrega</th>
               </tr>
@@ -569,7 +569,7 @@ export default function Dashboard() {
                       </span>
                     </td>
                     <td>{order.technician?.name || 'Sin asignar'}</td>
-                    <td>{order.budget ? `$${order.budget}` : '—'}</td>
+                    <td className="money">{order.budget ? `$${order.budget}` : '—'}</td>
                     <td>{order.technicianCommission ? `$${order.technicianCommission}` : '—'}</td>
                     <td>{formatDate(order.deliveredAt)}</td>
                   </tr>
@@ -579,15 +579,15 @@ export default function Dashboard() {
             <tfoot>
               <tr>
                 <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>Totales</td>
-                <td style={{ fontWeight: 700 }}>${totalBudget.toFixed(2)}</td>
-                <td style={{ fontWeight: 700 }}>${totalTechnicianCommission.toFixed(2)}</td>
+                <td className="money" style={{ fontWeight: 700 }}>${totalBudget.toFixed(2)}</td>
+                <td className="money" style={{ fontWeight: 700 }}>${totalTechnicianCommission.toFixed(2)}</td>
                 <td></td>
               </tr>
               <tr>
                 <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700 }}>
                   Total general (presupuesto + comisión)
                 </td>
-                <td colSpan={2} style={{ fontWeight: 700 }}>
+                <td colSpan={2} className="money" style={{ fontWeight: 700 }}>
                   ${(totalBudget + totalTechnicianCommission).toFixed(2)}
                 </td>
               </tr>
@@ -607,7 +607,7 @@ export default function Dashboard() {
                 <tr>
                   <th>Cliente</th>
                   <th>Productos</th>
-                  <th>Total</th>
+                  <th className="money">Total</th>
                   <th>Estado</th>
                   <th>Motorizado</th>
                   <th>Comisión motorizado</th>
@@ -619,7 +619,7 @@ export default function Dashboard() {
                   <tr key={po.id}>
                     <td>{po.client.name} {po.client.lastName}</td>
                     <td>{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
-                    <td>${po.total}</td>
+                    <td className="money">${po.total}</td>
                     <td>
                       <span className={badgeClassName(getStatusBadge('productOrder', po.status).variant)}>
                         {getStatusBadge('productOrder', po.status).label}
@@ -634,17 +634,17 @@ export default function Dashboard() {
               <tfoot>
                 <tr>
                   <td colSpan={2} style={{ textAlign: 'right', fontWeight: 700 }}>Totales</td>
-                  <td style={{ fontWeight: 700 }}>${totalProductSales.toFixed(2)}</td>
+                  <td className="money" style={{ fontWeight: 700 }}>${totalProductSales.toFixed(2)}</td>
                   <td></td>
                   <td></td>
-                  <td style={{ fontWeight: 700 }}>${totalDeliveryCommission.toFixed(2)}</td>
+                  <td className="money" style={{ fontWeight: 700 }}>${totalDeliveryCommission.toFixed(2)}</td>
                   <td></td>
                 </tr>
                 <tr>
                   <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700 }}>
                     Total general (ventas + comisión)
                   </td>
-                  <td colSpan={2} style={{ fontWeight: 700 }}>
+                  <td colSpan={2} className="money" style={{ fontWeight: 700 }}>
                     ${(totalProductSales + totalDeliveryCommission).toFixed(2)}
                   </td>
                 </tr>

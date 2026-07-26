@@ -95,7 +95,7 @@ export default function CreateStaff() {
           {success && <p className="alert-success">{success}</p>}
 
           <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? 'Creando...' : 'Crear empleado'}
+            {loading ? 'Creando…' : 'Crear empleado'}
           </button>
         </form>
       </div>

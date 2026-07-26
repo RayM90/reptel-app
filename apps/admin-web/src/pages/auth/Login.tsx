@@ -169,7 +169,7 @@ export default function Login() {
             </div>
             {error && <p className="alert-error">{error}</p>}
             <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%' }}>
-              {loading ? 'Guardando...' : 'Establecer contraseña'}
+              {loading ? 'Guardando…' : 'Establecer contraseña'}
             </button>
           </form>
         </div>
@@ -213,7 +213,7 @@ export default function Login() {
           </div>
           {error && <p className="alert-error">{error}</p>}
           <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%' }}>
-            {loading ? 'Ingresando...' : 'Ingresar'}
+            {loading ? 'Ingresando…' : 'Ingresar'}
           </button>
         </form>
       </div>

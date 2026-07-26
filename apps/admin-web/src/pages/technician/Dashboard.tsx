@@ -245,7 +245,7 @@ export default function TechnicianDashboard() {
   )
   const monthLabel = monthStart.toLocaleDateString('es-VE', { month: 'long', year: 'numeric' })
 
-  if (loading) return <div className="page-container"><p>Cargando...</p></div>
+  if (loading) return <div className="page-container"><p>Cargando…</p></div>
   if (error) return <div className="page-container"><p className="alert-error">{error}</p></div>
 
   return (
@@ -416,11 +416,11 @@ export default function TechnicianDashboard() {
           <p>Aún no tienes órdenes completadas</p>
         ) : (
           completedOrders.map((order) => (
-            <div key={order.id} className="form-hint">
+            <div key={order.id} className="history-row">
               <strong>{order.orderNumber}</strong> — {order.client.name} {order.client.lastName}{' '}
               — {order.device.brand} {order.device.model}
               {order.technicianCommission != null && (
-                <span> · Comisión: ${order.technicianCommission}</span>
+                <span className="history-amount"> · Comisión: ${order.technicianCommission}</span>
               )}
             </div>
           ))

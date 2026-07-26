@@ -200,7 +200,7 @@ export default function DeliveryDashboard() {
   )
   const monthLabel = monthStart.toLocaleDateString('es-VE', { month: 'long', year: 'numeric' })
 
-  if (loading) return <div className="page-container"><p>Cargando...</p></div>
+  if (loading) return <div className="page-container"><p>Cargando…</p></div>
   if (error) return <div className="page-container"><p className="alert-error">{error}</p></div>
 
   return (
@@ -299,10 +299,10 @@ export default function DeliveryDashboard() {
       <div className="card" style={{ marginTop: 32 }}>
         <h3>Entregas completadas ({completedDeliveries.length})</h3>
         {completedDeliveries.map((delivery) => (
-          <div key={delivery.id} className="form-hint">
+          <div key={delivery.id} className="history-row">
             <strong>Pedido #{delivery.productOrder.id.slice(0, 8)}</strong> — {delivery.productOrder.client.name}{' '}
             {delivery.productOrder.client.lastName} — entregado {delivery.deliveredAt && formatDate(delivery.deliveredAt)}
-            {delivery.deliveryCommission != null && <span> · Comisión: ${delivery.deliveryCommission}</span>}
+            {delivery.deliveryCommission != null && <span className="history-amount"> · Comisión: ${delivery.deliveryCommission}</span>}
           </div>
         ))}
         {completedDeliveries.length === 0 && <p>Aún no tienes entregas completadas</p>}
