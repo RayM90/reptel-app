@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_URL = 'http://192.168.0.116:3000'// Cambia esto a la URL de tu servidor backend
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.0.116:3000'
 
 export const api = axios.create({
   baseURL: API_URL,
