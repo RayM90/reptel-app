@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4ade80',
+    backgroundColor: '#1E7A3D',
   },
   statusText: {
     fontSize: 12,
