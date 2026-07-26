@@ -159,7 +159,6 @@ enum PartialPaymentStatus {
 
 model User {
   id                String           @id @default(uuid())
-  cognitoId         String?          @unique
   name              String
   email             String           @unique
   phone             String?
