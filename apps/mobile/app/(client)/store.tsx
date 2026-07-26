@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: { fontSize: 26, fontWeight: '800', color: colors.primary, marginBottom: 2 },
-  subtitle: { fontSize: 14, color: colors.secondary },
+  subtitle: { fontSize: 14, color: colors.textMuted },
   cartBtn: {
     position: 'relative',
     padding: 8,
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 4,
   },
-  badgeText: { color: colors.surface, fontSize: 11, fontWeight: '800' },
+  badgeText: { color: colors.onPrimary, fontSize: 11, fontWeight: '800' },
   categoryHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   categoryTitleText: { fontSize: 13, color: colors.primary, fontWeight: '700' },
-  scrollHint: { fontSize: 11, color: colors.secondary, fontWeight: '500' },
+  scrollHint: { fontSize: 11, color: colors.textMuted, fontWeight: '500' },
   filterScroll: { maxHeight: 50, minHeight: 50, marginBottom: 10 },
   filterContainer: {
     paddingHorizontal: 22,
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
   },
   filterBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   filterText: { fontSize: 13, color: colors.secondary, fontWeight: '600', textAlign: 'center', flexShrink: 0 },
-  filterTextActive: { color: colors.surface },
+  filterTextActive: { color: colors.onPrimary },
   productList: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
   grid: {
     flexDirection: 'row',
@@ -322,13 +322,13 @@ const styles = StyleSheet.create({
   cardBody: { padding: 12 },
   categoryTag: {
     fontSize: 10,
-    color: colors.secondary,
+    color: colors.textMuted,
     fontWeight: '600',
     textTransform: 'uppercase',
     marginBottom: 4,
   },
   productName: { fontSize: 13, fontWeight: '700', color: colors.primary, marginBottom: 4 },
-  productDesc: { fontSize: 11, color: colors.secondary, lineHeight: 15, marginBottom: 8 },
+  productDesc: { fontSize: 11, color: colors.textMuted, lineHeight: 15, marginBottom: 8 },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   price: { fontSize: 16, fontWeight: '800', color: colors.primary },
   stock: { fontSize: 11, color: colors.success, fontWeight: '600' },
   buyBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
-  buyBtnDisabled: { backgroundColor: colors.border },
-  buyBtnText: { color: colors.surface, fontSize: 11, fontWeight: '700' },
-  emptyText: { textAlign: 'center', color: colors.secondary, marginTop: 60, fontSize: 15 },
+  buyBtnDisabled: { backgroundColor: colors.textMuted },
+  buyBtnText: { color: colors.onPrimary, fontSize: 11, fontWeight: '700' },
+  emptyText: { textAlign: 'center', color: colors.textMuted, marginTop: 60, fontSize: 15 },
 })
