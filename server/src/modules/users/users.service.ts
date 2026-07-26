@@ -17,7 +17,6 @@ export const getAllUsers = async () => {
   return prisma.user.findMany({
     select: {
       id: true,
-      cognitoId: true,
       email: true,
       name: true,
       phone: true,
@@ -39,7 +38,6 @@ export const getUserById = async (id: string) => {
     where: { id },
     select: {
       id: true,
-      cognitoId: true,
       email: true,
       name: true,
       phone: true,
@@ -52,17 +50,6 @@ export const getUserById = async (id: string) => {
 };
 
 /**
- * Obtiene un usuario por su ID de Cognito
- * @param cognitoId - ID del usuario en AWS Cognito
- * @returns Usuario encontrado o null
- */
-export const getUserByCognitoId = async (cognitoId: string) => {
-  return prisma.user.findUnique({
-    where: { cognitoId },
-  });
-};
-
-/**
  * Crea un nuevo usuario en la BD local sincronizado con Cognito
  * El password se marca como COGNITO_MANAGED ya que la autenticación
  * es manejada completamente por AWS Cognito
@@ -70,7 +57,6 @@ export const getUserByCognitoId = async (cognitoId: string) => {
  * @returns Usuario creado sin el campo password
  */
 export const createUser = async (data: {
-  cognitoId: string;
   email: string;
   name: string;
   phone?: string;
@@ -78,7 +64,6 @@ export const createUser = async (data: {
 }) => {
   const user = await prisma.user.create({
     data: {
-      cognitoId: data.cognitoId,
       email: data.email,
       name: data.name,
       phone: data.phone,

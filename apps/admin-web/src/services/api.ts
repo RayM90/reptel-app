@@ -12,3 +12,17 @@ api.interceptors.request.use((config) => {
   }
   return config
 })
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const isAuthEndpoint = error.config?.url?.includes('/api/auth/login') ||
+      error.config?.url?.includes('/api/auth/complete-new-password')
+
+    if (error.response?.status === 401 && !isAuthEndpoint) {
+      useAuthStore.getState().logout()
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)

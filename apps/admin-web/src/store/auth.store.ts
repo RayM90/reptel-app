@@ -3,14 +3,9 @@ import { persist } from 'zustand/middleware'
 
 type Role =
   | 'ADMIN'
-  | 'TECHNICIAN'
   | 'TECHNICIAN_DELIVERY'
   | 'DELIVERY'
   | 'CLIENT'
-  | 'CASHIER'
-  | 'MANAGER'
-  | 'SELLER'
-  | 'SUPPORT'
 
 interface User {
   id: string

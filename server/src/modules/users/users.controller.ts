@@ -32,12 +32,12 @@ export const getUser = async (req: AuthRequest, res: Response): Promise<void> =>
 
 export const registerUserInDB = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { cognitoId, email, name, phone, role } = req.body;
-    if (!cognitoId || !email || !name || !role) {
+    const { email, name, phone, role } = req.body;
+    if (!email || !name || !role) {
       res.status(400).json({ message: 'Faltan campos requeridos' });
       return;
     }
-    const user = await createUser({ cognitoId, email, name, phone, role });
+    const user = await createUser({ email, name, phone, role });
     res.status(201).json({ success: true, data: user });
   } catch (error: any) {
     res.status(400).json({ message: error.message || 'Error al crear usuario' });
