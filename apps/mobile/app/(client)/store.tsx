@@ -35,6 +35,7 @@ export default function StoreScreen() {
   const { addItem, totalItems } = useCartStore()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos')
   const [categories, setCategories] = useState<string[]>(['Todos'])
   const showToast = useToastStore((state) => state.showToast)
@@ -44,6 +45,7 @@ export default function StoreScreen() {
   }, [])
 
   const fetchProducts = async () => {
+    setError(false)
     try {
       const response = await api.get('/api/products')
       const data: Product[] = response.data.data
@@ -51,6 +53,7 @@ export default function StoreScreen() {
       const cats = ['Todos', ...new Set(data.map((p) => p.category.name))]
       setCategories(cats)
     } catch (error: any) {
+      setError(true)
       showToast('No se pudieron cargar los productos', 'error')
     } finally {
       setLoading(false)
@@ -141,6 +144,16 @@ const handleAddToCart = (product: Product) => {
         {/* Productos */}
         {loading ? (
           <ActivityIndicator size="large" color="#17247a" style={{ marginTop: 60 }} />
+        ) : error ? (
+          <View style={{ alignItems: 'center', marginTop: 60, paddingHorizontal: 24 }}>
+            <Text style={styles.emptyText}>No se pudo conectar con la tienda</Text>
+            <TouchableOpacity
+              style={[styles.card, { marginTop: 16, paddingHorizontal: 20, paddingVertical: 10 }]}
+              onPress={fetchProducts}
+            >
+              <Text>↻ Reintentar</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <ScrollView
             contentContainerStyle={styles.productList}
