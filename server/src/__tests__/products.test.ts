@@ -3,6 +3,7 @@ import app from '../app'
 
 let adminToken: string
 let productId: string
+let createdProductId: string
 
 beforeAll(async () => {
   const loginRes = await request(app)
@@ -43,5 +44,70 @@ describe('Products — GET /:id protegido por rol', () => {
       .set('Authorization', `Bearer ${adminToken}`)
     expect(res.status).toBe(200)
     expect(res.body.data.id).toBe(productId)
+  }, 10000)
+})
+
+describe('Products — POST / crear producto (admin)', () => {
+  it('POST sin token debe retornar 401', async () => {
+    const res = await request(app).post('/api/products').send({ name: 'x', price: 1, categoryId: 'x' })
+    expect(res.status).toBe(401)
+  })
+
+  it('POST con precio negativo debe retornar 400', async () => {
+    const categoriesRes = await request(app).get('/api/products/categories')
+    const categoryId = categoriesRes.body.data?.[0]?.id
+    if (!categoryId) return
+    const res = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Producto de prueba', price: -5, categoryId })
+    expect(res.status).toBe(400)
+  }, 10000)
+
+  it('POST con datos validos debe crear el producto (201)', async () => {
+    const categoriesRes = await request(app).get('/api/products/categories')
+    const categoryId = categoriesRes.body.data?.[0]?.id
+    if (!categoryId) return
+    const res = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Producto de prueba SDD', price: 9.99, categoryId, stock: 5 })
+    expect(res.status).toBe(201)
+    expect(res.body.data.name).toBe('Producto de prueba SDD')
+    createdProductId = res.body.data.id
+  }, 10000)
+})
+
+describe('Products — PUT /:id editar producto (admin)', () => {
+  it('PUT sin token debe retornar 401', async () => {
+    if (!createdProductId) return
+    const res = await request(app).put(`/api/products/${createdProductId}`).send({ price: 15 })
+    expect(res.status).toBe(401)
+  })
+
+  it('PUT con token ADMIN debe permitir editar y desactivar (200)', async () => {
+    if (!createdProductId) return
+    const res = await request(app)
+      .put(`/api/products/${createdProductId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ price: 15, isActive: false })
+    expect(res.status).toBe(200)
+    expect(res.body.data.isActive).toBe(false)
+  }, 10000)
+
+  it('el producto desactivado no debe aparecer en GET /api/products (publico)', async () => {
+    if (!createdProductId) return
+    const res = await request(app).get('/api/products')
+    const found = res.body.data.find((p: any) => p.id === createdProductId)
+    expect(found).toBeUndefined()
+  })
+
+  it('el producto desactivado SI debe aparecer en GET /api/products/admin', async () => {
+    if (!createdProductId) return
+    const res = await request(app)
+      .get('/api/products/admin')
+      .set('Authorization', `Bearer ${adminToken}`)
+    const found = res.body.data.find((p: any) => p.id === createdProductId)
+    expect(found).toBeDefined()
   }, 10000)
 })
