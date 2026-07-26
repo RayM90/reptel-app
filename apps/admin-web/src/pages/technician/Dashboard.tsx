@@ -66,7 +66,7 @@ const NEW_CARD_STYLE: CSSProperties = {
 }
 
 const NEW_BADGE_STYLE: CSSProperties = {
-  backgroundColor: '#f59e0b',
+  backgroundColor: 'var(--color-secondary)',
   color: '#fff',
   marginLeft: 8,
 }
