@@ -4,6 +4,7 @@ import { api } from '../../services/api'
 import { useAuthStore } from '../../store/auth.store'
 import { useToastStore } from '../../store/toast.store'
 import { POLL_INTERVAL_MS } from '../../config/constants'
+import { getStatusBadge, badgeClassName } from '../../utils/statusBadge'
 
 type OrderStatus =
   | 'PENDING_PAYMENT'
@@ -297,7 +298,10 @@ export default function TechnicianDashboard() {
                     <strong>{order.orderNumber}</strong> — {order.client.name} {order.client.lastName}
                     {isNew && <span className="badge" style={NEW_BADGE_STYLE}>🆕 Nuevo</span>}
                     <br />
-                    {order.device.brand} {order.device.model} · <span className="badge">{order.status}</span>
+                    {order.device.brand} {order.device.model} ·{' '}
+                    <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
+                      {getStatusBadge('order', order.status).label}
+                    </span>
                     {order.technicianCommission != null && (
                       <span> · Comisión: ${order.technicianCommission}</span>
                     )}
