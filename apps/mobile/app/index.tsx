@@ -4,19 +4,23 @@ import { router } from 'expo-router'
 import { useAuthStore } from '../src/store/auth.store'
 
 export default function Index() {
-  const { isAuthenticated } = useAuthStore()
-
   useEffect(() => {
-    setTimeout(() => {
-      if (!isAuthenticated) {
-        // Sin sesión → pantalla de bienvenida
-        router.replace('/welcome')
-      } else {
-        // Con sesión → home del cliente
+    const navigate = () => {
+      const { isAuthenticated } = useAuthStore.getState()
+      if (isAuthenticated) {
         router.replace('/(client)/home-client')
+      } else {
+        router.replace('/welcome')
       }
-    }, 500)
-  }, [isAuthenticated])
+    }
+
+    if (useAuthStore.persist.hasHydrated()) {
+      navigate()
+    } else {
+      const unsubscribe = useAuthStore.persist.onFinishHydration(navigate)
+      return unsubscribe
+    }
+  }, [])
 
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center',

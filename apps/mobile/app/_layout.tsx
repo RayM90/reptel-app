@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Stack, router } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { StatusBar } from 'expo-status-bar'
@@ -34,6 +35,17 @@ function HomeButton() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    if (useAuthStore.persist.hasHydrated()) {
+      useAuthStore.getState().resumeSession()
+    } else {
+      const unsubscribe = useAuthStore.persist.onFinishHydration(() => {
+        useAuthStore.getState().resumeSession()
+      })
+      return unsubscribe
+    }
+  }, [])
+
   return (
     <QueryClientProvider client={queryClient}>
       {/* View envolvente para que Toast y ConfirmDialog puedan superponerse
