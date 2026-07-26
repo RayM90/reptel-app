@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     color: "#1a1a6e",
   },
   eyeBtn: {
-    padding: 8,
+    padding: 12,
   },
 
   // Botón login
