@@ -36,7 +36,14 @@ function HomeButton() {
 
 export default function RootLayout() {
   useEffect(() => {
-    useAuthStore.getState().resumeSession()
+    if (useAuthStore.persist.hasHydrated()) {
+      useAuthStore.getState().resumeSession()
+    } else {
+      const unsubscribe = useAuthStore.persist.onFinishHydration(() => {
+        useAuthStore.getState().resumeSession()
+      })
+      return unsubscribe
+    }
   }, [])
 
   return (
