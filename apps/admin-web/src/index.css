@@ -113,7 +113,7 @@ a {
 
 .btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(75, 62, 150, 0.35);
+  box-shadow: 0 0 0 3px rgba(75, 62, 150, 0.6);
 }
 
 .btn-primary {
@@ -224,7 +224,7 @@ table.styled-table tr:last-child td {
 .form-group textarea:focus {
   outline: none;
   border-color: var(--color-secondary);
-  box-shadow: 0 0 0 3px rgba(75, 62, 150, 0.35);
+  box-shadow: 0 0 0 3px rgba(75, 62, 150, 0.6);
 }
 
 .form-hint {
