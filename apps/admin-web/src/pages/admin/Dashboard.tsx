@@ -373,7 +373,10 @@ export default function Dashboard() {
           ↻ Actualizar
         </button>
       </div>
-      <p><Link to="/admin/create-staff" className="btn btn-accent">➕ Crear usuario de personal</Link></p>
+      <p>
+        <Link to="/admin/create-staff" className="btn btn-accent">➕ Crear usuario de personal</Link>{' '}
+        <Link to="/admin/inventory" className="btn btn-secondary">📦 Inventario</Link>
+      </p>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         <button
