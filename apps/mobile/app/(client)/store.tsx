@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../../src/services/api'
 import { useCartStore } from '../../src/store/cart.store'
 import { useToastStore } from '../../src/store/toast.store'
+import { colors } from '../../src/theme/colors'
 
 interface Product {
   id: string
@@ -143,7 +144,7 @@ const handleAddToCart = (product: Product) => {
 
         {/* Productos */}
         {loading ? (
-          <ActivityIndicator size="large" color="#17247a" style={{ marginTop: 60 }} />
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 60 }} />
         ) : error ? (
           <View style={{ alignItems: 'center', marginTop: 60, paddingHorizontal: 24 }}>
             <Text style={styles.emptyText}>No se pudo conectar con la tienda</Text>
@@ -236,14 +237,14 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   backBtn: { marginBottom: 8 },
-  backText: { color: '#5364ad', fontSize: 14, fontWeight: '500' },
+  backText: { color: colors.secondary, fontSize: 14, fontWeight: '500' },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  title: { fontSize: 26, fontWeight: '800', color: '#17247a', marginBottom: 2 },
-  subtitle: { fontSize: 14, color: '#5364ad' },
+  title: { fontSize: 26, fontWeight: '800', color: colors.primary, marginBottom: 2 },
+  subtitle: { fontSize: 14, color: colors.secondary },
   cartBtn: {
     position: 'relative',
     padding: 8,
@@ -253,7 +254,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 2,
     right: 2,
-    backgroundColor: '#B3261E',
+    backgroundColor: colors.danger,
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -261,7 +262,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 4,
   },
-  badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  badgeText: { color: colors.surface, fontSize: 11, fontWeight: '800' },
   categoryHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -269,8 +270,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     marginBottom: 8,
   },
-  categoryTitleText: { fontSize: 13, color: '#17247a', fontWeight: '700' },
-  scrollHint: { fontSize: 11, color: '#5364ad', fontWeight: '500' },
+  categoryTitleText: { fontSize: 13, color: colors.primary, fontWeight: '700' },
+  scrollHint: { fontSize: 11, color: colors.secondary, fontWeight: '500' },
   filterScroll: { maxHeight: 50, minHeight: 50, marginBottom: 10 },
   filterContainer: {
     paddingHorizontal: 22,
@@ -284,14 +285,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 1.5,
-    borderColor: '#d0d8ff',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'flex-start',
   },
-  filterBtnActive: { backgroundColor: '#17247a', borderColor: '#17247a' },
-  filterText: { fontSize: 13, color: '#5364ad', fontWeight: '600', textAlign: 'center', flexShrink: 0 },
-  filterTextActive: { color: '#ffffff' },
+  filterBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  filterText: { fontSize: 13, color: colors.secondary, fontWeight: '600', textAlign: 'center', flexShrink: 0 },
+  filterTextActive: { color: colors.surface },
   productList: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
   grid: {
     flexDirection: 'row',
@@ -301,10 +302,10 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '47%',
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#17247a',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -312,7 +313,7 @@ const styles = StyleSheet.create({
   },
   imagePlaceholder: {
     height: 100,
-    backgroundColor: '#eef2ff',
+    backgroundColor: colors.backgroundAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -321,23 +322,23 @@ const styles = StyleSheet.create({
   cardBody: { padding: 12 },
   categoryTag: {
     fontSize: 10,
-    color: '#5364ad',
+    color: colors.secondary,
     fontWeight: '600',
     textTransform: 'uppercase',
     marginBottom: 4,
   },
-  productName: { fontSize: 13, fontWeight: '700', color: '#17247a', marginBottom: 4 },
-  productDesc: { fontSize: 11, color: '#5364ad', lineHeight: 15, marginBottom: 8 },
+  productName: { fontSize: 13, fontWeight: '700', color: colors.primary, marginBottom: 4 },
+  productDesc: { fontSize: 11, color: colors.secondary, lineHeight: 15, marginBottom: 8 },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
   },
-  price: { fontSize: 16, fontWeight: '800', color: '#17247a' },
-  stock: { fontSize: 11, color: '#1E7A3D', fontWeight: '600' },
-  buyBtn: { backgroundColor: '#17247a', borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
-  buyBtnDisabled: { backgroundColor: '#c0c0c0' },
-  buyBtnText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
-  emptyText: { textAlign: 'center', color: '#5364ad', marginTop: 60, fontSize: 15 },
+  price: { fontSize: 16, fontWeight: '800', color: colors.primary },
+  stock: { fontSize: 11, color: colors.success, fontWeight: '600' },
+  buyBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
+  buyBtnDisabled: { backgroundColor: colors.border },
+  buyBtnText: { color: colors.surface, fontSize: 11, fontWeight: '700' },
+  emptyText: { textAlign: 'center', color: colors.secondary, marginTop: 60, fontSize: 15 },
 })

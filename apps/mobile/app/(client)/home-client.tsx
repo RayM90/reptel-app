@@ -11,6 +11,7 @@ import { useRouter, Stack } from 'expo-router';
 import { useAuthStore } from '../../src/store/auth.store';
 import { useToastStore } from '../../src/store/toast.store';
 import { useConfirm } from '../../src/hooks/useConfirm';
+import { colors } from '../../src/theme/colors';
 
 export default function HomeClient() {
   const router = useRouter();
@@ -189,7 +190,7 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#5364ad',
+    color: colors.secondary,
   },
   scroll: {
     flexGrow: 1,
@@ -223,14 +224,14 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#17247a',
+    color: colors.primary,
     marginTop: 2,
     marginBottom: 6,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 15,
-    color: '#5364ad',
+    color: colors.secondary,
     fontWeight: '400',
   },
   primaryContainer: {
@@ -241,12 +242,12 @@ const styles = StyleSheet.create({
   mainCard: {
     width: '100%',
     height: 90,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    shadowColor: '#17247a',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 10,
@@ -255,7 +256,7 @@ const styles = StyleSheet.create({
   iconWrapper: {
     width: 54,
     height: 54,
-    backgroundColor: '#eef2ff',
+    backgroundColor: colors.backgroundAlt,
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
@@ -277,12 +278,12 @@ const styles = StyleSheet.create({
   subCard: {
     width: '47%',
     height: 130,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#17247a',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 10,
@@ -291,7 +292,7 @@ const styles = StyleSheet.create({
   subCardIconWrapper: {
     width: 46,
     height: 46,
-    backgroundColor: '#eef2ff',
+    backgroundColor: colors.backgroundAlt,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
@@ -303,17 +304,17 @@ const styles = StyleSheet.create({
   cardLabel: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#17247a',
+    color: colors.primary,
     marginBottom: 4,
   },
   cardDescLeft: {
     fontSize: 12,
-    color: '#5364ad',
+    color: colors.secondary,
     lineHeight: 16,
   },
   cardDesc: {
     fontSize: 11,
-    color: '#5364ad',
+    color: colors.secondary,
     textAlign: 'center',
     lineHeight: 15,
   },
@@ -328,11 +329,11 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#1E7A3D',
+    backgroundColor: colors.success,
   },
   statusText: {
     fontSize: 12,
-    color: '#5364ad',
+    color: colors.secondary,
     fontWeight: '500',
   },
 });
