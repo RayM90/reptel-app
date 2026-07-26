@@ -388,3 +388,46 @@ table.styled-table tr:last-child td {
   max-width: 420px;
   box-shadow: 0 8px 24px rgba(35, 38, 47, 0.2);
 }
+
+/* ─── Variantes de badge por estado ──────── */
+
+.badge-success {
+  background: #e3f3e9;
+  color: var(--color-success);
+}
+
+.badge-danger {
+  background: #fbe9e7;
+  color: var(--color-danger);
+}
+
+.badge-progress {
+  background: #ece9f6;
+  color: var(--color-secondary);
+}
+
+/* ─── Fila de historial (comisiones) ─────── */
+
+.history-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.history-row:last-child {
+  border-bottom: none;
+}
+
+.history-row .history-amount {
+  font-weight: 600;
+  color: var(--color-success);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Celdas monetarias ──────────────────── */
+
+.money {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
