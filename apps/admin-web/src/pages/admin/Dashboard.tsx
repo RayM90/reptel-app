@@ -549,7 +549,7 @@ export default function Dashboard() {
                 <th>Estado</th>
                 <th>Técnico</th>
                 <th className="money">Presupuesto</th>
-                <th>Comisión técnico</th>
+                <th className="money">Comisión técnico</th>
                 <th>Fecha entrega</th>
               </tr>
             </thead>
@@ -570,7 +570,7 @@ export default function Dashboard() {
                     </td>
                     <td>{order.technician?.name || 'Sin asignar'}</td>
                     <td className="money">{order.budget ? `$${order.budget}` : '—'}</td>
-                    <td>{order.technicianCommission ? `$${order.technicianCommission}` : '—'}</td>
+                    <td className="money">{order.technicianCommission ? `$${order.technicianCommission}` : '—'}</td>
                     <td>{formatDate(order.deliveredAt)}</td>
                   </tr>
                 ))
@@ -610,7 +610,7 @@ export default function Dashboard() {
                   <th className="money">Total</th>
                   <th>Estado</th>
                   <th>Motorizado</th>
-                  <th>Comisión motorizado</th>
+                  <th className="money">Comisión motorizado</th>
                   <th>Fecha entrega</th>
                 </tr>
               </thead>
@@ -626,7 +626,7 @@ export default function Dashboard() {
                       </span>
                     </td>
                     <td>{po.delivery?.agent.name || 'Sin asignar'}</td>
-                    <td>{po.delivery?.deliveryCommission ? `$${po.delivery.deliveryCommission}` : '—'}</td>
+                    <td className="money">{po.delivery?.deliveryCommission ? `$${po.delivery.deliveryCommission}` : '—'}</td>
                     <td>{formatDate(po.delivery?.deliveredAt ?? null)}</td>
                   </tr>
                 ))}
