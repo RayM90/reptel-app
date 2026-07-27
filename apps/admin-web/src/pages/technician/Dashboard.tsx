@@ -375,7 +375,7 @@ export default function TechnicianDashboard() {
                         >
                           {STATUS_OPTIONS.map((s) => (
                             <option key={s} value={s}>
-                              {s}
+                              {getStatusBadge('order', s).label}
                             </option>
                           ))}
                         </select>
