@@ -45,10 +45,17 @@ export default function LoginScreen() {
 
       router.replace("/(client)/home-client");
     } catch (error: any) {
-      showToast(
-        error.response?.data?.message || "Credenciales incorrectas",
-        "error"
-      );
+      if (!error.response) {
+        showToast(
+          "No se pudo conectar al servidor. Verifica tu conexión e inténtalo de nuevo.",
+          "error"
+        );
+      } else {
+        showToast(
+          error.response?.data?.message || "Credenciales incorrectas",
+          "error"
+        );
+      }
     } finally {
       setLoading(false);
     }
