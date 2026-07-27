@@ -1,6 +1,24 @@
 import axios from 'axios'
+import Constants from 'expo-constants'
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.0.116:3000'
+const API_PORT = 3000
+
+// En desarrollo, Expo ya sabe a qué IP se conectó el dispositivo/emulador para
+// descargar el bundle (hostUri). Se reutiliza esa IP para el backend en vez de
+// hardcodear una IP de LAN, que cambia cada vez que la máquina de desarrollo
+// se reconecta a la red (DHCP) y deja la app apuntando a una IP muerta.
+function resolveDevApiUrl(): string | undefined {
+  const hostUri = Constants.expoConfig?.hostUri
+  const host = hostUri?.split(':')[0]
+  return host ? `http://${host}:${API_PORT}` : undefined
+}
+
+// En dev, la IP auto-detectada manda: EXPO_PUBLIC_API_URL en .env es fácil de
+// dejar desactualizada (fue justo la causa de este bug) y no hay forma de que
+// el desarrollador se entere hasta que falla el login. En builds que no son
+// de desarrollo (producción/staging) no existe hostUri, así que se usa la
+// variable de entorno.
+const API_URL = (__DEV__ && resolveDevApiUrl()) || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
 
 export const api = axios.create({
   baseURL: API_URL,

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { registerUser, loginUser, refreshUserToken, completeNewPasswordChallenge, createStaffUser } from './auth.service';
+import { translateCognitoError } from './auth.errors';
 import prisma from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
 
@@ -24,14 +25,13 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const result = await registerUser(email, password, name, role, phone, address);
     res.status(201).json(result);
   } catch (error: any) {
-    res.status(400).json({ message: error.message || 'Error al registrar usuario' });
+    res.status(400).json({ message: translateCognitoError(error) || 'Error al registrar usuario' });
   }
 };
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
-    console.log('Login attempt:', { email, password });
 
     if (!email || !password) {
       res.status(400).json({ message: 'Email y contraseña son requeridos' });
@@ -98,7 +98,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       }
     });
   } catch (error: any) {
-    res.status(401).json({ message: error.message || 'Credenciales inválidas' });
+    res.status(401).json({ message: translateCognitoError(error) || 'Credenciales inválidas' });
   }
 };
 
@@ -160,7 +160,7 @@ export const completeNewPassword = async (req: Request, res: Response): Promise<
       }
     });
   } catch (error: any) {
-    res.status(400).json({ message: error.message || 'Error al establecer nueva contraseña' });
+    res.status(400).json({ message: translateCognitoError(error) || 'Error al establecer nueva contraseña' });
   }
 };
 
@@ -211,6 +211,6 @@ export const createStaff = async (req: Request, res: Response): Promise<void> =>
     const result = await createStaffUser(email, name, password, role, phone);
     res.status(201).json(result);
   } catch (error: any) {
-    res.status(400).json({ message: error.message || 'Error al crear el empleado' });
+    res.status(400).json({ message: translateCognitoError(error) || 'Error al crear el empleado' });
   }
 };
