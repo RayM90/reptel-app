@@ -25,6 +25,7 @@ export default function InventoryForm() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [loaded, setLoaded] = useState(!isEditMode)
 
   useEffect(() => {
     fetchCategories()
@@ -62,6 +63,7 @@ export default function InventoryForm() {
       setCategoryId(p.category.id)
       setRequiresInstallation(p.requiresInstallation)
       setIsActive(p.isActive)
+      setLoaded(true)
     } catch (err) {
       setError('No se pudo cargar el producto')
     }
@@ -94,6 +96,18 @@ export default function InventoryForm() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (isEditMode && !loaded) {
+    return (
+      <div className="page-container">
+        <h1>Editar producto</h1>
+        <p><Link to="/admin/inventory">← Volver al inventario</Link></p>
+        <div className="card" style={{ maxWidth: 480 }}>
+          {error ? <p className="alert-error">{error}</p> : <p>Cargando producto…</p>}
+        </div>
+      </div>
+    )
   }
 
   return (
