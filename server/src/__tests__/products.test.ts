@@ -1,5 +1,6 @@
 import request from 'supertest'
 import app from '../app'
+import prisma from '../lib/prisma'
 
 let adminToken: string
 let productId: string
@@ -14,6 +15,12 @@ beforeAll(async () => {
   const listRes = await request(app).get('/api/products')
   productId = listRes.body.data?.[0]?.id
 }, 20000)
+
+afterAll(async () => {
+  if (createdProductId) {
+    await prisma.product.delete({ where: { id: createdProductId } }).catch(() => {})
+  }
+})
 
 describe('Products — GET /admin protegido por rol', () => {
   it('GET /api/products/admin sin token debe retornar 401', async () => {
