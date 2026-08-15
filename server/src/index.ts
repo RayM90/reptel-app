@@ -3,7 +3,7 @@ dotenv.config()
 import http from 'http'
 import { WebSocketServer } from 'ws'
 import app from './app'
-import { setWss, broadcastOrderUpdate } from './websocket'
+import { setWss, broadcastOrderUpdate, authenticateWsConnection } from './websocket'
 
 const PORT = Number(process.env.PORT) || 3000
 
@@ -13,8 +13,14 @@ const wss = new WebSocketServer({ server })
 setWss(wss)
 export { broadcastOrderUpdate }
 
-wss.on('connection', (ws) => {
-  console.log('Cliente conectado a WebSocket')
+wss.on('connection', async (ws, req) => {
+  const user = await authenticateWsConnection(req)
+  if (!user) {
+    ws.close(4001, 'No autorizado')
+    return
+  }
+
+  console.log(`Cliente conectado a WebSocket (${user.email})`)
   ws.send(JSON.stringify({ type: 'CONNECTED', message: 'Conectado a RepTel en tiempo real' }))
   ws.on('close', () => console.log('Cliente desconectado de WebSocket'))
 })

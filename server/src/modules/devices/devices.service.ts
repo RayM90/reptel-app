@@ -15,9 +15,17 @@ export const getAllDevices = async () => {
   })
 }
 
-export const getDeviceById = async (id: string) => {
-  return prisma.device.findUnique({
-    where: { id },
+export const getDeviceById = async (id: string, requestingClientId?: string) => {
+  return prisma.device.findFirst({
+    where: {
+      id,
+      // Si quien pregunta es un CLIENT, solo puede ver el dispositivo si
+      // tiene al menos una orden propia asociada — evita que un cliente
+      // vea equipos (y su devicePassword) de otro cliente adivinando el id.
+      // Si no se pasa requestingClientId (uso de ADMIN/TECHNICIAN_DELIVERY
+      // desde el controller), no se filtra.
+      ...(requestingClientId ? { orders: { some: { clientId: requestingClientId } } } : {}),
+    },
     include: {
       orders: {
         include: {
