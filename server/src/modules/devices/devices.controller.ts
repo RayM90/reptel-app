@@ -1,5 +1,6 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
+import prisma from '../../lib/prisma'
 import {
   getAllDevices,
   getDeviceById,
@@ -19,7 +20,17 @@ export const getDevices = async (req: AuthRequest, res: Response): Promise<void>
 export const getDevice = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params
-    const device = await getDeviceById(id as string)
+    let requestingClientId: string | undefined
+
+    if (req.user?.groups.includes('CLIENT')) {
+      const user = await prisma.user.findUnique({
+        where: { email: req.user.email },
+        select: { clientId: true },
+      })
+      requestingClientId = user?.clientId ?? undefined
+    }
+
+    const device = await getDeviceById(id as string, requestingClientId)
     if (!device) {
       res.status(404).json({ message: 'Dispositivo no encontrado' })
       return
