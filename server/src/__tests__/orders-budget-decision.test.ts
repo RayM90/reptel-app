@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma'
-import { approveBudget, rejectBudget } from '../modules/orders/orders.service'
+import { approveBudget, rejectBudget, confirmZeroBudgetDiagnosis, disputeZeroBudgetDiagnosis } from '../modules/orders/orders.service'
+import { submitDiagnosis } from '../modules/orders/orders.service'
 
 let clientA: { id: string }
 let userA: { id: string; email: string }
@@ -8,13 +9,13 @@ let userB: { id: string; email: string }
 let technician: { id: string }
 let device: { id: string }
 
-const makeOrder = async (overrides: Partial<{ status: string; budget: number }> = {}) => {
+const makeOrder = async (overrides: Partial<{ status: string; budget: number | undefined }> = {}) => {
   return prisma.order.create({
     data: {
       orderNumber: `REP-TEST-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       status: (overrides.status ?? 'WAITING_APPROVAL') as any,
       problem: 'Pantalla dañada — test automatizado',
-      budget: overrides.budget ?? 50,
+      budget: 'budget' in overrides ? overrides.budget : 50,
       deliveryAmount: 10,
       revisionAmount: 15,
       clientId: clientA.id,
@@ -138,5 +139,69 @@ describe('orders.service — rejectBudget', () => {
   it('lanza error si la orden no pertenece al cliente', async () => {
     const order = await makeOrder()
     await expect(rejectBudget(order.id, userB.email, 'Otro')).rejects.toThrow('Orden no encontrada')
+  })
+})
+
+describe('orders.service — submitDiagnosis siempre WAITING_APPROVAL', () => {
+  it('con presupuesto > 0 deja WAITING_APPROVAL (sin cambios)', async () => {
+    const order = await makeOrder({ status: 'RECEIVED', budget: undefined as any })
+    const result = await submitDiagnosis(order.id, 'Pantalla dañada', 50)
+    expect(result.status).toBe('WAITING_APPROVAL')
+    expect(result.budgetApproved).toBeNull()
+  })
+
+  it('con presupuesto = 0 TAMBIÉN deja WAITING_APPROVAL (antes saltaba a READY)', async () => {
+    const order = await makeOrder({ status: 'RECEIVED', budget: undefined as any })
+    const result = await submitDiagnosis(order.id, 'No es la laptop, es el cargador', 0)
+    expect(result.status).toBe('WAITING_APPROVAL')
+    expect(result.budgetApproved).toBeNull() // ya no se auto-aprueba, decide el cliente
+  })
+})
+
+describe('orders.service — confirmZeroBudgetDiagnosis', () => {
+  it('confirma un diagnóstico $0: DELIVERED, comisión $16', async () => {
+    const order = await makeOrder({ budget: 0 })
+    const result = await confirmZeroBudgetDiagnosis(order.id, userA.email)
+    expect(result.status).toBe('DELIVERED')
+    expect(Number(result.technicianCommission)).toBe(16)
+    expect(result.finalPaymentConfirmedAt).not.toBeNull()
+  })
+
+  it('lanza error si el presupuesto no es $0', async () => {
+    const order = await makeOrder({ budget: 50 })
+    await expect(confirmZeroBudgetDiagnosis(order.id, userA.email)).rejects.toThrow(
+      'Esta acción solo aplica a diagnósticos sin costo'
+    )
+  })
+
+  it('lanza error si la orden no pertenece al cliente', async () => {
+    const order = await makeOrder({ budget: 0 })
+    await expect(confirmZeroBudgetDiagnosis(order.id, userB.email)).rejects.toThrow('Orden no encontrada')
+  })
+})
+
+describe('orders.service — disputeZeroBudgetDiagnosis', () => {
+  it('vuelve la orden al técnico: RECEIVED, budget y diagnosis en null', async () => {
+    const order = await makeOrder({ budget: 0 })
+    const result = await disputeZeroBudgetDiagnosis(order.id, userA.email, 'Sigue sin encender')
+    expect(result.status).toBe('RECEIVED')
+    expect(result.budget).toBeNull()
+    expect(result.diagnosis).toBeNull()
+
+    const techAfter = await prisma.user.findUnique({ where: { id: technician.id } })
+    expect(techAfter?.activeOrderCount).toBe(1) // NO se decrementa, sigue activa
+
+    const history = await prisma.orderStatusHistory.findFirst({
+      where: { orderId: order.id, status: 'RECEIVED' },
+      orderBy: { createdAt: 'desc' },
+    })
+    expect(history?.comment).toContain('Sigue sin encender')
+  })
+
+  it('lanza error si el presupuesto no es $0', async () => {
+    const order = await makeOrder({ budget: 50 })
+    await expect(disputeZeroBudgetDiagnosis(order.id, userA.email)).rejects.toThrow(
+      'Esta acción solo aplica a diagnósticos sin costo'
+    )
   })
 })
