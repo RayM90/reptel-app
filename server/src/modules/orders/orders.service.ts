@@ -1189,7 +1189,7 @@ export const disputeZeroBudgetDiagnosis = async (id: string, email: string, note
     throw new Error('Esta acción solo aplica a diagnósticos sin costo')
   }
 
-  const updatedOrder = await prisma.order.update({
+  return await prisma.order.update({
     where: { id },
     data: {
       budget: null,
@@ -1209,12 +1209,6 @@ export const disputeZeroBudgetDiagnosis = async (id: string, email: string, note
       statusHistory: { orderBy: { createdAt: 'desc' } },
     },
   })
-
-  if (order.technicianId) {
-    await incrementTechnicianLoad(order.technicianId)
-  }
-
-  return updatedOrder
 }
 
 // ─────────────────────────────────────────────
