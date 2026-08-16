@@ -22,6 +22,10 @@ router.post('/:id/advance-payment', authenticate, authorize('CLIENT'), ordersCon
 // Enviar un abono del anticipo (pago en partes — el cliente decide monto y cuántos)
 router.post('/:id/advance-payment-installment', authenticate, authorize('CLIENT'), ordersController.submitAdvancePaymentInstallment)
 
+// Aprobar o rechazar el presupuesto tras el diagnóstico del técnico
+router.post('/:id/approve-budget', authenticate, authorize('CLIENT'), ordersController.approveBudget)
+router.post('/:id/reject-budget', authenticate, authorize('CLIENT'), ordersController.rejectBudget)
+
 // ─── Rutas estáticas (personal) — deben ir ANTES de /:id ──────────
 // Órdenes del día — ADMIN
 router.get('/today', authenticate, authorize('ADMIN'), ordersController.getTodayOrders)
