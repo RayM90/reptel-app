@@ -92,6 +92,13 @@ export const ordersAPI = {
 
   rejectBudget: (id: string, reason: string) =>
     api.post(`/api/orders/${id}/reject-budget`, { reason }),
+
+  // Confirmar o disputar diagnóstico sin costo ($0)
+  confirmZeroBudgetDiagnosis: (id: string) =>
+    api.post(`/api/orders/${id}/confirm-zero-budget-diagnosis`),
+
+  disputeZeroBudgetDiagnosis: (id: string, note?: string) =>
+    api.post(`/api/orders/${id}/dispute-zero-budget-diagnosis`, { note }),
 }
 
 export const productOrdersAPI = {
