@@ -79,6 +79,10 @@ export const ordersAPI = {
     submitAdvancePayment: (id: string, paymentDetails: Record<string, string>) =>
     api.post(`/api/orders/${id}/advance-payment`, { paymentDetails }),
 
+  // Pago anticipado en partes — el cliente decide el monto de cada abono
+    submitAdvancePaymentInstallment: (id: string, paymentDetails: Record<string, string>, amount: number) =>
+    api.post(`/api/orders/${id}/advance-payment-installment`, { paymentDetails, amount }),
+
     submitFinalPayment: (id: string, paymentDetails: Record<string, string>) =>
     api.post(`/api/orders/${id}/final-payment`, { paymentDetails }),
 }

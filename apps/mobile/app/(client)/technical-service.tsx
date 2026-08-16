@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
+import { Feather } from '@expo/vector-icons'
 import { useToastStore } from '../../src/store/toast.store'
 
 // ── Tipos ────────────────────────────────────────────────────────
@@ -136,6 +137,7 @@ export default function TechnicalServiceScreen() {
   const [noAccessories, setNoAccessories] = useState(false)
   const [devicePassword, setDevicePassword] = useState('')
   const [noPassword, setNoPassword] = useState(false)
+  const [showDevicePassword, setShowDevicePassword] = useState(false)
 
   // ── Selección múltiple ───────────────────────────────────────────
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
@@ -255,7 +257,7 @@ export default function TechnicalServiceScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <LinearGradient
         colors={['#ffffff', '#eef2ff', '#d5ddff', '#8fa5ff']}
         style={{ flex: 1 }}
@@ -313,8 +315,26 @@ export default function TechnicalServiceScreen() {
             </TouchableOpacity>
 
             <Text style={styles.label}>Contraseña del equipo *</Text>
-            <TextInput style={styles.input} placeholder="Necesaria para pruebas del técnico"
-              value={devicePassword} onChangeText={setDevicePassword} editable={!noPassword} />
+            <Text style={styles.passwordHint}>
+              Solo la usa el técnico para probar el equipo durante la reparación.
+            </Text>
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Necesaria para pruebas del técnico"
+                value={devicePassword}
+                onChangeText={setDevicePassword}
+                editable={!noPassword}
+                secureTextEntry={!showDevicePassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowDevicePassword((prev) => !prev)}
+                disabled={noPassword}
+              >
+                <Feather name={showDevicePassword ? 'eye-off' : 'eye'} size={20} color="#8a8fc0" />
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity style={styles.checkRow} onPress={handleNoPassword}>
               <View style={[styles.checkbox, noPassword && styles.checkboxActive]}>
                 {noPassword && <Text style={styles.checkmark}>✓</Text>}
@@ -473,6 +493,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9f9f9', borderRadius: 8, padding: 12,
     fontSize: 15, borderWidth: 1, borderColor: '#e0e0e0', marginBottom: 4,
   },
+  passwordHint: { fontSize: 12, color: '#8a8fc0', marginBottom: 6 },
+  passwordRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#f9f9f9', borderRadius: 8,
+    borderWidth: 1, borderColor: '#e0e0e0', marginBottom: 4,
+  },
+  passwordInput: { flex: 1, padding: 12, fontSize: 15 },
+  eyeBtn: { padding: 12 },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
   typeRow: { flexDirection: 'row', gap: 10, marginBottom: 4 },
   typeBtn: {

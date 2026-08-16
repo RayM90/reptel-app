@@ -14,6 +14,7 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import { productOrdersAPI } from '../../src/services/api'
 import { useToastStore } from '../../src/store/toast.store'
+import { usePaymentDraft } from '../../src/hooks/usePaymentDraft'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -48,6 +49,24 @@ export default function UploadReceiptScreen() {
   const [correo, setCorreo] = useState('')
   const [uid, setUid] = useState('')
   const [nombre, setNombre] = useState('')
+
+  const { clearDraft } = usePaymentDraft(
+    'upload-receipt',
+    orderId,
+    { banco, telefono, referencia, monto, titular, cedulaLetter, cedulaNumber, correo, uid, nombre },
+    (loaded) => {
+      if (loaded.banco !== undefined) setBanco(loaded.banco)
+      if (loaded.telefono !== undefined) setTelefono(loaded.telefono)
+      if (loaded.referencia !== undefined) setReferencia(loaded.referencia)
+      if (loaded.monto !== undefined) setMonto(loaded.monto)
+      if (loaded.titular !== undefined) setTitular(loaded.titular)
+      if (loaded.cedulaLetter === 'V' || loaded.cedulaLetter === 'E') setCedulaLetter(loaded.cedulaLetter)
+      if (loaded.cedulaNumber !== undefined) setCedulaNumber(loaded.cedulaNumber)
+      if (loaded.correo !== undefined) setCorreo(loaded.correo)
+      if (loaded.uid !== undefined) setUid(loaded.uid)
+      if (loaded.nombre !== undefined) setNombre(loaded.nombre)
+    }
+  )
 
   const [loading, setLoading] = useState(false)
   const showToast = useToastStore((state) => state.showToast)
@@ -88,6 +107,7 @@ export default function UploadReceiptScreen() {
     setLoading(true)
     try {
       await productOrdersAPI.uploadReceipt(orderId, paymentDetails, montoNumber)
+      clearDraft()
       // El Alert original solo tenía un botón ("Ver mis pedidos") que
       // navegaba — mostramos el toast de éxito y navegamos directo.
       showToast(

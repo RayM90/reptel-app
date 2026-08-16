@@ -12,6 +12,16 @@ import { useState, useEffect, useCallback } from 'react'
 import { ordersAPI } from '../../src/services/api'
 import { useToastStore } from '../../src/store/toast.store'
 
+// El backend guarda el método de pago con el enum de Prisma (MOBILE_PAYMENT,
+// TRANSFER, BINANCE), pero la pantalla de pago espera los literales que usa
+// el formulario (PAGO_MOVIL, TRANSFERENCIA, BINANCE) — sin este mapeo, el
+// valor no coincide con ninguna condición y no se muestra ningún campo.
+const BACKEND_TO_FRONTEND_METHOD: Record<string, 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'> = {
+  MOBILE_PAYMENT: 'PAGO_MOVIL',
+  TRANSFER: 'TRANSFERENCIA',
+  BINANCE: 'BINANCE',
+}
+
 type OrderStatus =
   | 'PENDING_PAYMENT'
   | 'RECEIVED'
@@ -36,10 +46,21 @@ interface TechOrder {
   status: OrderStatus
   problem: string
   observations?: string
+  diagnosis?: string | null
   budget?: number | null
   budgetApproved?: boolean | null
   deliveryAmount?: number | null
   revisionAmount?: number | null
+  // Viene del backend como enum de Prisma (MOBILE_PAYMENT/TRANSFER/BINANCE),
+  // no como los literales del formulario — se traduce con BACKEND_TO_FRONTEND_METHOD.
+  advancePaymentMethod?: string | null
+  advancePaymentSubmissions?: {
+    id: string
+    amount: number
+    status: 'PENDING' | 'CONFIRMED' | 'REJECTED'
+    rejectionReason?: string | null
+    createdAt: string
+  }[]
   finalPaymentDetails?: Record<string, string> | null
   finalPaymentConfirmed?: boolean
   finalPaymentRejectionReason?: string | null
@@ -235,11 +256,77 @@ export default function MyTechnicalOrdersScreen() {
                         <Text style={styles.detailValue}>{order.problem}</Text>
                       </View>
 
+                      {/* Anticipo — solo mientras está pendiente de completarse */}
+                      {status === 'PENDING_PAYMENT' && (() => {
+                        const total =
+                          Number(order.deliveryAmount ?? 10) + Number(order.revisionAmount ?? 15)
+                        const submissions = order.advancePaymentSubmissions ?? []
+                        // "contado" cuenta PENDING + CONFIRMED — se usa para el restante,
+                        // así el cliente nunca puede enviar de más aunque haya abonos sin
+                        // revisar. "confirmado" es solo lo ya aprobado — es lo que se
+                        // muestra en el título para no dar a entender que ya está pagado
+                        // cuando en realidad sigue pendiente de revisión.
+                        const contado = submissions
+                          .filter((s) => s.status !== 'REJECTED')
+                          .reduce((sum, s) => sum + Number(s.amount), 0)
+                        const confirmado = submissions
+                          .filter((s) => s.status === 'CONFIRMED')
+                          .reduce((sum, s) => sum + Number(s.amount), 0)
+                        const restante = Math.max(0, total - contado)
+
+                        return (
+                          <View style={styles.advanceCard}>
+                            <Text style={styles.advanceTitle}>
+                              Anticipo confirmado: ${confirmado.toFixed(2)} de ${total.toFixed(2)}
+                            </Text>
+                            {submissions.length > 0 && (
+                              <View style={{ marginTop: 6, marginBottom: 10 }}>
+                                {submissions.map((s) => (
+                                  <Text key={s.id} style={styles.advanceSubmissionRow}>
+                                    {s.status === 'CONFIRMED' ? '✅' : s.status === 'REJECTED' ? '❌' : '⏳'}{' '}
+                                    ${Number(s.amount).toFixed(2)} — {s.status === 'CONFIRMED' ? 'confirmado' : s.status === 'REJECTED' ? 'rechazado' : 'pendiente de revisión'}
+                                  </Text>
+                                ))}
+                              </View>
+                            )}
+                            {restante > 0.009 && (
+                              <TouchableOpacity
+                                style={styles.advanceBtn}
+                                onPress={(e) => {
+                                  e.stopPropagation()
+                                  router.push({
+                                    pathname: '/(client)/upload-advance-receipt',
+                                    params: {
+                                      orderId: order.id,
+                                      paymentMethod:
+                                        BACKEND_TO_FRONTEND_METHOD[order.advancePaymentMethod || ''] || 'PAGO_MOVIL',
+                                      total: String(restante),
+                                    },
+                                  })
+                                }}
+                              >
+                                <Text style={styles.advanceBtnText}>
+                                  💳 {submissions.length > 0 ? `Completar anticipo (falta $${restante.toFixed(2)})` : 'Pagar anticipo'}
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        )
+                      })()}
+
                       {/* Observaciones */}
                       {order.observations && (
                         <View style={styles.detailRow}>
                           <Text style={styles.detailLabel}>Observaciones</Text>
                           <Text style={styles.detailValue}>{order.observations}</Text>
+                        </View>
+                      )}
+
+                      {/* Diagnóstico del técnico */}
+                      {order.diagnosis && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Diagnóstico del técnico</Text>
+                          <Text style={styles.detailValue}>{order.diagnosis}</Text>
                         </View>
                       )}
 
@@ -263,8 +350,9 @@ export default function MyTechnicalOrdersScreen() {
                         </View>
                       )}
 
-                      {/* Comprar repuesto — solo si ya hay presupuesto */}
-                      {order.budget != null && (
+                      {/* Comprar repuesto — solo si hay presupuesto real (no aplica con $0,
+                          ahí no hubo reparación que requiera piezas instaladas por el técnico) */}
+                      {order.budget != null && Number(order.budget) > 0 && (
                         <TouchableOpacity
                           style={styles.linkedProductBtn}
                           onPress={(e) => {
@@ -291,8 +379,10 @@ export default function MyTechnicalOrdersScreen() {
                         </View>
                       )}
 
-                      {/* Pago final — solo cuando la orden está lista (READY) */}
-                      {status === 'READY' && !order.finalPaymentConfirmed && (
+                      {/* Pago final — solo cuando la orden está lista (READY) y hay saldo
+                          real que pagar. Con presupuesto $0 no hay nada que cobrar; el
+                          admin cierra la orden directo sin pasar por este paso. */}
+                      {status === 'READY' && !order.finalPaymentConfirmed && order.budget != null && Number(order.budget) > 0 && (
                         <TouchableOpacity
                           style={styles.finalPaymentBtn}
                           onPress={(e) => {
@@ -422,6 +512,23 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   linkedProductBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  advanceCard: {
+    backgroundColor: '#eef2ff',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+  },
+  advanceTitle: { fontSize: 13, fontWeight: '700', color: '#17247a' },
+  advanceSubmissionRow: { fontSize: 12, color: '#3730a3', marginTop: 4 },
+  advanceBtn: {
+    backgroundColor: '#17247a',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  advanceBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   rejectionCard: {
     marginBottom: 12,
     backgroundColor: '#fee2e2',

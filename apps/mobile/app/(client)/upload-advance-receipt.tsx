@@ -14,6 +14,7 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import { ordersAPI } from '../../src/services/api'
 import { useToastStore } from '../../src/store/toast.store'
+import { usePaymentDraft } from '../../src/hooks/usePaymentDraft'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -49,15 +50,37 @@ export default function UploadAdvanceReceiptScreen() {
   const [uid, setUid] = useState('')
   const [nombre, setNombre] = useState('')
 
+  const { clearDraft } = usePaymentDraft(
+    'upload-advance-receipt',
+    orderId,
+    { banco, telefono, referencia, monto, titular, cedulaLetter, cedulaNumber, correo, uid, nombre },
+    (loaded) => {
+      if (loaded.banco !== undefined) setBanco(loaded.banco)
+      if (loaded.telefono !== undefined) setTelefono(loaded.telefono)
+      if (loaded.referencia !== undefined) setReferencia(loaded.referencia)
+      if (loaded.monto !== undefined) setMonto(loaded.monto)
+      if (loaded.titular !== undefined) setTitular(loaded.titular)
+      if (loaded.cedulaLetter === 'V' || loaded.cedulaLetter === 'E') setCedulaLetter(loaded.cedulaLetter)
+      if (loaded.cedulaNumber !== undefined) setCedulaNumber(loaded.cedulaNumber)
+      if (loaded.correo !== undefined) setCorreo(loaded.correo)
+      if (loaded.uid !== undefined) setUid(loaded.uid)
+      if (loaded.nombre !== undefined) setNombre(loaded.nombre)
+    }
+  )
+
   const [loading, setLoading] = useState(false)
   const showToast = useToastStore((state) => state.showToast)
 
   const montoNumber = monto ? Number(monto) : 0
   const faltante = totalNumber != null ? totalNumber - montoNumber : 0
-  const montoInsuficiente = totalNumber != null && faltante > 0.009
+  // El cliente puede pagar en partes: solo bloqueamos si el monto es 0/vacío
+  // o si se pasa del total pendiente. Menos del total es válido — queda un
+  // abono más por enviar.
+  const montoExcedeElTotal = totalNumber != null && montoNumber - totalNumber > 0.009
+  const esUnAbonoParcial = totalNumber != null && faltante > 0.009
 
   const isFormValid = () => {
-    if (!monto || montoInsuficiente) return false
+    if (!monto || montoNumber <= 0 || montoExcedeElTotal) return false
     if (paymentMethod === 'PAGO_MOVIL') return !!banco && !!telefono && !!referencia
     if (paymentMethod === 'TRANSFERENCIA') return !!banco && !!titular && !!cedula && !!referencia
     if (paymentMethod === 'BINANCE') return !!correo && !!uid && !!nombre
@@ -86,11 +109,12 @@ export default function UploadAdvanceReceiptScreen() {
 
     setLoading(true)
     try {
-      await ordersAPI.submitAdvancePayment(orderId, paymentDetails)
-      // El Alert original solo tenía un botón ("Ver mis órdenes") que
-      // navegaba — mostramos el toast de éxito y navegamos directo.
+      await ordersAPI.submitAdvancePaymentInstallment(orderId, paymentDetails, montoNumber)
+      clearDraft()
       showToast(
-        '✅ Datos enviados. El equipo de RepTel los revisará y confirmará tu pago pronto. El técnico será despachado una vez confirmado.',
+        esUnAbonoParcial
+          ? `✅ Abono de $${montoNumber.toFixed(2)} enviado. Te falta $${faltante.toFixed(2)} para completar el anticipo — puedes enviarlo cuando quieras desde "Mis Órdenes".`
+          : '✅ Datos enviados. El equipo de RepTel los revisará y confirmará tu pago pronto. El técnico será despachado una vez confirmado.',
         'success'
       )
       router.replace('/(client)/my-technical-orders')
@@ -188,10 +212,18 @@ export default function UploadAdvanceReceiptScreen() {
 
             <Field label="Monto enviado ($)" value={monto} onChangeText={(text) => setMonto(onlyDecimal(text))} placeholder="Ej. 25.00" keyboardType="decimal-pad" />
 
-            {montoInsuficiente && (
+            {esUnAbonoParcial && (
+              <View style={styles.infoNoticeCard}>
+                <Text style={styles.infoNoticeText}>
+                  💡 Puedes pagar en partes. Con este abono quedarían ${faltante.toFixed(2)} pendientes de ${totalNumber?.toFixed(2)} — envía el resto cuando quieras desde "Mis Órdenes".
+                </Text>
+              </View>
+            )}
+
+            {montoExcedeElTotal && (
               <View style={styles.warningCard}>
                 <Text style={styles.warningText}>
-                  ⚠️ Faltan ${faltante.toFixed(2)} para completar el pago total de ${totalNumber?.toFixed(2)}
+                  ⚠️ El monto no puede superar el total pendiente de ${totalNumber?.toFixed(2)}
                 </Text>
               </View>
             )}
@@ -308,6 +340,16 @@ const styles = StyleSheet.create({
     borderColor: '#fca5a5',
   },
   warningText: { fontSize: 13, color: '#b91c1c', fontWeight: '600' },
+  infoNoticeCard: {
+    backgroundColor: '#eef2ff',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: -4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+  },
+  infoNoticeText: { fontSize: 13, color: '#3730a3', fontWeight: '600', lineHeight: 18 },
   submitBtn: { backgroundColor: '#17247a', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginBottom: 16, marginTop: 8 },
   submitBtnDisabled: { backgroundColor: '#c0c0c0' },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },

@@ -177,6 +177,86 @@ export const submitAdvancePayment = async (req: AuthRequest, res: Response): Pro
 }
 
 // ─────────────────────────────────────────────
+// CLIENTE — Enviar un abono del anticipo (pago en partes)
+// El cliente decide libremente cuántos abonos hace y de qué monto, hasta
+// completar el total. Reemplaza a submitAdvancePayment para el flujo nuevo.
+// ─────────────────────────────────────────────
+
+export const submitAdvancePaymentInstallment = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const id = String(req.params.id)
+    const { paymentDetails, amount } = req.body
+
+    if (!paymentDetails || typeof paymentDetails !== 'object') {
+      res.status(400).json({ success: false, message: 'paymentDetails es requerido' })
+      return
+    }
+
+    if (amount === undefined || amount === null || Number.isNaN(Number(amount))) {
+      res.status(400).json({ success: false, message: 'amount es requerido y debe ser numérico' })
+      return
+    }
+
+    const submission = await ordersService.submitAdvancePaymentInstallment(
+      id,
+      email,
+      paymentDetails,
+      Number(amount)
+    )
+    res.status(201).json({ success: true, data: submission })
+  } catch (error: any) {
+    console.error('ERROR SUBIR ABONO DE ANTICIPO:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al registrar el abono' })
+  }
+}
+
+// ─────────────────────────────────────────────
+// ADMIN — Confirmar o rechazar un abono específico del anticipo
+// ─────────────────────────────────────────────
+
+export const confirmAdvancePaymentInstallment = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const submissionId = String(req.params.submissionId)
+    const { approved, rejectionReason } = req.body
+
+    if (approved === undefined) {
+      res.status(400).json({ success: false, message: 'approved es requerido (true o false)' })
+      return
+    }
+
+    if (approved === false && !rejectionReason) {
+      res.status(400).json({
+        success: false,
+        message: 'rejectionReason es requerido cuando se rechaza el abono',
+      })
+      return
+    }
+
+    const order = await ordersService.confirmAdvancePaymentInstallment(
+      submissionId,
+      Boolean(approved),
+      rejectionReason
+    )
+
+    broadcastOrderUpdate({
+      type: 'ORDER_STATUS_UPDATED',
+      data: order,
+    })
+
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR CONFIRMAR ABONO DE ANTICIPO:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al confirmar el abono' })
+  }
+}
+
+// ─────────────────────────────────────────────
 // CLIENTE — Historial de órdenes de servicio técnico propias
 // ─────────────────────────────────────────────
 
@@ -412,6 +492,27 @@ export const confirmFinalPayment = async (req: AuthRequest, res: Response): Prom
   } catch (error: any) {
     console.error('ERROR CONFIRMAR PAGO FINAL:', error)
     res.status(400).json({ success: false, message: error.message || 'Error al confirmar el pago final' })
+  }
+}
+
+// ─────────────────────────────────────────────
+// ADMIN — Cerrar una orden con presupuesto $0 (sin pago final que aprobar)
+// ─────────────────────────────────────────────
+
+export const closeZeroBudgetOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const order = await ordersService.closeZeroBudgetOrder(id)
+
+    broadcastOrderUpdate({
+      type: 'ORDER_STATUS_UPDATED',
+      data: order,
+    })
+
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR CERRAR ORDEN SIN COSTO:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al cerrar la orden' })
   }
 }
 

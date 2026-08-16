@@ -2,6 +2,7 @@ import { create } from 'zustand'
 
 interface ConfirmOptions {
   title: string
+  message?: string
   requireText?: boolean
   textLabel?: string
   confirmLabel?: string

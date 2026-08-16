@@ -475,6 +475,62 @@ export const confirmPartialPayment = async (
 }
 
 // ─────────────────────────────────────────────
+// ADMIN — Cancelar un pedido y devolver el stock reservado
+// Solo permite cancelar pedidos en PENDING. Una vez CONFIRMED (pago
+// completo, motorizado ya asignado) o DELIVERED, cancelar implicaría
+// revertir pagos/asignaciones ya hechas — eso queda fuera de este alcance.
+// ─────────────────────────────────────────────
+
+export const cancelProductOrder = async (productOrderId: string) => {
+  const order = await prisma.productOrder.findUnique({
+    where: { id: productOrderId },
+    include: { items: true, client: { include: { user: true } } },
+  })
+
+  if (!order) {
+    throw new Error('Pedido no encontrado')
+  }
+
+  if (order.status !== 'PENDING') {
+    throw new Error(
+      `Solo se pueden cancelar pedidos en estado PENDING. Este pedido está en ${order.status}.`
+    )
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    for (const item of order.items) {
+      await tx.product.update({
+        where: { id: item.productId },
+        data: { stock: { increment: item.quantity } },
+      })
+    }
+
+    return tx.productOrder.update({
+      where: { id: productOrderId },
+      data: { status: 'CANCELLED' },
+      include: {
+        items: { include: { product: true } },
+        client: true,
+      },
+    })
+  })
+
+  if (order.client.user) {
+    await prisma.notification.create({
+      data: {
+        type: 'STATUS_CHANGE',
+        channel: 'PUSH',
+        message: `Tu pedido #${productOrderId.slice(0, 8)} fue cancelado. El stock reservado fue liberado.`,
+        userId: order.client.user.id,
+        productOrderId,
+      },
+    })
+  }
+
+  return updated
+}
+
+// ─────────────────────────────────────────────
 // CONSULTAS
 // ─────────────────────────────────────────────
 

@@ -66,6 +66,7 @@ export default function ConfirmDialog() {
         tabIndex={-1}
       >
         <h3 id="confirm-dialog-title">{options.title}</h3>
+        {options.message && <p className="form-hint">{options.message}</p>}
 
         {options.requireText && (
           <div className="form-group">

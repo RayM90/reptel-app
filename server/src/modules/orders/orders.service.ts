@@ -118,6 +118,7 @@ export const getAllOrders = async () => {
       technician: { select: { id: true, name: true, email: true } },
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
+      advancePaymentSubmissions: { orderBy: { createdAt: 'desc' } },
     },
     orderBy: { receivedAt: 'desc' },
   })
@@ -181,6 +182,7 @@ export const getOrdersByClient = async (clientId: string) => {
       device: true,
       technician: { select: { id: true, name: true } },
       statusHistory: { orderBy: { createdAt: 'desc' } },
+      advancePaymentSubmissions: { orderBy: { createdAt: 'desc' } },
     },
     orderBy: { receivedAt: 'desc' },
   })
@@ -400,6 +402,177 @@ export const submitAdvancePayment = async (
 }
 
 // ─────────────────────────────────────────────
+// PAGO ANTICIPADO EN PARTES (abonos)
+// Mismo patrón que ProductOrderPaymentSubmission: el cliente decide
+// libremente cuántos pagos hace y de qué monto, cada envío es un registro
+// independiente, y no puede enviar más de lo que falta para completar el
+// total ($25 = ADVANCE_DELIVERY_AMOUNT + ADVANCE_REVISION_AMOUNT). Al
+// confirmarse abonos que suman el total, la orden pasa a RECEIVED sola.
+// ─────────────────────────────────────────────
+
+export const submitAdvancePaymentInstallment = async (
+  orderId: string,
+  email: string,
+  paymentDetails: Record<string, string>,
+  amount: number
+) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { clientId: true },
+  })
+
+  if (!user || !user.clientId) {
+    throw new Error('Cliente no encontrado para este usuario')
+  }
+
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, clientId: user.clientId },
+    include: {
+      client: true,
+      // Se cuentan CONFIRMED y PENDING para calcular lo disponible, así el
+      // cliente nunca puede enviar de más aunque haya abonos sin revisar.
+      advancePaymentSubmissions: { where: { status: { in: ['CONFIRMED', 'PENDING'] } } },
+    },
+  })
+
+  if (!order) {
+    throw new Error('Orden no encontrada')
+  }
+
+  if (amount == null || amount <= 0) {
+    throw new Error('El monto del pago debe ser mayor a cero')
+  }
+
+  const total =
+    Number(order.deliveryAmount ?? ADVANCE_DELIVERY_AMOUNT) +
+    Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+  const alreadyAccounted = order.advancePaymentSubmissions.reduce(
+    (sum, s) => sum + Number(s.amount),
+    0
+  )
+  const remaining = total - alreadyAccounted
+
+  if (amount > remaining + 0.009) {
+    throw new Error(
+      `El monto excede lo pendiente por pagar. Restante: $${remaining.toFixed(2)}`
+    )
+  }
+
+  const submission = await prisma.advancePaymentSubmission.create({
+    data: { orderId, amount, paymentDetails },
+  })
+
+  const admins = await prisma.user.findMany({
+    where: { role: 'ADMIN', isActive: true },
+    select: { id: true },
+  })
+
+  if (admins.length > 0) {
+    await prisma.notification.createMany({
+      data: admins.map((admin) => ({
+        type: 'PAYMENT_CONFIRMED',
+        channel: 'PUSH',
+        message: `${order.client.name} ${order.client.lastName} envió un abono de $${amount.toFixed(2)} para el anticipo de la orden #${order.orderNumber}`,
+        userId: admin.id,
+        orderId,
+      })),
+    })
+  }
+
+  return submission
+}
+
+export const confirmAdvancePaymentInstallment = async (
+  submissionId: string,
+  approved: boolean,
+  rejectionReason?: string
+) => {
+  const submission = await prisma.advancePaymentSubmission.findUnique({
+    where: { id: submissionId },
+    include: {
+      order: {
+        include: {
+          client: { include: { user: true } },
+          advancePaymentSubmissions: { where: { status: 'CONFIRMED' } },
+        },
+      },
+    },
+  })
+
+  if (!submission) {
+    throw new Error('Abono de pago no encontrado')
+  }
+
+  if (submission.status !== 'PENDING') {
+    throw new Error('Este abono ya fue procesado')
+  }
+
+  if (!approved && !rejectionReason) {
+    throw new Error('rejectionReason es requerido cuando se rechaza el abono')
+  }
+
+  const order = submission.order
+  const total =
+    Number(order.deliveryAmount ?? ADVANCE_DELIVERY_AMOUNT) +
+    Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+
+  const updatedOrder = await prisma.$transaction(async (tx) => {
+    await tx.advancePaymentSubmission.update({
+      where: { id: submissionId },
+      data: {
+        status: approved ? 'CONFIRMED' : 'REJECTED',
+        rejectionReason: approved ? null : rejectionReason,
+        confirmedAt: approved ? new Date() : null,
+      },
+    })
+
+    if (approved) {
+      const alreadyConfirmed = order.advancePaymentSubmissions.reduce(
+        (sum, s) => sum + Number(s.amount),
+        0
+      )
+      const newTotalConfirmed = alreadyConfirmed + Number(submission.amount)
+      const orderNowComplete = newTotalConfirmed + 0.009 >= total
+
+      if (orderNowComplete) {
+        return await tx.order.update({
+          where: { id: order.id },
+          data: {
+            advancePaymentConfirmed: true,
+            advancePaymentConfirmedAt: new Date(),
+            status: 'RECEIVED',
+            statusHistory: {
+              create: {
+                status: 'RECEIVED',
+                comment: `Anticipo de $${total} completado mediante abonos — confirmado por el administrador`,
+              },
+            },
+          },
+          include: {
+            client: true,
+            device: true,
+            statusHistory: { orderBy: { createdAt: 'desc' } },
+            advancePaymentSubmissions: true,
+          },
+        })
+      }
+    }
+
+    return await tx.order.findUniqueOrThrow({
+      where: { id: order.id },
+      include: {
+        client: true,
+        device: true,
+        statusHistory: { orderBy: { createdAt: 'desc' } },
+        advancePaymentSubmissions: true,
+      },
+    })
+  })
+
+  return updatedOrder
+}
+
+// ─────────────────────────────────────────────
 // ÓRDENES — ACTUALIZACIÓN
 // ─────────────────────────────────────────────
 
@@ -504,17 +677,27 @@ export const submitDiagnosis = async (
   budget: number,
   serviceCatalogId?: string
 ) => {
+  // Si el presupuesto es $0 no hay nada que el cliente deba aprobar ni pagar
+  // (ej. la falla no requería reparación, o era un accesorio externo como el
+  // cargador) — la orden se cierra directo en vez de quedar "esperando
+  // aprobación" de un monto que no existe.
+  const hasCost = budget > 0
+  const nextStatus = hasCost ? 'WAITING_APPROVAL' : 'READY'
+
   return await prisma.order.update({
     where: { id },
     data: {
       diagnosis,
       budget,
+      budgetApproved: hasCost ? undefined : true,
       serviceCatalogId: serviceCatalogId ?? null,
-      status: 'WAITING_APPROVAL',
+      status: nextStatus,
       statusHistory: {
         create: {
-          status: 'WAITING_APPROVAL',
-          comment: `Diagnóstico registrado por el técnico. Presupuesto: $${budget}`,
+          status: nextStatus,
+          comment: hasCost
+            ? `Diagnóstico registrado por el técnico. Presupuesto: $${budget}`
+            : `Diagnóstico registrado por el técnico. Sin costo — no requiere aprobación de presupuesto.`,
         },
       },
     },
@@ -725,6 +908,77 @@ export const confirmFinalPayment = async (
         message: approved
           ? `Tu pago fue confirmado. La orden #${order.orderNumber} fue completada. ¡Gracias por confiar en RepTel!`
           : `No pudimos confirmar tu pago final para la orden #${order.orderNumber}: ${rejectionReason}. Por favor envía tus datos de pago nuevamente.`,
+        userId: order.client.user.id,
+        orderId: id,
+      },
+    })
+  }
+
+  return updatedOrder
+}
+
+// ─────────────────────────────────────────────
+// ADMIN — Cerrar una orden con presupuesto $0 (diagnóstico sin costo)
+// No hay saldo que el cliente deba pagar ni aprobar, así que este cierre
+// no pasa por confirmFinalPayment. La comisión del técnico, en este caso,
+// no sigue la fórmula normal (delivery + 40% × (presupuesto - revisión)),
+// porque con presupuesto $0 esa resta da negativo — el técnico sí hizo el
+// diagnóstico, así que cobra el delivery completo + 40% del monto de
+// revisión ($15), en vez de que se le reste.
+// ─────────────────────────────────────────────
+
+export const closeZeroBudgetOrder = async (id: string) => {
+  const order = await prisma.order.findUnique({
+    where: { id },
+    include: { client: { include: { user: true } } },
+  })
+
+  if (!order) {
+    throw new Error('Orden no encontrada')
+  }
+
+  const budget = order.budget != null ? Number(order.budget) : null
+  if (budget !== 0) {
+    throw new Error('Esta acción solo aplica a órdenes con presupuesto $0')
+  }
+
+  const deliveryAmount = order.deliveryAmount ? Number(order.deliveryAmount) : 0
+  const revisionAmount = order.revisionAmount ? Number(order.revisionAmount) : 0
+  const commission = deliveryAmount + 0.4 * revisionAmount
+
+  const updatedOrder = await prisma.order.update({
+    where: { id },
+    data: {
+      finalPaymentConfirmed: true,
+      finalPaymentConfirmedAt: new Date(),
+      technicianCommission: commission,
+      status: 'DELIVERED',
+      deliveredAt: new Date(),
+      statusHistory: {
+        create: {
+          status: 'DELIVERED',
+          comment: `Orden cerrada sin costo (diagnóstico sin reparación). Comisión del técnico: $${commission.toFixed(2)}`,
+        },
+      },
+    },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+
+  if (order.technicianId) {
+    await decrementTechnicianLoad(order.technicianId)
+  }
+
+  if (order.client.user) {
+    await prisma.notification.create({
+      data: {
+        type: 'PAYMENT_CONFIRMED',
+        channel: 'PUSH',
+        message: `La orden #${order.orderNumber} fue completada sin costo adicional. ¡Gracias por confiar en RepTel!`,
         userId: order.client.user.id,
         orderId: id,
       },
