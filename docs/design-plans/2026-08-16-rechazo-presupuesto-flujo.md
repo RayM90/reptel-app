@@ -19,7 +19,45 @@ cliente, en la app.
 - **Dinero:** los $25 (delivery $10 + revisión $15) ya están cobrados y confirmados por el admin *antes* de que el técnico salga — eso no cambia. Si el cliente rechaza, no se cobra nada más, no hay reembolso.
 - **Automático en ambos paneles:** el admin y el técnico deben ver la orden reflejarse sola, sin tocar código de esos paneles.
 
-## Diagrama del flujo completo (con la pieza que falta en rojo)
+## Actualización — flujo unificado (v2, tras revisar con Raymar)
+
+El diagnóstico (texto libre, ya existe) sigue siendo 100% del técnico — es
+donde confirma qué tiene realmente el equipo y si se puede reparar. Lo único
+nuevo es la capa de decisión encima: **el cliente decide siempre, para
+cualquier presupuesto, incluido $0**. Hoy `submitDiagnosis()` salta
+`WAITING_APPROVAL` cuando `budget === 0` y lo cierra directo un botón de
+ADMIN (`closeZeroBudgetOrder`) — el cliente nunca ve ni confirma eso. Se
+corrige: **`submitDiagnosis()` manda siempre a `WAITING_APPROVAL`**, sea $0
+o no, y el cliente decide en los dos casos:
+
+- **Presupuesto > $0:** Aprobar (sigue a reparación) / Rechazar con motivo (Task 1-4, sin cambios).
+- **Presupuesto = $0** ("nada que reparar"): **Confirmar** (cierra la orden, `DELIVERED`, comisión $16 — mismo resultado que hoy pero lo dispara el cliente) / **No estoy de acuerdo** (confirmado con Raymar: la orden vuelve al técnico para un nuevo diagnóstico — se limpian `budget` y `diagnosis`, reutiliza el mismo formulario "Registrar diagnóstico" que ya existe en el panel del técnico, sin pantallas nuevas).
+
+Técnico y admin ven todo esto reflejado solo por status + `statusHistory`
+(sin botón propio para ellos en esta decisión — confirmado). El
+`closeZeroBudgetOrder` de ADMIN se queda como está, como válvula de escape
+manual (ej. cliente inubicable).
+
+```mermaid
+flowchart TD
+    T[Técnico: diagnóstico + presupuesto] --> W[Orden: WAITING_APPROVAL<br/>siempre, sea $0 o no]
+
+    W --> Z{"¿Presupuesto = $0?"}
+
+    Z -->|No, hay costo| C1{Cliente decide}
+    C1 -->|Aprueba| AP[APPROVED → REPAIRING → READY]
+    AP --> FP[Pago final] --> DEL[DELIVERED<br/>comisión = delivery + 40%×presup-revisión]
+    C1 -->|Rechaza + motivo| CAN[CANCELLED<br/>comisión fija $16]
+
+    Z -->|Sí, $0| C2{Cliente decide}
+    C2 -->|Confirma| DEL2[DELIVERED<br/>comisión fija $16]
+    C2 -->|No está de acuerdo| RESET["budget y diagnosis → null<br/>status → RECEIVED"]
+    RESET --> T
+
+    style RESET fill:#fef9c3,stroke:#a16207,stroke-width:2px
+```
+
+## Diagrama del flujo completo (con la pieza que falta en rojo) — v1, referencia histórica
 
 ```mermaid
 flowchart TD
@@ -109,18 +147,71 @@ cliente").
 
 ## Diseño técnico
 
+### ⚠️ Corrección de seguridad (encontrada al escribir el plan)
+
+`PATCH /:id/budget` está registrada como **`authorize('ADMIN')`** solamente
+(`orders.routes.ts:48`) — el cliente no puede llamarla, y aunque pudiera,
+`updateOrderBudget()` no valida que la orden sea suya (a diferencia de
+`submitAdvancePaymentInstallment`, que sí resuelve `clientId` desde el
+token). Esa ruta se queda como está, para uso de ADMIN/técnico editando el
+presupuesto. En su lugar, **dos endpoints nuevos, client-only, con
+verificación de dueño**, mismo patrón que el resto de acciones del cliente:
+
+- `POST /:id/approve-budget` (CLIENT) — no toca el monto, solo aprueba.
+- `POST /:id/reject-budget` (CLIENT) — el `rejectBudget()` ya diseñado abajo.
+
 ### Backend (`server/src/modules/orders/`)
 
+**`orders.service.ts` — nueva función `approveBudget()`** (client-only,
+no toca el monto):
+
+```ts
+export const approveBudget = async (id: string, email: string) => {
+  const user = await prisma.user.findUnique({ where: { email }, select: { clientId: true } })
+  if (!user || !user.clientId) throw new Error('Cliente no encontrado para este usuario')
+
+  const order = await prisma.order.findFirst({ where: { id, clientId: user.clientId } })
+  if (!order) throw new Error('Orden no encontrada')
+  if (order.status !== 'WAITING_APPROVAL') {
+    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
+  }
+
+  return await prisma.order.update({
+    where: { id },
+    data: {
+      budgetApproved: true,
+      status: 'APPROVED',
+      statusHistory: {
+        create: {
+          status: 'APPROVED',
+          comment: `Presupuesto de $${order.budget} aprobado por el cliente en la app`,
+        },
+      },
+    },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+}
+```
+
 **`orders.service.ts` — nueva función `rejectBudget()`**, gemela de
-`closeZeroBudgetOrder()`:
+`closeZeroBudgetOrder()` pero client-only con verificación de dueño:
 
 ```ts
 export const rejectBudget = async (
   id: string,
+  email: string,
   reason: string,        // "Es muy costoso" | "Prefiero resolverlo por mi cuenta" | texto libre si "Otro"
 ) => {
-  const order = await prisma.order.findUnique({
-    where: { id },
+  const user = await prisma.user.findUnique({ where: { email }, select: { clientId: true } })
+  if (!user || !user.clientId) throw new Error('Cliente no encontrado para este usuario')
+
+  const order = await prisma.order.findFirst({
+    where: { id, clientId: user.clientId },
     include: { client: { include: { user: true } } },
   })
   if (!order) throw new Error('Orden no encontrada')
@@ -168,32 +259,136 @@ export const rejectBudget = async (
 }
 ```
 
-**Ruta nueva:** `POST /api/orders/:id/reject-budget` (client-only, valida que
-la orden pertenezca al cliente autenticado — mismo patrón de
-`submitAdvancePaymentInstallment`, resolviendo `clientId` desde el email del
-token, nunca del body).
+**Rutas nuevas** (`orders.routes.ts`, junto a las demás rutas de CLIENT):
+```ts
+router.post('/:id/approve-budget', authenticate, authorize('CLIENT'), ordersController.approveBudget)
+router.post('/:id/reject-budget', authenticate, authorize('CLIENT'), ordersController.rejectBudget)
+```
 
-**Ruta a activar (ya existe, solo falta un caller):**
-`PATCH /api/orders/:id/budget` con `{ budget: order.budget, approved: true }`
-para "Aceptar" — sin cambios en backend.
+### Backend — nuevo: confirmación del diagnóstico $0
+
+**`submitDiagnosis()` — cambiar la línea del status:**
+```ts
+// antes: const nextStatus = hasCost ? 'WAITING_APPROVAL' : 'READY'
+const nextStatus = 'WAITING_APPROVAL' // siempre — el cliente decide en los dos casos
+```
+(el resto de la función no cambia — `budgetApproved: hasCost ? undefined : true`
+también se quita, ya no se auto-aprueba nada, lo decide el cliente)
+
+**`orders.service.ts` — nueva función `confirmZeroBudgetDiagnosis()`**
+(cliente confirma "nada que reparar", mismo cálculo de comisión que
+`closeZeroBudgetOrder`, pero client-only con verificación de dueño):
+```ts
+export const confirmZeroBudgetDiagnosis = async (id: string, email: string) => {
+  const user = await prisma.user.findUnique({ where: { email }, select: { clientId: true } })
+  if (!user || !user.clientId) throw new Error('Cliente no encontrado para este usuario')
+
+  const order = await prisma.order.findFirst({ where: { id, clientId: user.clientId } })
+  if (!order) throw new Error('Orden no encontrada')
+  if (order.status !== 'WAITING_APPROVAL') {
+    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
+  }
+  if (Number(order.budget) !== 0) {
+    throw new Error('Esta acción solo aplica a diagnósticos sin costo')
+  }
+
+  const deliveryAmount = order.deliveryAmount ? Number(order.deliveryAmount) : 0
+  const revisionAmount = order.revisionAmount ? Number(order.revisionAmount) : 0
+  const commission = deliveryAmount + 0.4 * revisionAmount
+
+  return await prisma.order.update({
+    where: { id },
+    data: {
+      budgetApproved: true,
+      finalPaymentConfirmed: true,
+      finalPaymentConfirmedAt: new Date(),
+      technicianCommission: commission,
+      status: 'DELIVERED',
+      deliveredAt: new Date(),
+      statusHistory: {
+        create: {
+          status: 'DELIVERED',
+          comment: `Cliente confirmó el diagnóstico — no requiere reparación. Comisión del técnico: $${commission.toFixed(2)}.`,
+        },
+      },
+    },
+    include: { client: true, device: true, technician: { select: { id: true, name: true } }, statusHistory: { orderBy: { createdAt: 'desc' } } },
+  })
+  // decrementTechnicianLoad + notificación al cliente, igual que closeZeroBudgetOrder
+}
+```
+
+**`orders.service.ts` — nueva función `disputeZeroBudgetDiagnosis()`**
+(cliente no está de acuerdo → vuelve al técnico):
+```ts
+export const disputeZeroBudgetDiagnosis = async (id: string, email: string, note?: string) => {
+  const user = await prisma.user.findUnique({ where: { email }, select: { clientId: true } })
+  if (!user || !user.clientId) throw new Error('Cliente no encontrado para este usuario')
+
+  const order = await prisma.order.findFirst({ where: { id, clientId: user.clientId } })
+  if (!order) throw new Error('Orden no encontrada')
+  if (order.status !== 'WAITING_APPROVAL') {
+    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
+  }
+  if (Number(order.budget) !== 0) {
+    throw new Error('Esta acción solo aplica a diagnósticos sin costo')
+  }
+
+  return await prisma.order.update({
+    where: { id },
+    data: {
+      budget: null,
+      diagnosis: null,
+      status: 'RECEIVED',
+      statusHistory: {
+        create: {
+          status: 'RECEIVED',
+          comment: `Cliente no estuvo de acuerdo con el diagnóstico (sin costo) — solicitó nueva revisión.${note ? ` Nota: ${note}` : ''}`,
+        },
+      },
+    },
+    include: { client: true, device: true, technician: { select: { id: true, name: true } }, statusHistory: { orderBy: { createdAt: 'desc' } } },
+  })
+  // sin decrementTechnicianLoad — la orden sigue activa para el mismo técnico
+}
+```
+
+**Rutas nuevas:**
+```ts
+router.post('/:id/confirm-zero-budget-diagnosis', authenticate, authorize('CLIENT'), ordersController.confirmZeroBudgetDiagnosis)
+router.post('/:id/dispute-zero-budget-diagnosis', authenticate, authorize('CLIENT'), ordersController.disputeZeroBudgetDiagnosis)
+```
+
+`closeZeroBudgetOrder` (ADMIN) se queda igual, sin tocar — válvula de escape manual.
 
 ### Mobile (`apps/mobile`)
 
-**`src/services/api.ts`** — agregar `rejectBudget(orderId, reason)` junto al
-ya existente `updateOrderBudget`.
+**`src/services/api.ts`** — agregar `approveBudget(orderId)` y
+`rejectBudget(orderId, reason)` (el `updateOrderBudget` existente se deja
+como está, es ADMIN-only).
 
 **`app/(client)/my-technical-orders.tsx`** — en el bloque expandido, cuando
-`status === 'WAITING_APPROVAL'`: mostrar el presupuesto + dos botones,
-**"✅ Aceptar presupuesto"** (llama `updateOrderBudget(id, budget, true)`
-directo) y **"❌ Rechazar presupuesto"** (abre selector de motivo inline →
-`useConfirm()` → `rejectBudget(id, reason)`). Ambos con `fetchOrders()` al
-terminar, igual que el resto de acciones de esta pantalla.
+`status === 'WAITING_APPROVAL'`, dos variantes según `budget`:
+
+- **`budget > 0`:** presupuesto + **"✅ Aprobar presupuesto"**
+  (`useConfirm()` → `approveBudget(id)`) y **"❌ Rechazar presupuesto"**
+  (selector de motivo inline → `useConfirm()` → `rejectBudget(id, reason)`).
+- **`budget === 0`:** texto del diagnóstico + **"✅ Confirmar diagnóstico"**
+  (`useConfirm()` → `confirmZeroBudgetDiagnosis(id)`) y **"🔁 No estoy de
+  acuerdo, pedir nueva revisión"** (`useConfirm()` →
+  `disputeZeroBudgetDiagnosis(id)`).
+
+Todos con `fetchOrders()` al terminar, igual que el resto de acciones de
+esta pantalla.
 
 ### Tests (`server/src/__tests__/orders.test.ts`)
 
 Casos a cubrir, mismo estilo que los tests existentes de
 `closeZeroBudgetOrder`:
-- Rechazo válido desde `WAITING_APPROVAL` → `CANCELLED`, comisión $16, `finalPaymentConfirmedAt` seteado.
-- Rechazo desde cualquier otro status → error.
-- `decrementTechnicianLoad` se llama.
-- Notificación al cliente se crea.
+- Aprobar/rechazar/confirmar/disputar válido desde `WAITING_APPROVAL`.
+- Cada acción desde cualquier otro status → error.
+- `confirmZeroBudgetDiagnosis`/`rejectBudget` con `budget != 0`/`=== 0` mal aplicado → error (ej. confirmar-$0 sobre una orden con `budget=50`).
+- Rechazo: `CANCELLED`, comisión $16, `finalPaymentConfirmedAt` seteado, `decrementTechnicianLoad` llamado.
+- Confirmar $0: `DELIVERED`, comisión $16, `finalPaymentConfirmedAt` seteado.
+- Disputar $0: `budget`/`diagnosis` vuelven a `null`, status `RECEIVED`, el técnico sigue asignado (sin `decrementTechnicianLoad`).
+- Ownership: cliente B no puede actuar sobre una orden de cliente A, en las 4 funciones.
