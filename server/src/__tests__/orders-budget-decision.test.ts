@@ -178,18 +178,27 @@ describe('orders.service — confirmZeroBudgetDiagnosis', () => {
     const order = await makeOrder({ budget: 0 })
     await expect(confirmZeroBudgetDiagnosis(order.id, userB.email)).rejects.toThrow('Orden no encontrada')
   })
+
+  it('lanza error si la orden no está en WAITING_APPROVAL', async () => {
+    const order = await makeOrder({ status: 'RECEIVED', budget: 0 })
+    await expect(confirmZeroBudgetDiagnosis(order.id, userA.email)).rejects.toThrow(
+      'Esta acción solo aplica a órdenes esperando aprobación de presupuesto'
+    )
+  })
 })
 
 describe('orders.service — disputeZeroBudgetDiagnosis', () => {
   it('vuelve la orden al técnico: RECEIVED, budget y diagnosis en null', async () => {
     const order = await makeOrder({ budget: 0 })
+
+    const techBefore = await prisma.user.findUnique({ where: { id: technician.id } })
     const result = await disputeZeroBudgetDiagnosis(order.id, userA.email, 'Sigue sin encender')
+    const techAfter = await prisma.user.findUnique({ where: { id: technician.id } })
+
     expect(result.status).toBe('RECEIVED')
     expect(result.budget).toBeNull()
     expect(result.diagnosis).toBeNull()
-
-    const techAfter = await prisma.user.findUnique({ where: { id: technician.id } })
-    expect(techAfter?.activeOrderCount).toBe(1) // NO se decrementa, sigue activa
+    expect(techAfter?.activeOrderCount).toBe(techBefore?.activeOrderCount) // NO se decrementa NI se incrementa
 
     const history = await prisma.orderStatusHistory.findFirst({
       where: { orderId: order.id, status: 'RECEIVED' },
@@ -202,6 +211,13 @@ describe('orders.service — disputeZeroBudgetDiagnosis', () => {
     const order = await makeOrder({ budget: 50 })
     await expect(disputeZeroBudgetDiagnosis(order.id, userA.email)).rejects.toThrow(
       'Esta acción solo aplica a diagnósticos sin costo'
+    )
+  })
+
+  it('lanza error si la orden no está en WAITING_APPROVAL', async () => {
+    const order = await makeOrder({ status: 'RECEIVED', budget: 0 })
+    await expect(disputeZeroBudgetDiagnosis(order.id, userA.email)).rejects.toThrow(
+      'Esta acción solo aplica a órdenes esperando aprobación de presupuesto'
     )
   })
 })
