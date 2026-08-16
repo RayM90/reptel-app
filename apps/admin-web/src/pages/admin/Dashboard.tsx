@@ -540,7 +540,7 @@ export default function Dashboard() {
                     </td>
                     <td><PaymentDetailsView details={order.finalPaymentDetails} /></td>
                     <td>
-                      {order.status === 'READY' && order.budget != null && Number(order.budget) === 0 ? (
+                      {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') && order.budget != null && Number(order.budget) === 0 ? (
                         <button className="btn btn-primary" onClick={() => handleCloseZeroBudgetOrder(order)}>
                           Marcar como entregada
                         </button>

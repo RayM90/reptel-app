@@ -934,6 +934,10 @@ export const closeZeroBudgetOrder = async (id: string) => {
     throw new Error('Orden no encontrada')
   }
 
+  if (order.status === 'DELIVERED' || order.status === 'CANCELLED') {
+    throw new Error('Esta orden ya fue cerrada')
+  }
+
   const budget = order.budget != null ? Number(order.budget) : null
   if (budget !== 0) {
     throw new Error('Esta acción solo aplica a órdenes con presupuesto $0')
