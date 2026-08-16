@@ -26,6 +26,10 @@ router.post('/:id/advance-payment-installment', authenticate, authorize('CLIENT'
 router.post('/:id/approve-budget', authenticate, authorize('CLIENT'), ordersController.approveBudget)
 router.post('/:id/reject-budget', authenticate, authorize('CLIENT'), ordersController.rejectBudget)
 
+// Confirmar o disputar un diagnóstico sin costo
+router.post('/:id/confirm-zero-budget-diagnosis', authenticate, authorize('CLIENT'), ordersController.confirmZeroBudgetDiagnosis)
+router.post('/:id/dispute-zero-budget-diagnosis', authenticate, authorize('CLIENT'), ordersController.disputeZeroBudgetDiagnosis)
+
 // ─── Rutas estáticas (personal) — deben ir ANTES de /:id ──────────
 // Órdenes del día — ADMIN
 router.get('/today', authenticate, authorize('ADMIN'), ordersController.getTodayOrders)
