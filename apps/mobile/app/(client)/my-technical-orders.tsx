@@ -451,7 +451,11 @@ export default function MyTechnicalOrdersScreen() {
                           <Text style={styles.detailValue}>
                             ${Number(order.budget).toFixed(2)}
                             {order.budgetApproved != null &&
-                              (order.budgetApproved ? ' — Aprobado' : ' — Pendiente de aprobación')}
+                              (order.budgetApproved
+                                ? ' — Aprobado'
+                                : status === 'CANCELLED'
+                                  ? ' — Rechazado'
+                                  : ' — Pendiente de aprobación')}
                           </Text>
                         </View>
                       )}
@@ -615,7 +619,7 @@ export default function MyTechnicalOrdersScreen() {
                       )}
 
                       {/* Comisión (solo informativo, orden ya entregada) */}
-                      {order.technicianCommission != null && (
+                      {status === 'DELIVERED' && order.technicianCommission != null && (
                         <View style={styles.detailRow}>
                           <Text style={styles.detailLabel}>Servicio completado</Text>
                           <Text style={styles.detailValue}>✅ Pago final confirmado</Text>
