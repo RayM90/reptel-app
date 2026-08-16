@@ -415,7 +415,7 @@ export default function MyTechnicalOrdersScreen() {
                           <Text style={styles.decisionTitle}>¿Qué decides con este presupuesto?</Text>
 
                           <TouchableOpacity
-                            style={styles.approveBtn}
+                            style={[styles.approveBtn, actionLoading[order.id] && styles.actionBtnDisabled]}
                             onPress={(e) => { e.stopPropagation(); handleApproveBudget(order) }}
                             disabled={actionLoading[order.id]}
                           >
@@ -431,6 +431,9 @@ export default function MyTechnicalOrdersScreen() {
                                 onPress={(e) => {
                                   e.stopPropagation()
                                   setRejectReason((prev) => ({ ...prev, [order.id]: r }))
+                                  if (r !== 'Otro') {
+                                    setRejectReasonOther((prev) => ({ ...prev, [order.id]: '' }))
+                                  }
                                 }}
                               >
                                 <Text style={[styles.reasonChipText, rejectReason[order.id] === r && styles.reasonChipTextActive]}>
@@ -449,12 +452,13 @@ export default function MyTechnicalOrdersScreen() {
                               onChangeText={(text) =>
                                 setRejectReasonOther((prev) => ({ ...prev, [order.id]: text }))
                               }
+                              onTouchStart={(e) => e.stopPropagation()}
                             />
                           )}
 
                           {!!rejectReason[order.id] && (
                             <TouchableOpacity
-                              style={styles.rejectBtn}
+                              style={[styles.rejectBtn, actionLoading[order.id] && styles.actionBtnDisabled]}
                               onPress={(e) => { e.stopPropagation(); handleRejectBudget(order) }}
                               disabled={actionLoading[order.id]}
                             >
@@ -708,6 +712,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rejectBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  actionBtnDisabled: { opacity: 0.5 },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
