@@ -16,7 +16,10 @@ interface Order {
   deliveredAt: string | null
   client: { name: string; lastName: string }
   technician: { id: string; name: string } | null
+  deliveryAmount: string | null
+  revisionAmount: string | null
   advancePaymentDetails: Record<string, string> | null
+  advancePaymentSubmissions: PaymentSubmission[]
   finalPaymentDetails: Record<string, string> | null
   technicianCommission: string | null
 }
@@ -70,7 +73,7 @@ function PaymentSubmissionsView({
 }: {
   submissions: PaymentSubmission[]
   total: string
-  onApprove: (submissionId: string) => void
+  onApprove: (submissionId: string, amount: string) => void
   onReject: (submissionId: string) => void
 }) {
   if (submissions.length === 0) return <span>—</span>
@@ -107,7 +110,7 @@ function PaymentSubmissionsView({
           )}
           {s.status === 'PENDING' && (
             <div style={{ marginTop: 6 }}>
-              <button className="btn btn-primary" onClick={() => onApprove(s.id)}>
+              <button className="btn btn-primary" onClick={() => onApprove(s.id, s.amount)}>
                 Aprobar abono
               </button>{' '}
               <button className="btn btn-danger" onClick={() => onReject(s.id)}>
@@ -214,9 +217,15 @@ export default function Dashboard() {
   }
 
   // ── Pago anticipado (delivery + revisión) ──
-  const handleApproveAdvancePayment = async (orderId: string) => {
+  const handleApproveAdvancePayment = async (order: Order) => {
+    const confirmed = await confirmDialog({
+      title: 'Aprobar pago anticipado',
+      message: `Orden ${order.orderNumber} — ${order.client.name} ${order.client.lastName}. Esta acción no se puede deshacer.`,
+      confirmLabel: 'Aprobar',
+    })
+    if (!confirmed) return
     try {
-      await api.post(`/api/orders/${orderId}/confirm-advance-payment`, { approved: true })
+      await api.post(`/api/orders/${order.id}/confirm-advance-payment`, { approved: true })
       showToast('✅ Pago anticipado aprobado. La orden pasó a "Recibida".', 'success')
       fetchData()
     } catch (err) {
@@ -244,10 +253,53 @@ export default function Dashboard() {
     }
   }
 
-  // ── Pago final (saldo de mano de obra) ──
-  const handleApproveFinalPayment = async (orderId: string) => {
+  // ── Anticipo de servicio técnico — abonos individuales (pago en partes) ──
+  const handleApproveAdvanceInstallment = async (submissionId: string, amount: string) => {
+    const confirmed = await confirmDialog({
+      title: 'Aprobar abono del anticipo',
+      message: `Monto: $${Number(amount).toFixed(2)}. Esta acción no se puede deshacer.`,
+      confirmLabel: 'Aprobar',
+    })
+    if (!confirmed) return
     try {
-      const response = await api.post(`/api/orders/${orderId}/confirm-final-payment`, { approved: true })
+      await api.post(`/api/orders/advance-payment-installment/${submissionId}/confirm`, { approved: true })
+      showToast('✅ Abono aprobado.', 'success')
+      fetchData()
+    } catch (err) {
+      showToast('❌ Error al aprobar el abono', 'error')
+    }
+  }
+
+  const handleRejectAdvanceInstallment = async (submissionId: string) => {
+    const reason = await confirmDialog({
+      title: 'Rechazar abono del anticipo',
+      requireText: true,
+      textLabel: 'Motivo del rechazo',
+      confirmLabel: 'Rechazar',
+    })
+    if (!reason) return
+    try {
+      await api.post(`/api/orders/advance-payment-installment/${submissionId}/confirm`, {
+        approved: false,
+        rejectionReason: reason,
+      })
+      showToast('✅ Abono rechazado. Se notificó al cliente para que reenvíe sus datos.', 'success')
+      fetchData()
+    } catch (err) {
+      showToast('❌ Error al rechazar el abono', 'error')
+    }
+  }
+
+  // ── Pago final (saldo de mano de obra) ──
+  const handleApproveFinalPayment = async (order: Order) => {
+    const confirmed = await confirmDialog({
+      title: 'Aprobar pago final',
+      message: `Orden ${order.orderNumber} — ${order.client.name} ${order.client.lastName}. Calcula y fija la comisión del técnico. Esta acción no se puede deshacer.`,
+      confirmLabel: 'Aprobar',
+    })
+    if (!confirmed) return
+    try {
+      const response = await api.post(`/api/orders/${order.id}/confirm-final-payment`, { approved: true })
       const commission = response.data.data.technicianCommission
       showToast(`✅ Pago final aprobado. Orden completada. Comisión del técnico: $${commission}`, 'success')
       fetchData()
@@ -276,8 +328,32 @@ export default function Dashboard() {
     }
   }
 
+  // ── Cerrar orden con presupuesto $0 (diagnóstico sin costo, sin pago final) ──
+  const handleCloseZeroBudgetOrder = async (order: Order) => {
+    const confirmed = await confirmDialog({
+      title: 'Marcar como entregada',
+      message: `Orden ${order.orderNumber} — ${order.client.name} ${order.client.lastName}. Presupuesto $0, no hay saldo que cobrar. Se calculará la comisión del técnico (delivery + 40% de la revisión). Esta acción no se puede deshacer.`,
+      confirmLabel: 'Marcar como entregada',
+    })
+    if (!confirmed) return
+    try {
+      const response = await api.post(`/api/orders/${order.id}/close-zero-budget`)
+      const commission = response.data.data.technicianCommission
+      showToast(`✅ Orden completada sin costo. Comisión del técnico: $${commission}`, 'success')
+      fetchData()
+    } catch (err) {
+      showToast('❌ Error al cerrar la orden', 'error')
+    }
+  }
+
   // ── Pedidos de tienda — abonos individuales ──
-  const handleApprovePartialPayment = async (submissionId: string) => {
+  const handleApprovePartialPayment = async (submissionId: string, amount: string) => {
+    const confirmed = await confirmDialog({
+      title: 'Aprobar abono',
+      message: `Monto: $${Number(amount).toFixed(2)}. Esta acción no se puede deshacer.`,
+      confirmLabel: 'Aprobar',
+    })
+    if (!confirmed) return
     try {
       await api.patch(`/api/product-orders/payment-submissions/${submissionId}/confirm`, { approved: true })
       showToast('✅ Abono aprobado.', 'success')
@@ -304,6 +380,23 @@ export default function Dashboard() {
       fetchData()
     } catch (err) {
       showToast('❌ Error al rechazar el abono', 'error')
+    }
+  }
+
+  // ── Pedidos de tienda — cancelar (solo mientras está PENDING) ──
+  const handleCancelProductOrder = async (po: ProductOrder) => {
+    const confirmed = await confirmDialog({
+      title: 'Cancelar pedido',
+      message: `Cliente: ${po.client.name} ${po.client.lastName} — Total: $${Number(po.total).toFixed(2)}. El stock reservado se devolverá al inventario. Esta acción no se puede deshacer.`,
+      confirmLabel: 'Cancelar pedido',
+    })
+    if (!confirmed) return
+    try {
+      await api.patch(`/api/product-orders/${po.id}/cancel`)
+      showToast('✅ Pedido cancelado. El stock fue devuelto al inventario.', 'success')
+      fetchData()
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || '❌ Error al cancelar el pedido', 'error')
     }
   }
 
@@ -437,27 +530,25 @@ export default function Dashboard() {
                     </td>
                     <td className="money">{order.budget ? `$${order.budget}` : '—'}</td>
                     <td>{order.technician?.name || 'Sin asignar'}</td>
-                    <td><PaymentDetailsView details={order.advancePaymentDetails} /></td>
+                    <td>
+                      <PaymentSubmissionsView
+                        submissions={order.advancePaymentSubmissions ?? []}
+                        total={String(Number(order.deliveryAmount ?? 10) + Number(order.revisionAmount ?? 15))}
+                        onApprove={handleApproveAdvanceInstallment}
+                        onReject={handleRejectAdvanceInstallment}
+                      />
+                    </td>
                     <td><PaymentDetailsView details={order.finalPaymentDetails} /></td>
                     <td>
-                      {order.status === 'PENDING_PAYMENT' ? (
-                        <>
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => handleApproveAdvancePayment(order.id)}
-                            disabled={!order.advancePaymentDetails}
-                          >
-                            Aprobar anticipo
-                          </button>{' '}
-                          <button className="btn btn-danger" onClick={() => handleRejectAdvancePayment(order.id)}>
-                            Rechazar
-                          </button>
-                        </>
+                      {order.status === 'READY' && order.budget != null && Number(order.budget) === 0 ? (
+                        <button className="btn btn-primary" onClick={() => handleCloseZeroBudgetOrder(order)}>
+                          Marcar como entregada
+                        </button>
                       ) : order.status === 'READY' ? (
                         <>
                           <button
                             className="btn btn-primary"
-                            onClick={() => handleApproveFinalPayment(order.id)}
+                            onClick={() => handleApproveFinalPayment(order)}
                             disabled={!order.finalPaymentDetails}
                           >
                             Aprobar pago final
@@ -491,7 +582,7 @@ export default function Dashboard() {
           <p>No hay pedidos activos</p>
         ) : (
           <div className="table-wrapper">
-            <table className="styled-table">
+            <table className="styled-table styled-table--sticky-actions">
               <thead>
                 <tr>
                   <th>Cliente</th>
@@ -500,6 +591,7 @@ export default function Dashboard() {
                   <th>Estado</th>
                   <th>Motorizado asignado</th>
                   <th>Pagos recibidos</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -530,6 +622,15 @@ export default function Dashboard() {
                         onApprove={handleApprovePartialPayment}
                         onReject={handleRejectPartialPayment}
                       />
+                    </td>
+                    <td>
+                      {po.status === 'PENDING' ? (
+                        <button className="btn btn-danger" onClick={() => handleCancelProductOrder(po)}>
+                          Cancelar pedido
+                        </button>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                   </tr>
                 ))}

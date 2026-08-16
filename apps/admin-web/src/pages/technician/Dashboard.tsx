@@ -360,6 +360,7 @@ export default function TechnicianDashboard() {
                       </div>
                     )}
 
+                    {!needsDiagnosis && (
                     <div className="card">
                       <h4>Agregar comentario de progreso</h4>
                       <div className="form-group">
@@ -394,6 +395,7 @@ export default function TechnicianDashboard() {
                         Guardar comentario
                       </button>
                     </div>
+                    )}
 
                     <h4>Historial</h4>
                     {order.statusHistory.map((entry) => (

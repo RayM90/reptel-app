@@ -64,15 +64,16 @@ a {
   align-items: center;
   justify-content: space-between;
   padding: 14px 24px;
-  background: var(--color-primary);
-  color: #ffffff;
+  background: var(--color-bg-2);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .header-bar__brand {
   font-family: 'Fraunces', serif;
   font-size: 18px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--color-text);
 }
 
 .header-bar__user {
@@ -84,6 +85,7 @@ a {
 
 .header-bar__role {
   background: var(--color-secondary);
+  color: #ffffff;
   padding: 3px 10px;
   border-radius: 12px;
   font-size: 12px;
@@ -193,6 +195,21 @@ table.styled-table td {
 
 table.styled-table tr:last-child td {
   border-bottom: none;
+}
+
+/* Fija la última columna (acciones) para que sea alcanzable sin tener que
+   hacer scroll horizontal completo — usar solo en tablas donde la última
+   columna es una acción imprescindible (ej. "Editar"). */
+table.styled-table--sticky-actions th:last-child,
+table.styled-table--sticky-actions td:last-child {
+  position: sticky;
+  right: 0;
+  background: #ffffff;
+  box-shadow: -8px 0 8px -8px rgba(0, 0, 0, 0.18);
+}
+
+table.styled-table--sticky-actions th:last-child {
+  background: var(--color-bg-2);
 }
 
 /* ─── Formularios ────────────────────────── */

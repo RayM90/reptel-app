@@ -53,7 +53,7 @@ export default function InventoryList() {
 
       {!loading && !error && (
         <div className="table-wrapper">
-          <table className="styled-table">
+          <table className="styled-table styled-table--sticky-actions">
             <thead>
               <tr>
                 <th>ID</th>

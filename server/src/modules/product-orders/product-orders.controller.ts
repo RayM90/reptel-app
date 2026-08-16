@@ -328,6 +328,22 @@ export const confirmReceived = async (req: AuthRequest, res: Response): Promise<
 }
 
 // ─────────────────────────────────────────────
+// ADMIN — Cancelar un pedido y devolver el stock reservado
+// ─────────────────────────────────────────────
+
+export const cancelOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const order = await productOrdersService.cancelProductOrder(id)
+    res.json({ success: true, data: order })
+  } catch (error) {
+    console.error('ERROR CANCELAR PEDIDO:', error)
+    const message = error instanceof Error ? error.message : 'Error al cancelar el pedido'
+    res.status(400).json({ success: false, message })
+  }
+}
+
+// ─────────────────────────────────────────────
 // ADMIN — Listar todos los pedidos de tienda (Fase 4)
 // ─────────────────────────────────────────────
 

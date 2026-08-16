@@ -242,6 +242,7 @@ model Order {
   advancePaymentConfirmed    Boolean        @default(false)
   advancePaymentConfirmedAt  DateTime?
   advancePaymentRejectionReason String?     @db.Text
+  advancePaymentSubmissions  AdvancePaymentSubmission[]
 
   // ── NUEVO: pago final (saldo restante) + comisión del técnico ──
   finalPaymentDetails         Json?
@@ -537,6 +538,25 @@ model ProductOrderPaymentSubmission {
   productOrder    ProductOrder         @relation(fields: [productOrderId], references: [id])
 
   @@map("productorderpaymentsubmission")
+}
+
+// Abonos parciales del anticipo de Servicio Técnico ($25 = delivery + revisión).
+// Mismo patrón que ProductOrderPaymentSubmission: cada envío es un registro
+// independiente, el cliente puede pagar en varias partes y no puede enviar
+// más de lo que falta para completar el total.
+model AdvancePaymentSubmission {
+  id              String               @id @default(uuid())
+  amount          Decimal              @db.Decimal(10, 2)
+  paymentDetails  Json
+  status          PartialPaymentStatus @default(PENDING)
+  rejectionReason String?              @db.Text
+  createdAt       DateTime             @default(now())
+  confirmedAt     DateTime?
+
+  orderId         String
+  order           Order                @relation(fields: [orderId], references: [id])
+
+  @@map("advancepaymentsubmission")
 }
 
 model ProductDelivery {

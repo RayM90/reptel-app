@@ -74,6 +74,14 @@ router.get(
   productOrdersController.getAllOrders
 )
 
+// Cancelar un pedido — solo permitido en estado PENDING, devuelve el stock
+router.patch(
+  '/:id/cancel',
+  authenticate,
+  authorize('ADMIN'),
+  productOrdersController.cancelOrder
+)
+
 // Motorizado marca el pedido como entregado
 
 router.patch('/:id/deliver', authenticate, authorize('DELIVERY'), productOrdersController.markAsDelivered)
