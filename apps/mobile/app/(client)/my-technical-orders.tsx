@@ -131,6 +131,7 @@ export default function MyTechnicalOrdersScreen() {
   const confirmDialog = useConfirm()
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({})
   const [rejectReasonOther, setRejectReasonOther] = useState<Record<string, string>>({})
+  const [disputeNote, setDisputeNote] = useState<Record<string, string>>({})
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({})
 
   const fetchOrders = useCallback(async () => {
@@ -240,18 +241,22 @@ export default function MyTechnicalOrdersScreen() {
   }
 
   const handleDisputeZeroBudget = async (order: TechOrder) => {
-    const note = await confirmDialog({
+    // La nota es realmente opcional: se captura antes en un TextInput propio
+    // (estado disputeNote), no vía confirmDialog con requireText — con
+    // requireText: true el diálogo no resuelve si el campo queda vacío,
+    // lo que bloqueaba el envío sin nota pese a que el texto decía "opcional".
+    const confirmed = await confirmDialog({
       title: '¿Qué sigue pasando con el equipo?',
-      message: 'Cuéntanos brevemente para que el técnico lo tenga en cuenta en la nueva revisión (opcional).',
+      message: 'El técnico revisará tu equipo de nuevo. ¿Confirmas el envío?',
       confirmLabel: 'Enviar y pedir nueva revisión',
-      requireText: true,
-      textLabel: 'Ej. Sigue sin encender',
     })
-    if (note === null) return // canceló el diálogo
+    if (!confirmed) return
+
+    const note = (disputeNote[order.id] || '').trim()
 
     setActionLoading((prev) => ({ ...prev, [order.id]: true }))
     try {
-      await ordersAPI.disputeZeroBudgetDiagnosis(order.id, typeof note === 'string' ? note : undefined)
+      await ordersAPI.disputeZeroBudgetDiagnosis(order.id, note || undefined)
       showToast('🔁 Enviado. El técnico revisará tu equipo de nuevo.', 'success')
       fetchOrders()
     } catch (error: any) {
@@ -527,6 +532,20 @@ export default function MyTechnicalOrdersScreen() {
                           >
                             <Text style={styles.approveBtnText}>✅ Confirmar diagnóstico</Text>
                           </TouchableOpacity>
+
+                          <Text style={styles.reasonLabel}>
+                            Si no estás de acuerdo, cuéntanos qué sigue pasando (opcional):
+                          </Text>
+                          <TextInput
+                            style={styles.reasonInput}
+                            placeholder="Ej. Sigue sin encender"
+                            placeholderTextColor="#9aa5cc"
+                            value={disputeNote[order.id] || ''}
+                            onChangeText={(text) =>
+                              setDisputeNote((prev) => ({ ...prev, [order.id]: text }))
+                            }
+                            onTouchStart={(e) => e.stopPropagation()}
+                          />
 
                           <TouchableOpacity
                             style={styles.rejectBtn}
