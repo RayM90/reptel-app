@@ -219,6 +219,48 @@ export default function MyTechnicalOrdersScreen() {
     }
   }
 
+  const handleConfirmZeroBudget = async (order: TechOrder) => {
+    const confirmed = await confirmDialog({
+      title: 'Confirmar diagnóstico',
+      message: 'El técnico determinó que no es necesario reparar tu equipo. Ya pagaste la revisión y el delivery — no se te cobrará nada más. ¿Confirmas?',
+      confirmLabel: 'Confirmar',
+    })
+    if (!confirmed) return
+
+    setActionLoading((prev) => ({ ...prev, [order.id]: true }))
+    try {
+      await ordersAPI.confirmZeroBudgetDiagnosis(order.id)
+      showToast('✅ Diagnóstico confirmado. No se te cobrará nada adicional.', 'success')
+      fetchOrders()
+    } catch (error: any) {
+      showToast(error?.response?.data?.message || 'Error al confirmar el diagnóstico', 'error')
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [order.id]: false }))
+    }
+  }
+
+  const handleDisputeZeroBudget = async (order: TechOrder) => {
+    const note = await confirmDialog({
+      title: '¿Qué sigue pasando con el equipo?',
+      message: 'Cuéntanos brevemente para que el técnico lo tenga en cuenta en la nueva revisión (opcional).',
+      confirmLabel: 'Enviar y pedir nueva revisión',
+      requireText: true,
+      textLabel: 'Ej. Sigue sin encender',
+    })
+    if (note === null) return // canceló el diálogo
+
+    setActionLoading((prev) => ({ ...prev, [order.id]: true }))
+    try {
+      await ordersAPI.disputeZeroBudgetDiagnosis(order.id, typeof note === 'string' ? note : undefined)
+      showToast('🔁 Enviado. El técnico revisará tu equipo de nuevo.', 'success')
+      fetchOrders()
+    } catch (error: any) {
+      showToast(error?.response?.data?.message || 'Error al enviar la disputa', 'error')
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [order.id]: false }))
+    }
+  }
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -468,9 +510,38 @@ export default function MyTechnicalOrdersScreen() {
                         </View>
                       )}
 
-                      {/* Comprar repuesto — solo si hay presupuesto real (no aplica con $0,
-                          ahí no hubo reparación que requiera piezas instaladas por el técnico) */}
-                      {order.budget != null && Number(order.budget) > 0 && (
+                      {/* Decisión del cliente — diagnóstico SIN costo */}
+                      {status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) === 0 && (
+                        <View style={styles.decisionCard}>
+                          <Text style={styles.decisionTitle}>
+                            El técnico determinó que no es necesario reparar tu equipo
+                          </Text>
+                          {order.diagnosis && (
+                            <Text style={styles.reasonLabel}>{order.diagnosis}</Text>
+                          )}
+
+                          <TouchableOpacity
+                            style={styles.approveBtn}
+                            onPress={(e) => { e.stopPropagation(); handleConfirmZeroBudget(order) }}
+                            disabled={actionLoading[order.id]}
+                          >
+                            <Text style={styles.approveBtnText}>✅ Confirmar diagnóstico</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.rejectBtn}
+                            onPress={(e) => { e.stopPropagation(); handleDisputeZeroBudget(order) }}
+                            disabled={actionLoading[order.id]}
+                          >
+                            <Text style={styles.rejectBtnText}>🔁 No estoy de acuerdo, pedir nueva revisión</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      {/* Comprar repuesto vinculado a esta orden — disponible con
+                          cualquier presupuesto (incluido $0, ej. "no es la laptop,
+                          es el cargador" y el cliente quiere comprarlo ya mismo) */}
+                      {order.budget != null && (
                         <TouchableOpacity
                           style={styles.linkedProductBtn}
                           onPress={(e) => {
