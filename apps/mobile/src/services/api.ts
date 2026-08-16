@@ -85,6 +85,13 @@ export const ordersAPI = {
 
     submitFinalPayment: (id: string, paymentDetails: Record<string, string>) =>
     api.post(`/api/orders/${id}/final-payment`, { paymentDetails }),
+
+  // Cliente decide sobre el presupuesto tras el diagnóstico del técnico
+  approveBudget: (id: string) =>
+    api.post(`/api/orders/${id}/approve-budget`),
+
+  rejectBudget: (id: string, reason: string) =>
+    api.post(`/api/orders/${id}/reject-budget`, { reason }),
 }
 
 export const productOrdersAPI = {
