@@ -677,19 +677,16 @@ export const submitDiagnosis = async (
   budget: number,
   serviceCatalogId?: string
 ) => {
-  // Si el presupuesto es $0 no hay nada que el cliente deba aprobar ni pagar
-  // (ej. la falla no requería reparación, o era un accesorio externo como el
-  // cargador) — la orden se cierra directo en vez de quedar "esperando
-  // aprobación" de un monto que no existe.
+  // El cliente decide siempre, incluso con budget=$0. No hay auto-aprobación.
   const hasCost = budget > 0
-  const nextStatus = hasCost ? 'WAITING_APPROVAL' : 'READY'
+  const nextStatus = 'WAITING_APPROVAL'
 
   return await prisma.order.update({
     where: { id },
     data: {
       diagnosis,
       budget,
-      budgetApproved: hasCost ? undefined : true,
+      budgetApproved: undefined,
       serviceCatalogId: serviceCatalogId ?? null,
       status: nextStatus,
       statusHistory: {
@@ -697,7 +694,7 @@ export const submitDiagnosis = async (
           status: nextStatus,
           comment: hasCost
             ? `Diagnóstico registrado por el técnico. Presupuesto: $${budget}`
-            : `Diagnóstico registrado por el técnico. Sin costo — no requiere aprobación de presupuesto.`,
+            : `Diagnóstico registrado por el técnico. Sin costo — cliente debe confirmar.`,
         },
       },
     },
@@ -1105,6 +1102,116 @@ export const rejectBudget = async (id: string, email: string, reason: string) =>
         orderId: id,
       },
     })
+  }
+
+  return updatedOrder
+}
+
+// ─────────────────────────────────────────────
+// Cliente confirma diagnóstico $0
+// ─────────────────────────────────────────────
+
+// Cliente confirma que no hay nada que reparar (budget=0). Mismo cálculo de
+// comisión que closeZeroBudgetOrder (ADMIN), pero disparado por el cliente.
+export const confirmZeroBudgetDiagnosis = async (id: string, email: string) => {
+  const user = await prisma.user.findUnique({ where: { email }, select: { clientId: true } })
+  if (!user || !user.clientId) throw new Error('Cliente no encontrado para este usuario')
+
+  const order = await prisma.order.findFirst({ where: { id, clientId: user.clientId } })
+  if (!order) throw new Error('Orden no encontrada')
+  if (order.status !== 'WAITING_APPROVAL') {
+    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
+  }
+  if (order.budget == null || Number(order.budget) !== 0) {
+    throw new Error('Esta acción solo aplica a diagnósticos sin costo')
+  }
+
+  const deliveryAmount = order.deliveryAmount ? Number(order.deliveryAmount) : 0
+  const revisionAmount = order.revisionAmount ? Number(order.revisionAmount) : 0
+  const commission = deliveryAmount + 0.4 * revisionAmount
+
+  const updatedOrder = await prisma.order.update({
+    where: { id },
+    data: {
+      budgetApproved: true,
+      finalPaymentConfirmed: true,
+      finalPaymentConfirmedAt: new Date(),
+      technicianCommission: commission,
+      status: 'DELIVERED',
+      deliveredAt: new Date(),
+      statusHistory: {
+        create: {
+          status: 'DELIVERED',
+          comment: `Cliente confirmó el diagnóstico — no requiere reparación. Comisión del técnico: $${commission.toFixed(2)}.`,
+        },
+      },
+    },
+    include: {
+      client: { include: { user: true } },
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+
+  if (order.technicianId) {
+    await decrementTechnicianLoad(order.technicianId)
+  }
+
+  if (updatedOrder.client.user) {
+    await prisma.notification.create({
+      data: {
+        type: 'STATUS_CHANGE',
+        channel: 'PUSH',
+        message: `Confirmamos el diagnóstico de la orden #${updatedOrder.orderNumber}: no requiere reparación. No se te cobrará nada adicional.`,
+        userId: updatedOrder.client.user.id,
+        orderId: id,
+      },
+    })
+  }
+
+  return updatedOrder
+}
+
+// Cliente no está de acuerdo con el diagnóstico $0 — la orden vuelve al
+// técnico para una nueva revisión. Se incrementa la carga porque la orden
+// vuelve a estar activa.
+export const disputeZeroBudgetDiagnosis = async (id: string, email: string, note?: string) => {
+  const user = await prisma.user.findUnique({ where: { email }, select: { clientId: true } })
+  if (!user || !user.clientId) throw new Error('Cliente no encontrado para este usuario')
+
+  const order = await prisma.order.findFirst({ where: { id, clientId: user.clientId } })
+  if (!order) throw new Error('Orden no encontrada')
+  if (order.status !== 'WAITING_APPROVAL') {
+    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
+  }
+  if (order.budget == null || Number(order.budget) !== 0) {
+    throw new Error('Esta acción solo aplica a diagnósticos sin costo')
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: { id },
+    data: {
+      budget: null,
+      diagnosis: null,
+      status: 'RECEIVED',
+      statusHistory: {
+        create: {
+          status: 'RECEIVED',
+          comment: `Cliente no estuvo de acuerdo con el diagnóstico (sin costo) — solicitó nueva revisión.${note ? ` Nota: ${note}` : ''}`,
+        },
+      },
+    },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+
+  if (order.technicianId) {
+    await incrementTechnicianLoad(order.technicianId)
   }
 
   return updatedOrder
