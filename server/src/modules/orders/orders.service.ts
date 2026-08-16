@@ -989,6 +989,128 @@ export const closeZeroBudgetOrder = async (id: string) => {
 }
 
 // ─────────────────────────────────────────────
+// CLIENTE — Aprobar o rechazar el presupuesto (Fase 5)
+// La orden queda en WAITING_APPROVAL tras el diagnóstico del técnico
+// (submitDiagnosis con budget > 0). El cliente decide en la app — coincide
+// con la Figura 5 del Trabajo de Grado ("¿Cliente aprueba el presupuesto
+// en la app?"). Spec completa:
+// docs/design-plans/2026-08-16-rechazo-presupuesto-flujo.md
+// ─────────────────────────────────────────────
+
+export const approveBudget = async (id: string, email: string) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { clientId: true },
+  })
+  if (!user || !user.clientId) {
+    throw new Error('Cliente no encontrado para este usuario')
+  }
+
+  const order = await prisma.order.findFirst({
+    where: { id, clientId: user.clientId },
+  })
+  if (!order) {
+    throw new Error('Orden no encontrada')
+  }
+  if (order.status !== 'WAITING_APPROVAL') {
+    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
+  }
+
+  return await prisma.order.update({
+    where: { id },
+    data: {
+      budgetApproved: true,
+      status: 'APPROVED',
+      statusHistory: {
+        create: {
+          status: 'APPROVED',
+          comment: `Presupuesto de $${order.budget} aprobado por el cliente en la app`,
+        },
+      },
+    },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+}
+
+// Cuando el cliente rechaza: la revisión ($15) y el delivery ($10) ya están
+// cobrados (se pagaron antes de despachar al técnico), así que no hay nada
+// más que cobrar ni reembolsar. La comisión del técnico usa la misma
+// fórmula que closeZeroBudgetOrder (delivery + 40% de la revisión) — no
+// depende de cuál era el presupuesto rechazado, porque el técnico sí hizo
+// el trabajo de diagnóstico/revisión, solo que el cliente no siguió con la
+// reparación.
+export const rejectBudget = async (id: string, email: string, reason: string) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { clientId: true },
+  })
+  if (!user || !user.clientId) {
+    throw new Error('Cliente no encontrado para este usuario')
+  }
+
+  const order = await prisma.order.findFirst({
+    where: { id, clientId: user.clientId },
+    include: { client: { include: { user: true } } },
+  })
+  if (!order) {
+    throw new Error('Orden no encontrada')
+  }
+  if (order.status !== 'WAITING_APPROVAL') {
+    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
+  }
+
+  const deliveryAmount = order.deliveryAmount ? Number(order.deliveryAmount) : 0
+  const revisionAmount = order.revisionAmount ? Number(order.revisionAmount) : 0
+  const commission = deliveryAmount + 0.4 * revisionAmount
+
+  const updatedOrder = await prisma.order.update({
+    where: { id },
+    data: {
+      budgetApproved: false,
+      finalPaymentConfirmed: true,
+      finalPaymentConfirmedAt: new Date(),
+      technicianCommission: commission,
+      status: 'CANCELLED',
+      statusHistory: {
+        create: {
+          status: 'CANCELLED',
+          comment: `Cliente rechazó el presupuesto de $${order.budget}. Motivo: ${reason}. Comisión del técnico: $${commission.toFixed(2)} (delivery + 40% revisión).`,
+        },
+      },
+    },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+
+  if (order.technicianId) {
+    await decrementTechnicianLoad(order.technicianId)
+  }
+
+  if (order.client.user) {
+    await prisma.notification.create({
+      data: {
+        type: 'STATUS_CHANGE',
+        channel: 'PUSH',
+        message: `Confirmamos que no se realizará la reparación de la orden #${order.orderNumber}. No se te cobrará nada adicional.`,
+        userId: order.client.user.id,
+        orderId: id,
+      },
+    })
+  }
+
+  return updatedOrder
+}
+
+// ─────────────────────────────────────────────
 // TÉCNICO — Historial de sus órdenes asignadas (Fase 4)
 // ─────────────────────────────────────────────
 
