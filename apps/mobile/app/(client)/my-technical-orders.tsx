@@ -5,12 +5,14 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  TextInput,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter } from 'expo-router'
 import { useState, useEffect, useCallback } from 'react'
 import { ordersAPI } from '../../src/services/api'
 import { useToastStore } from '../../src/store/toast.store'
+import { useConfirm } from '../../src/hooks/useConfirm'
 
 // El backend guarda el método de pago con el enum de Prisma (MOBILE_PAYMENT,
 // TRANSFER, BINANCE), pero la pantalla de pago espera los literales que usa
@@ -118,12 +120,18 @@ const STATUS_BG: Record<OrderStatus, string> = {
   CANCELLED: '#FBE9E7',
 }
 
+const REJECT_REASONS = ['Es muy costoso', 'Prefiero resolverlo por mi cuenta', 'Otro']
+
 export default function MyTechnicalOrdersScreen() {
   const router = useRouter()
   const [orders, setOrders] = useState<TechOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const showToast = useToastStore((state) => state.showToast)
+  const confirmDialog = useConfirm()
+  const [rejectReason, setRejectReason] = useState<Record<string, string>>({})
+  const [rejectReasonOther, setRejectReasonOther] = useState<Record<string, string>>({})
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({})
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -158,6 +166,57 @@ export default function MyTechnicalOrdersScreen() {
       hour: '2-digit',
       minute: '2-digit',
     })
+  }
+
+  const handleApproveBudget = async (order: TechOrder) => {
+    const confirmed = await confirmDialog({
+      title: 'Aprobar presupuesto',
+      message: `¿Confirmas que aceptas el presupuesto de $${Number(order.budget).toFixed(2)} para reparar tu equipo?`,
+      confirmLabel: 'Aprobar',
+    })
+    if (!confirmed) return
+
+    setActionLoading((prev) => ({ ...prev, [order.id]: true }))
+    try {
+      await ordersAPI.approveBudget(order.id)
+      showToast('✅ Presupuesto aprobado. El técnico continuará con la reparación.', 'success')
+      fetchOrders()
+    } catch (error: any) {
+      showToast(error?.response?.data?.message || 'Error al aprobar el presupuesto', 'error')
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [order.id]: false }))
+    }
+  }
+
+  const handleRejectBudget = async (order: TechOrder) => {
+    const selected = rejectReason[order.id]
+    if (!selected) {
+      showToast('Selecciona un motivo antes de rechazar.', 'error')
+      return
+    }
+    const reason = selected === 'Otro' ? (rejectReasonOther[order.id] || '').trim() : selected
+    if (!reason) {
+      showToast('Describe el motivo antes de rechazar.', 'error')
+      return
+    }
+
+    const confirmed = await confirmDialog({
+      title: 'Rechazar presupuesto',
+      message: 'Entendido, no se realizará la reparación. Ya pagaste la revisión y el delivery — no se te cobrará nada más. ¿Confirmas?',
+      confirmLabel: 'Rechazar',
+    })
+    if (!confirmed) return
+
+    setActionLoading((prev) => ({ ...prev, [order.id]: true }))
+    try {
+      await ordersAPI.rejectBudget(order.id, reason)
+      showToast('Reparación cancelada. No se te cobrará nada adicional.', 'success')
+      fetchOrders()
+    } catch (error: any) {
+      showToast(error?.response?.data?.message || 'Error al rechazar el presupuesto', 'error')
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [order.id]: false }))
+    }
   }
 
   return (
@@ -347,6 +406,61 @@ export default function MyTechnicalOrdersScreen() {
                             {order.budgetApproved != null &&
                               (order.budgetApproved ? ' — Aprobado' : ' — Pendiente de aprobación')}
                           </Text>
+                        </View>
+                      )}
+
+                      {/* Decisión del cliente sobre el presupuesto */}
+                      {status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) > 0 && (
+                        <View style={styles.decisionCard}>
+                          <Text style={styles.decisionTitle}>¿Qué decides con este presupuesto?</Text>
+
+                          <TouchableOpacity
+                            style={styles.approveBtn}
+                            onPress={(e) => { e.stopPropagation(); handleApproveBudget(order) }}
+                            disabled={actionLoading[order.id]}
+                          >
+                            <Text style={styles.approveBtnText}>✅ Aprobar presupuesto</Text>
+                          </TouchableOpacity>
+
+                          <Text style={styles.reasonLabel}>O si prefieres no reparar, indica por qué:</Text>
+                          <View style={styles.reasonRow}>
+                            {REJECT_REASONS.map((r) => (
+                              <TouchableOpacity
+                                key={r}
+                                style={[styles.reasonChip, rejectReason[order.id] === r && styles.reasonChipActive]}
+                                onPress={(e) => {
+                                  e.stopPropagation()
+                                  setRejectReason((prev) => ({ ...prev, [order.id]: r }))
+                                }}
+                              >
+                                <Text style={[styles.reasonChipText, rejectReason[order.id] === r && styles.reasonChipTextActive]}>
+                                  {r}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+
+                          {rejectReason[order.id] === 'Otro' && (
+                            <TextInput
+                              style={styles.reasonInput}
+                              placeholder="Cuéntanos el motivo..."
+                              placeholderTextColor="#9aa5cc"
+                              value={rejectReasonOther[order.id] || ''}
+                              onChangeText={(text) =>
+                                setRejectReasonOther((prev) => ({ ...prev, [order.id]: text }))
+                              }
+                            />
+                          )}
+
+                          {!!rejectReason[order.id] && (
+                            <TouchableOpacity
+                              style={styles.rejectBtn}
+                              onPress={(e) => { e.stopPropagation(); handleRejectBudget(order) }}
+                              disabled={actionLoading[order.id]}
+                            >
+                              <Text style={styles.rejectBtnText}>❌ Rechazar presupuesto</Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
                       )}
 
@@ -547,6 +661,53 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   finalPaymentBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  decisionCard: {
+    backgroundColor: '#f8faff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#d0d8ff',
+  },
+  decisionTitle: { fontSize: 13, fontWeight: '700', color: '#17247a', marginBottom: 10 },
+  approveBtn: {
+    backgroundColor: '#1E7A3D',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  approveBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  reasonLabel: { fontSize: 12, color: '#5364ad', marginBottom: 8 },
+  reasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  reasonChip: {
+    borderWidth: 1.5,
+    borderColor: '#d0d8ff',
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+  },
+  reasonChipActive: { borderColor: '#B3261E', backgroundColor: '#fee2e2' },
+  reasonChipText: { fontSize: 12, color: '#17247a', fontWeight: '600' },
+  reasonChipTextActive: { color: '#B3261E' },
+  reasonInput: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#d0d8ff',
+    padding: 10,
+    fontSize: 13,
+    color: '#17247a',
+    marginBottom: 10,
+  },
+  rejectBtn: {
+    backgroundColor: '#B3261E',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  rejectBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
