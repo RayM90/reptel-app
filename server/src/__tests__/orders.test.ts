@@ -1,5 +1,7 @@
 import request from 'supertest'
 import app from '../app'
+import prisma from '../lib/prisma'
+import { decrementTechnicianLoad } from '../modules/orders/orders.service'
 
 let authToken: string
 let createdOrderId: string
@@ -143,4 +145,25 @@ describe('Orders — PATCH /api/orders/:id/status', () => {
     expect(res.body.data.status).toBe('DIAGNOSING')
   }, 10000)
 
+})
+
+// Este archivo crea una orden real vía la API (createdOrderId). Antes no se
+// limpiaba, así que cada corrida de `npm test`/`npx jest` dejaba una orden
+// "Pantalla rota - test automatizado" atascada para siempre en el panel de
+// admin/técnico, contando además contra activeOrderCount del técnico
+// auto-asignado. Se limpia aquí, mismo patrón que orders-budget-decision.test.ts.
+afterAll(async () => {
+  if (!createdOrderId) return
+
+  const order = await prisma.order.findUnique({
+    where: { id: createdOrderId },
+    select: { technicianId: true },
+  })
+
+  await prisma.orderStatusHistory.deleteMany({ where: { orderId: createdOrderId } })
+  await prisma.order.delete({ where: { id: createdOrderId } }).catch(() => {})
+
+  if (order?.technicianId) {
+    await decrementTechnicianLoad(order.technicianId)
+  }
 })
