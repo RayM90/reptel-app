@@ -331,10 +331,17 @@ export default function MyTechnicalOrdersScreen() {
                   </View>
 
                   {/* Badge de estado */}
-                  <View style={[styles.statusBadge, { backgroundColor: STATUS_BG[status] }]}>
-                    <Text style={[styles.statusText, { color: STATUS_COLOR[status] }]}>
-                      {STATUS_LABEL[status]}
-                    </Text>
+                  <View style={styles.statusRow}>
+                    <View style={[styles.statusBadge, { backgroundColor: STATUS_BG[status] }]}>
+                      <Text style={[styles.statusText, { color: STATUS_COLOR[status] }]}>
+                        {STATUS_LABEL[status]}
+                      </Text>
+                    </View>
+                    {status === 'WAITING_APPROVAL' && order.budget != null && (
+                      <View style={styles.actionBadge}>
+                        <Text style={styles.actionBadgeText}>⚠️ Acción requerida</Text>
+                      </View>
+                    )}
                   </View>
 
                   {/* Equipo siempre visible */}
@@ -691,14 +698,28 @@ const styles = StyleSheet.create({
   orderId: { fontSize: 14, fontWeight: '800', color: '#17247a' },
   orderDate: { fontSize: 12, color: '#9aa5cc', marginTop: 2 },
   expandArrow: { fontSize: 12, color: '#9aa5cc', marginLeft: 8 },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
   statusBadge: {
     alignSelf: 'flex-start',
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 4,
-    marginBottom: 12,
   },
   statusText: { fontSize: 12, fontWeight: '700' },
+  actionBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: '#B3261E',
+  },
+  actionBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff' },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
