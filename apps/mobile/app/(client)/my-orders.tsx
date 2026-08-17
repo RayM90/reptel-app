@@ -291,6 +291,11 @@ export default function MyOrdersScreen() {
                         <Text style={styles.updatedBadgeText}>🔔 Actualizado</Text>
                       </View>
                     )}
+                    {canSendMorePayment && (
+                      <View style={styles.actionBadge}>
+                        <Text style={styles.actionBadgeText}>⚠️ Acción requerida</Text>
+                      </View>
+                    )}
                   </View>
 
                   {/* Total siempre visible */}
@@ -579,6 +584,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#f59e0b',
   },
   updatedBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  actionBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: '#B3261E',
+  },
+  actionBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff' },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
