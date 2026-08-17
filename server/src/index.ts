@@ -1,11 +1,30 @@
 import dotenv from 'dotenv'
 dotenv.config()
 import http from 'http'
+import os from 'os'
 import { WebSocketServer } from 'ws'
 import app from './app'
 import { setWss, broadcastOrderUpdate } from './websocket'
 
 const PORT = Number(process.env.PORT) || 3000
+
+// La IP de LAN se calcula en vivo (antes estaba hardcodeada y quedaba
+// desactualizada cada vez que el DHCP reasignaba la IP de la máquina,
+// causando "Network Error" en el móvil por apuntar a una IP muerta).
+const getLocalIp = (): string => {
+  const nets = os.networkInterfaces()
+  const candidates: string[] = []
+  for (const name of Object.keys(nets)) {
+    // Descarta VPN/túneles (Tailscale, ProTUN, etc.) — el teléfono se
+    // conecta por la LAN física (Wi-Fi), no por esas interfaces.
+    if (/tailscale|protun|tun|vpn/i.test(name)) continue
+    for (const net of nets[name] ?? []) {
+      if (net.family === 'IPv4' && !net.internal) candidates.push(net.address)
+    }
+  }
+  // Prioriza el rango típico de LAN doméstica.
+  return candidates.find((ip) => ip.startsWith('192.168.')) ?? candidates[0] ?? 'localhost'
+}
 
 const server = http.createServer(app)
 const wss = new WebSocketServer({ server })
@@ -20,9 +39,10 @@ wss.on('connection', (ws) => {
 })
 
 server.listen(PORT, '0.0.0.0', () => {
+  const localIp = getLocalIp()
   console.log(`Servidor RepTel corriendo en http://localhost:${PORT}`)
-  console.log(`Red local: http://192.168.0.116:${PORT}`)
-  console.log(`WebSocket corriendo en ws://192.168.0.116:${PORT}`)
+  console.log(`Red local: http://${localIp}:${PORT}`)
+  console.log(`WebSocket corriendo en ws://${localIp}:${PORT}`)
 })
 
 export default app
