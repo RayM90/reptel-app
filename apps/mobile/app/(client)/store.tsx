@@ -29,6 +29,11 @@ interface Product {
 
 const productImages: Record<string, any> = {
   'products/cargador-usbc.jpg': require('../../assets/images/products/cargador-usbc.jpg'),
+  'products/cargador-usba.jpg': require('../../assets/images/products/cargador-usba.jpg'),
+  'products/funda-protectora.jpg': require('../../assets/images/products/funda-protectora.jpg'),
+  'products/teclado-inalambrico.jpg': require('../../assets/images/products/teclado-inalambrico.jpg'),
+  'products/pantalla-lcd.jpg': require('../../assets/images/products/pantalla-lcd.jpg'),
+  'products/bateria-laptop.jpg': require('../../assets/images/products/bateria-laptop.jpg'),
 }
 
 export default function StoreScreen() {
