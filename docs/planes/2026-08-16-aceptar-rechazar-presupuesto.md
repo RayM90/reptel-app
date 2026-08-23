@@ -1,7 +1,5 @@
 # Aceptar/Rechazar Presupuesto — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Dejar que el cliente apruebe o rechace, desde la app, el presupuesto
 que el técnico registra tras diagnosticar el equipo — hoy la orden se queda
 atascada para siempre en `WAITING_APPROVAL` porque ninguna pantalla llama al
