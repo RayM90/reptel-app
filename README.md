@@ -71,17 +71,22 @@ reptel-app/
 - 🧾 Formularios de pago en texto (Pago Móvil, Transferencia, Binance) — validados contra el monto real, con aviso si falta dinero
 - 🔗 Compra de repuestos vinculados a una orden de servicio en curso
 - 📦 Historial completo de pedidos y órdenes, con seguimiento de estado en tiempo real
+- ✅❌ Aprobación o rechazo del presupuesto de reparación, y confirmación/disputa del diagnóstico sin costo ($0)
 
 ### Para el administrador (web)
 - 📊 Dashboard con todos los servicios técnicos y pedidos de tienda activos
 - ✅❌ Aprobación o rechazo de pagos (anticipado y final), con notificación automática al cliente
 - 🛵 Asignación automática del motorizado con menor carga de trabajo
+- 👤 Creación de usuarios de personal (técnico/motorizado) con contraseña temporal
 
 ### Para el técnico (web)
 - 📋 Panel con todas sus órdenes asignadas
 - 🔍 Registro de diagnóstico y presupuesto, con catálogo de servicios frecuentes
 - 💬 Comentarios de progreso en cada orden
 - 💰 Comisión calculada automáticamente al completar cada servicio, con corte semanal (lunes a sábado)
+
+### Para el motorizado (web)
+- 🛵 Panel con las entregas asignadas y su estado en tiempo real (recogida, traslado, entrega)
 
 ---
 
@@ -103,8 +108,9 @@ La mano de obra se calcula descontando el anticipo de revisión ya pagado, para 
 - [x] Vínculo Tienda-Servicio (compra de repuestos para una orden en curso)
 - [x] Panel de Administrador (web)
 - [x] Panel del Técnico (web), con comisiones y corte semanal
-- [ ] Panel del Motorizado (web)
-- [ ] Gestión de usuarios de personal desde el panel de Administrador
+- [x] Panel del Motorizado (web)
+- [x] Gestión de usuarios de personal desde el panel de Administrador
+- [x] Aprobar/rechazar presupuesto y confirmar/disputar diagnóstico sin costo ($0)
 - [ ] Diseño visual definitivo del panel web (paleta de colores institucional)
 
 ---
