@@ -468,7 +468,8 @@ export default function Dashboard() {
       </div>
       <p>
         <Link to="/admin/create-staff" className="btn btn-accent">➕ Crear usuario de personal</Link>{' '}
-        <Link to="/admin/inventory" className="btn btn-secondary">📦 Inventario</Link>
+        <Link to="/admin/inventory" className="btn btn-secondary">📦 Inventario</Link>{' '}
+        <Link to="/admin/reportes" className="btn btn-secondary">📊 Reportes</Link>
       </p>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
