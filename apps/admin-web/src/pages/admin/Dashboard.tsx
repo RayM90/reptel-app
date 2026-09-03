@@ -425,25 +425,6 @@ export default function Dashboard() {
     (po) => po.status === 'DELIVERED' || po.status === 'CANCELLED'
   )
 
-  // Totales del historial — para ver de un vistazo cuánto se ha movido en
-  // comisiones y ventas sin tener que sumar fila por fila.
-  const totalTechnicianCommission = completedOrders.reduce(
-    (sum, o) => sum + (o.technicianCommission ? Number(o.technicianCommission) : 0),
-    0
-  )
-  const totalBudget = completedOrders.reduce(
-    (sum, o) => sum + (o.budget ? Number(o.budget) : 0),
-    0
-  )
-  const totalProductSales = completedProductOrders.reduce(
-    (sum, po) => sum + Number(po.total),
-    0
-  )
-  const totalDeliveryCommission = completedProductOrders.reduce(
-    (sum, po) => sum + (po.delivery?.deliveryCommission ? Number(po.delivery.deliveryCommission) : 0),
-    0
-  )
-
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '—'
     return new Date(dateStr).toLocaleDateString('es-VE', {
@@ -645,6 +626,7 @@ export default function Dashboard() {
         <>
       <section className="card">
         <h2>Servicios Técnicos — Historial ({completedOrders.length})</h2>
+        <p><Link to="/admin/reportes">Ver reporte completo por técnico y período →</Link></p>
         <div className="table-wrapper">
           <table className="styled-table">
             <thead>
@@ -681,28 +663,13 @@ export default function Dashboard() {
                 ))
               )}
             </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>Totales</td>
-                <td className="money" style={{ fontWeight: 700 }}>${totalBudget.toFixed(2)}</td>
-                <td className="money" style={{ fontWeight: 700 }}>${totalTechnicianCommission.toFixed(2)}</td>
-                <td></td>
-              </tr>
-              <tr>
-                <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700 }}>
-                  Total general (presupuesto + comisión)
-                </td>
-                <td colSpan={2} className="money" style={{ fontWeight: 700 }}>
-                  ${(totalBudget + totalTechnicianCommission).toFixed(2)}
-                </td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       </section>
 
       <section className="card">
         <h2>Pedidos de Tienda — Historial ({completedProductOrders.length})</h2>
+        <p><Link to="/admin/reportes">Ver reporte completo por técnico y período →</Link></p>
         {completedProductOrders.length === 0 ? (
           <p>Aún no hay pedidos entregados o cancelados</p>
         ) : (
@@ -736,24 +703,6 @@ export default function Dashboard() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={2} style={{ textAlign: 'right', fontWeight: 700 }}>Totales</td>
-                  <td className="money" style={{ fontWeight: 700 }}>${totalProductSales.toFixed(2)}</td>
-                  <td></td>
-                  <td></td>
-                  <td className="money" style={{ fontWeight: 700 }}>${totalDeliveryCommission.toFixed(2)}</td>
-                  <td></td>
-                </tr>
-                <tr>
-                  <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700 }}>
-                    Total general (ventas + comisión)
-                  </td>
-                  <td colSpan={2} className="money" style={{ fontWeight: 700 }}>
-                    ${(totalProductSales + totalDeliveryCommission).toFixed(2)}
-                  </td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         )}
