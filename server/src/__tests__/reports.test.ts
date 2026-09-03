@@ -225,3 +225,85 @@ describe('reports.service — getReportSummary', () => {
     expect(result.tienda.ordersCount).toBe(0)
   })
 })
+
+import request from 'supertest'
+import app from '../app'
+import { authorize } from '../middleware/auth.middleware'
+
+let adminToken: string
+
+describe('GET /api/reports/summary', () => {
+  beforeAll(async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'admin@reptel.com', password: 'RepTel2024*' })
+    adminToken = res.body.data.token
+  }, 20000)
+
+  it('sin token retorna 401', async () => {
+    const res = await request(app).get('/api/reports/summary?from=2026-06-01&to=2026-06-30')
+    expect(res.status).toBe(401)
+  })
+
+  it('con token ADMIN y rango válido retorna 200 con la forma esperada', async () => {
+    const res = await request(app)
+      .get('/api/reports/summary?from=2026-06-01&to=2026-06-30')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(res.body.data).toHaveProperty('servicio')
+    expect(res.body.data).toHaveProperty('tienda')
+  }, 10000)
+
+  it('sin from/to retorna 400', async () => {
+    const res = await request(app)
+      .get('/api/reports/summary')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(400)
+    expect(res.body.success).toBe(false)
+  }, 10000)
+
+  it('con from posterior a to retorna 400', async () => {
+    const res = await request(app)
+      .get('/api/reports/summary?from=2026-06-30&to=2026-06-01')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(400)
+  }, 10000)
+
+  it('con technicianId filtra la respuesta (200)', async () => {
+    const res = await request(app)
+      .get(`/api/reports/summary?from=2026-06-01&to=2026-06-30&technicianId=${technicianY.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.servicio.ordersCount).toBe(1)
+  }, 10000)
+
+  it('con clientId filtra ambos módulos (200)', async () => {
+    const res = await request(app)
+      .get(`/api/reports/summary?from=2026-06-01&to=2026-06-30&clientId=${clientB.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.servicio.ordersCount).toBe(1)
+    expect(res.body.data.tienda.ordersCount).toBe(0)
+  }, 10000)
+})
+
+describe('Reports — authorize() rechaza roles no-ADMIN (unitario)', () => {
+  it('retorna 403 cuando el usuario no tiene el rol ADMIN', () => {
+    const middleware = authorize('ADMIN')
+    const req: any = { user: { sub: 'x', email: 'x@x.com', groups: ['CLIENT'] } }
+    const json = jest.fn()
+    const res: any = { status: jest.fn(() => ({ json })) }
+    const next = jest.fn()
+
+    middleware(req, res, next)
+
+    expect(res.status).toHaveBeenCalledWith(403)
+    expect(next).not.toHaveBeenCalled()
+  })
+})
