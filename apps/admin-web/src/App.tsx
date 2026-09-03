@@ -7,6 +7,7 @@ import DeliveryDashboard from './pages/delivery/Dashboard'
 import CreateStaff from './pages/admin/CreateStaff'
 import InventoryList from './pages/admin/InventoryList'
 import InventoryForm from './pages/admin/InventoryForm'
+import Reports from './pages/admin/Reports'
 import Toast from './components/Toast'
 import ConfirmDialog from './components/ConfirmDialog'
 
@@ -57,6 +58,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <InventoryForm />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/reportes"
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <Reports />
             </ProtectedRoute>
           }
         />
