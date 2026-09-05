@@ -127,6 +127,11 @@ enum PartialPaymentStatus {
   REJECTED
 }
 
+enum InventoryMovementType {
+  IN
+  OUT
+}
+
 // ─────────────────────────────────────────────
 // MÓDULO USUARIOS Y CLIENTES
 // ─────────────────────────────────────────────
@@ -157,6 +162,7 @@ model User {
   advanceSubmissionsConfirmed AdvancePaymentSubmission[] @relation("AdvanceConfirmedBy")
   productSubmissionsConfirmed ProductOrderPaymentSubmission[] @relation("ProductPaymentConfirmedBy")
   productOrderStatusChangesMade ProductOrderStatusHistory[] @relation("ProductOrderStatusActor")
+  inventoryMovementsMade InventoryMovement[]
 }
 
 model Client {
@@ -385,6 +391,8 @@ model Product {
 
   requiresInstallation Boolean @default(false)
 
+  movements   InventoryMovement[]
+
   @@map("product")
 }
 
@@ -470,6 +478,25 @@ model ProductOrderPaymentSubmission {
   confirmedByUser    User?                @relation("ProductPaymentConfirmedBy", fields: [confirmedByUserId], references: [id])
 
   @@map("productorderpaymentsubmission")
+}
+
+// Historial de movimientos de inventario — registra cada vez que el stock
+// de un Product cambia (creación, ajuste manual, venta, cancelación) para
+// dejar rastro de por qué cambió, sin exponer reportes ni endpoints nuevos.
+model InventoryMovement {
+  id        String                 @id @default(uuid())
+  type      InventoryMovementType
+  quantity  Int
+  reason    String
+  createdAt DateTime               @default(now())
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  @@map("inventorymovement")
 }
 
 // Abonos parciales del anticipo de Servicio Técnico ($25 = delivery + revisión).

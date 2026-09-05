@@ -71,7 +71,22 @@ export const createProduct = async (data: {
   categoryId: string;
   requiresInstallation?: boolean;
 }) => {
-  return prisma.product.create({ data });
+  return prisma.$transaction(async (tx) => {
+    const product = await tx.product.create({ data });
+
+    if (product.stock > 0) {
+      await tx.inventoryMovement.create({
+        data: {
+          productId: product.id,
+          type: 'IN',
+          quantity: product.stock,
+          reason: 'Stock inicial al crear el producto',
+        },
+      });
+    }
+
+    return product;
+  });
 };
 
 export const updateProduct = async (
@@ -88,5 +103,22 @@ export const updateProduct = async (
     isActive?: boolean;
   }
 ) => {
-  return prisma.product.update({ where: { id }, data });
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.product.findUniqueOrThrow({ where: { id } });
+    const updated = await tx.product.update({ where: { id }, data });
+
+    if (data.stock !== undefined && data.stock !== before.stock) {
+      const diff = data.stock - before.stock;
+      await tx.inventoryMovement.create({
+        data: {
+          productId: id,
+          type: diff > 0 ? 'IN' : 'OUT',
+          quantity: Math.abs(diff),
+          reason: 'Ajuste manual de stock desde el panel de administración',
+        },
+      });
+    }
+
+    return updated;
+  });
 };
