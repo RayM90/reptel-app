@@ -74,7 +74,7 @@ function PaymentSubmissionsView({
   submissions: PaymentSubmission[]
   total: string
   onApprove: (submissionId: string, amount: string) => void
-  onReject: (submissionId: string) => void
+  onReject: (submissionId: string, amount: string) => void
 }) {
   if (submissions.length === 0) return <span>—</span>
 
@@ -113,7 +113,7 @@ function PaymentSubmissionsView({
               <button className="btn btn-primary" onClick={() => onApprove(s.id, s.amount)}>
                 Aprobar abono
               </button>{' '}
-              <button className="btn btn-danger" onClick={() => onReject(s.id)}>
+              <button className="btn btn-danger" onClick={() => onReject(s.id, s.amount)}>
                 Rechazar
               </button>
             </div>
@@ -222,6 +222,7 @@ export default function Dashboard() {
       title: 'Aprobar abono del anticipo',
       message: `Monto: $${Number(amount).toFixed(2)}. Esta acción no se puede deshacer.`,
       confirmLabel: 'Aprobar',
+      amount: Number(amount),
     })
     if (!confirmed) return
     try {
@@ -233,12 +234,13 @@ export default function Dashboard() {
     }
   }
 
-  const handleRejectAdvanceInstallment = async (submissionId: string) => {
+  const handleRejectAdvanceInstallment = async (submissionId: string, amount: string) => {
     const reason = await confirmDialog({
       title: 'Rechazar abono del anticipo',
       requireText: true,
       textLabel: 'Motivo del rechazo',
       confirmLabel: 'Rechazar',
+      amount: Number(amount),
     })
     if (!reason) return
     try {
@@ -259,6 +261,7 @@ export default function Dashboard() {
       title: 'Aprobar pago final',
       message: `Orden ${order.orderNumber} — ${order.client.name} ${order.client.lastName}. Calcula y fija la comisión del técnico. Esta acción no se puede deshacer.`,
       confirmLabel: 'Aprobar',
+      amount: order.finalPaymentDetails?.monto ? Number(order.finalPaymentDetails.monto) : undefined,
     })
     if (!confirmed) return
     try {
@@ -271,12 +274,14 @@ export default function Dashboard() {
     }
   }
 
-  const handleRejectFinalPayment = async (orderId: string) => {
+  const handleRejectFinalPayment = async (order: Order) => {
+    const orderId = order.id
     const reason = await confirmDialog({
       title: 'Rechazar pago final',
       requireText: true,
       textLabel: 'Motivo del rechazo',
       confirmLabel: 'Rechazar',
+      amount: order.finalPaymentDetails?.monto ? Number(order.finalPaymentDetails.monto) : undefined,
     })
     if (!reason) return
     try {
@@ -315,6 +320,7 @@ export default function Dashboard() {
       title: 'Aprobar abono',
       message: `Monto: $${Number(amount).toFixed(2)}. Esta acción no se puede deshacer.`,
       confirmLabel: 'Aprobar',
+      amount: Number(amount),
     })
     if (!confirmed) return
     try {
@@ -326,12 +332,13 @@ export default function Dashboard() {
     }
   }
 
-  const handleRejectPartialPayment = async (submissionId: string) => {
+  const handleRejectPartialPayment = async (submissionId: string, amount: string) => {
     const reason = await confirmDialog({
       title: 'Rechazar abono de pago',
       requireText: true,
       textLabel: 'Motivo del rechazo',
       confirmLabel: 'Rechazar',
+      amount: Number(amount),
     })
     if (!reason) return
     try {
@@ -498,7 +505,7 @@ export default function Dashboard() {
                           >
                             Aprobar pago final
                           </button>{' '}
-                          <button className="btn btn-danger" onClick={() => handleRejectFinalPayment(order.id)}>
+                          <button className="btn btn-danger" onClick={() => handleRejectFinalPayment(order)}>
                             Rechazar
                           </button>
                         </>

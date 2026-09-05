@@ -66,6 +66,11 @@ export default function ConfirmDialog() {
         tabIndex={-1}
       >
         <h3 id="confirm-dialog-title">{options.title}</h3>
+        {typeof options.amount === 'number' && (
+          <p style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-primary)', margin: '4px 0' }}>
+            ${options.amount.toFixed(2)}
+          </p>
+        )}
         {options.message && <p className="form-hint">{options.message}</p>}
 
         {options.requireText && (
