@@ -39,7 +39,7 @@ export default function InventoryList() {
 
   return (
     <div className="page-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="page-header">
         <h1>Inventario</h1>
         <button className="btn btn-secondary" onClick={() => fetchProducts()}>
           ↻ Actualizar

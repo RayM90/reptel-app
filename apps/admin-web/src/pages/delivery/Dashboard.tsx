@@ -205,7 +205,7 @@ export default function DeliveryDashboard() {
 
   return (
     <div className="page-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="page-header">
         <div>
           <h1>Panel de Motorizado</h1>
           <p>Hola, {user?.name}</p>
