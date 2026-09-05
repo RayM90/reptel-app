@@ -470,7 +470,7 @@ export default function Dashboard() {
                     <td>
                       {order.orderNumber}
                       {newOrderIds.has(order.id) && (
-                        <span className="badge" style={NEW_BADGE_STYLE} aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>
+                        <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>
                       )}
                     </td>
                     <td>{order.client.name} {order.client.lastName}</td>
@@ -556,7 +556,7 @@ export default function Dashboard() {
                     <td>
                       {po.client.name} {po.client.lastName}
                       {newProductOrderIds.has(po.id) && (
-                        <span className="badge" style={NEW_BADGE_STYLE} aria-label="Pedido nuevo, no revisado todavía">🆕 Nuevo</span>
+                        <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Pedido nuevo, no revisado todavía">🆕 Nuevo</span>
                       )}
                     </td>
                     <td>{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>

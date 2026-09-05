@@ -296,7 +296,7 @@ export default function TechnicianDashboard() {
                 >
                   <div className="accordion-card-header__summary">
                     <strong>{order.orderNumber}</strong> — {order.client.name} {order.client.lastName}
-                    {isNew && <span className="badge" style={NEW_BADGE_STYLE} aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>}
+                    {isNew && <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>}
                     <br />
                     {order.device.brand} {order.device.model} ·{' '}
                     <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
