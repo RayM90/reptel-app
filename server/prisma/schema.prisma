@@ -254,6 +254,9 @@ model Order {
   invoices         Invoice[]
 
   linkedProductOrders ProductOrder[] @relation("ProductOrderToServiceOrder")
+
+  @@index([status, deliveredAt])
+  @@index([receivedAt])
 }
 
 model OrderStatusHistory {
