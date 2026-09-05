@@ -11,5 +11,5 @@ ALTER TABLE `productorderitem`
   ADD CONSTRAINT `productorderitem_quantity_positive` CHECK (`quantity` > 0),
   ADD CONSTRAINT `productorderitem_unitprice_non_negative` CHECK (`unitPrice` >= 0);
 
-ALTER TABLE `order`
+ALTER TABLE `Order`
   ADD CONSTRAINT `order_budget_non_negative` CHECK (`budget` IS NULL OR `budget` >= 0);
