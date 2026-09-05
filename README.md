@@ -51,6 +51,62 @@ reptel-app/
 
 ---
 
+## 🚀 Cómo levantar el proyecto
+
+### Requisitos previos
+- Node.js 18 o superior (probado con v24)
+- MySQL corriendo localmente, con una base de datos creada (ej. `reptel_db`)
+- Un User Pool de AWS Cognito ya configurado (User Pool ID + Client ID)
+
+### 1. Variables de entorno
+Crear `server/.env`:
+```
+DATABASE_URL="mysql://usuario:password@localhost:3306/reptel_db"
+COGNITO_USER_POOL_ID=...
+COGNITO_CLIENT_ID=...
+AWS_REGION=us-east-1
+PORT=3000
+```
+
+### 2. Instalar dependencias
+Cada carpeta tiene su propio `package.json` (no hay un solo `npm install` para todo el monorepo):
+```bash
+cd server && npm install
+cd ../apps/admin-web && npm install
+cd ../apps/mobile && npm install
+```
+
+### 3. Levantar el backend
+```bash
+cd server
+npx prisma migrate deploy
+npm run dev
+```
+Queda en `http://localhost:3000` y muestra en consola la IP de tu red local (para que el celular la use). **Detener:** `Ctrl+C`.
+
+### 4. Levantar el panel web (admin-web)
+```bash
+cd apps/admin-web
+npm run dev
+```
+Abre en `http://localhost:5173`. **Detener:** `Ctrl+C`.
+
+### 5. Levantar la app móvil
+```bash
+cd apps/mobile
+npm start
+```
+Escanear el QR con **Expo Go**, celular en la misma red Wi-Fi que la PC del backend. **Detener:** `Ctrl+C` (o `q` en la terminal de Expo).
+
+> Los tres corren por separado — se necesitan 3 terminales abiertas a la vez mientras desarrollas.
+
+### Correr los tests del backend
+```bash
+cd server && npm test
+```
+
+---
+
 ## 👥 Roles del sistema
 
 | Rol | Qué hace |
