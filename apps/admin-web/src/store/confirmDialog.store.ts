@@ -6,6 +6,7 @@ interface ConfirmOptions {
   requireText?: boolean
   textLabel?: string
   confirmLabel?: string
+  amount?: number
 }
 
 interface ConfirmDialogState {
