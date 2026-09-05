@@ -453,3 +453,50 @@ table.styled-table--sticky-actions th:last-child {
 table.styled-table th.money {
   text-align: right;
 }
+
+/* ─── Buscador de cliente (Reportes) ──────────────────── */
+
+.autocomplete-list {
+  position: absolute;
+  z-index: 10;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  margin: 2px 0 0;
+  padding: 4px 0;
+  list-style: none;
+  width: 220px;
+  max-height: 180px;
+  overflow-y: auto;
+  box-shadow: 0 2px 8px rgba(35, 38, 47, 0.12);
+}
+
+.autocomplete-list li {
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.autocomplete-list li:hover {
+  background: var(--color-bg-2);
+}
+
+/* ─── Impresión (Reportes → Exportar PDF) ─────────────── */
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-break {
+    page-break-before: always;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  .card {
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+}
