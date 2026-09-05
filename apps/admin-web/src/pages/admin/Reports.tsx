@@ -305,7 +305,7 @@ export default function Reports() {
               <div className="table-wrapper">
                 <table className="styled-table">
                   <thead>
-                    <tr><th>Técnico</th><th>Órdenes</th><th className="money">Comisión</th></tr>
+                    <tr><th scope="col">Técnico</th><th scope="col">Órdenes</th><th scope="col" className="money">Comisión</th></tr>
                   </thead>
                   <tbody>
                     {data.servicio.byTechnician.map((t) => (
@@ -329,7 +329,7 @@ export default function Reports() {
               <div className="table-wrapper">
                 <table className="styled-table">
                   <thead>
-                    <tr><th>Cliente</th><th>Órdenes</th><th className="money">Presupuesto</th></tr>
+                    <tr><th scope="col">Cliente</th><th scope="col">Órdenes</th><th scope="col" className="money">Presupuesto</th></tr>
                   </thead>
                   <tbody>
                     {data.servicio.byClient.map((c) => (
@@ -354,8 +354,8 @@ export default function Reports() {
                 <table className="styled-table">
                   <thead>
                     <tr>
-                      <th>Orden</th><th>Cliente</th><th>Técnico</th>
-                      <th className="money">Presupuesto</th><th className="money">Comisión</th><th>Entregado</th>
+                      <th scope="col">Orden</th><th scope="col">Cliente</th><th scope="col">Técnico</th>
+                      <th scope="col" className="money">Presupuesto</th><th scope="col" className="money">Comisión</th><th scope="col">Entregado</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -399,7 +399,7 @@ export default function Reports() {
               <div className="table-wrapper">
                 <table className="styled-table">
                   <thead>
-                    <tr><th>Motorizado</th><th>Entregas</th><th className="money">Comisión</th></tr>
+                    <tr><th scope="col">Motorizado</th><th scope="col">Entregas</th><th scope="col" className="money">Comisión</th></tr>
                   </thead>
                   <tbody>
                     {data.tienda.byMotorizado.map((m) => (
@@ -423,7 +423,7 @@ export default function Reports() {
               <div className="table-wrapper">
                 <table className="styled-table">
                   <thead>
-                    <tr><th>Cliente</th><th>Pedidos</th><th className="money">Ventas</th></tr>
+                    <tr><th scope="col">Cliente</th><th scope="col">Pedidos</th><th scope="col" className="money">Ventas</th></tr>
                   </thead>
                   <tbody>
                     {data.tienda.byClient.map((c) => (
@@ -448,8 +448,8 @@ export default function Reports() {
                 <table className="styled-table">
                   <thead>
                     <tr>
-                      <th>Cliente</th><th>Motorizado</th>
-                      <th className="money">Total</th><th className="money">Comisión</th><th>Entregado</th>
+                      <th scope="col">Cliente</th><th scope="col">Motorizado</th>
+                      <th scope="col" className="money">Total</th><th scope="col" className="money">Comisión</th><th scope="col">Entregado</th>
                     </tr>
                   </thead>
                   <tbody>
