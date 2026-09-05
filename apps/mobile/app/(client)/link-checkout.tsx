@@ -15,6 +15,7 @@ import { useState } from 'react'
 import { productOrdersAPI } from '../../src/services/api'
 import { useToastStore } from '../../src/store/toast.store'
 import { useConfirm } from '../../src/hooks/useConfirm'
+import { usePaymentInfo, formatPaymentInfo } from '../../src/hooks/usePaymentInfo'
 
 const REVISION_COST = 15 // mismo valor que el backend (constants.ts), duplicada intencionalmente en frontend
 
@@ -24,12 +25,6 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   PAGO_MOVIL: '📱 Pago Móvil',
   TRANSFERENCIA: '🏦 Transferencia Bancaria',
   BINANCE: '₿ Binance',
-}
-
-const PAYMENT_INFO: Record<PaymentMethod, string> = {
-  PAGO_MOVIL: 'Banco: Banesco • Teléfono: 0414-1234567 • CI: V-12345678',
-  TRANSFERENCIA: 'Banco: Banesco • Cuenta: 0134-0000-00-0000000000 • RIF: J-12345678-9',
-  BINANCE: 'ID Binance: reptel@correo.com • Red: BEP20 (USDT)',
 }
 
 interface SelectedItem {
@@ -58,6 +53,7 @@ export default function LinkCheckoutScreen() {
   const [loading, setLoading] = useState(false)
   const showToast = useToastStore((state) => state.showToast)
   const confirmDialog = useConfirm()
+  const { data: paymentSettings } = usePaymentInfo()
 
   const handleConfirm = async () => {
     if (!selectedMethod) {
@@ -180,8 +176,8 @@ export default function LinkCheckoutScreen() {
                   <Text style={styles.paymentLabel}>{PAYMENT_LABELS[method]}</Text>
                   <View style={[styles.radio, selectedMethod === method && styles.radioActive]} />
                 </View>
-                {selectedMethod === method && (
-                  <Text style={styles.paymentInfo}>{PAYMENT_INFO[method]}</Text>
+                {selectedMethod === method && paymentSettings && (
+                  <Text style={styles.paymentInfo}>{formatPaymentInfo(paymentSettings, method)}</Text>
                 )}
               </TouchableOpacity>
             ))}

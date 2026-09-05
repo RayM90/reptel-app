@@ -17,6 +17,7 @@ import { useAuthStore } from '../../src/store/auth.store'
 import { productOrdersAPI } from '../../src/services/api'
 import { useToastStore } from '../../src/store/toast.store'
 import { useConfirm } from '../../src/hooks/useConfirm'
+import { usePaymentInfo, formatPaymentInfo } from '../../src/hooks/usePaymentInfo'
 
 // Mismos montos fijos que el backend (server/src/config/constants.ts).
 // Prototipo de tesis, no configurables todavía.
@@ -33,16 +34,11 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   BINANCE: '₿ Binance',
 }
 
-const PAYMENT_INFO: Record<PaymentMethod, string> = {
-  PAGO_MOVIL: 'Banco: Banesco • Teléfono: 0414-1234567 • CI: V-12345678',
-  TRANSFERENCIA: 'Banco: Banesco • Cuenta: 0134-0000-00-0000000000 • RIF: J-12345678-9',
-  BINANCE: 'ID Binance: reptel@correo.com • Red: BEP20 (USDT)',
-}
-
 export default function CheckoutScreen() {
   const router = useRouter()
   const { items, totalItems, totalPrice, clearCart, updateQuantity, removeItem } = useCartStore()
   const { user } = useAuthStore()
+  const { data: paymentSettings } = usePaymentInfo()
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [loading, setLoading] = useState(false)
   const [useOtherAddress, setUseOtherAddress] = useState(false)
@@ -316,8 +312,8 @@ export default function CheckoutScreen() {
                     selectedMethod === method && styles.radioActive,
                   ]} />
                 </View>
-                {selectedMethod === method && (
-                  <Text style={styles.paymentInfo}>{PAYMENT_INFO[method]}</Text>
+                {selectedMethod === method && paymentSettings && (
+                  <Text style={styles.paymentInfo}>{formatPaymentInfo(paymentSettings, method)}</Text>
                 )}
               </TouchableOpacity>
             ))}

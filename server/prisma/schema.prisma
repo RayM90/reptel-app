@@ -500,6 +500,30 @@ model ProductDelivery {
 }
 
 // ─────────────────────────────────────────────
+// MÓDULO CONFIGURACIÓN DEL NEGOCIO
+// ─────────────────────────────────────────────
+
+// Datos de pago de la tienda (banco, teléfono Pago Móvil, cédula, cuenta
+// bancaria, RIF, wallet Binance) — antes hardcodeados como constantes
+// idénticas duplicadas en 4 archivos del frontend móvil (advance-payment.tsx,
+// checkout.tsx, final-payment.tsx, link-checkout.tsx). Se centralizan aquí
+// para que el ADMIN los edite en un solo lugar sin recompilar la app.
+model BusinessSettings {
+  id                     String   @id @default(uuid())
+  pagoMovilBanco         String
+  pagoMovilTelefono      String
+  pagoMovilCedula        String
+  transferenciaBanco     String
+  transferenciaCuenta    String
+  transferenciaRif       String
+  binanceId              String
+  binanceRed             String
+  updatedAt              DateTime @updatedAt
+
+  @@map("businesssettings")
+}
+
+// ─────────────────────────────────────────────
 // MÓDULO NOTIFICACIONES
 // ─────────────────────────────────────────────
 

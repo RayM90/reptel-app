@@ -11,6 +11,7 @@ import catalogRouter from './modules/catalog/catalog.routes'
 import productsRouter from './modules/products/products.routes'
 import productOrdersRouter from './modules/product-orders/product-orders.routes'
 import reportsRouter from './modules/reports/reports.routes'
+import settingsRouter from './modules/settings/settings.routes'
 
 dotenv.config()
 
@@ -37,5 +38,6 @@ app.use('/api/catalog', catalogRouter)
 app.use('/api/products', productsRouter)
 app.use('/api/product-orders', productOrdersRouter)
 app.use('/api/reports', reportsRouter)
+app.use('/api/settings', settingsRouter)
 
 export default app

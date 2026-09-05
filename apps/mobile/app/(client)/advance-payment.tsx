@@ -14,6 +14,7 @@ import { useState } from 'react'
 import { ordersAPI } from '../../src/services/api'
 import { useToastStore } from '../../src/store/toast.store'
 import { useConfirm } from '../../src/hooks/useConfirm'
+import { usePaymentInfo, formatPaymentInfo } from '../../src/hooks/usePaymentInfo'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -21,12 +22,6 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   PAGO_MOVIL: '📱 Pago Móvil',
   TRANSFERENCIA: '🏦 Transferencia Bancaria',
   BINANCE: '₿ Binance',
-}
-
-const PAYMENT_INFO: Record<PaymentMethod, string> = {
-  PAGO_MOVIL: 'Banco: Banesco • Teléfono: 0414-1234567 • CI: V-12345678',
-  TRANSFERENCIA: 'Banco: Banesco • Cuenta: 0134-0000-00-0000000000 • RIF: J-12345678-9',
-  BINANCE: 'ID Binance: reptel@correo.com • Red: BEP20 (USDT)',
 }
 
 // Montos fijos de delivery + revisión — deben coincidir con las
@@ -75,6 +70,7 @@ export default function AdvancePaymentScreen() {
   const [loading, setLoading] = useState(false)
   const showToast = useToastStore((state) => state.showToast)
   const confirmDialog = useConfirm()
+  const { data: paymentSettings } = usePaymentInfo()
 
   const handleConfirm = async () => {
     if (!selectedMethod) {
@@ -234,8 +230,8 @@ export default function AdvancePaymentScreen() {
                     selectedMethod === method && styles.radioActive,
                   ]} />
                 </View>
-                {selectedMethod === method && (
-                  <Text style={styles.paymentInfo}>{PAYMENT_INFO[method]}</Text>
+                {selectedMethod === method && paymentSettings && (
+                  <Text style={styles.paymentInfo}>{formatPaymentInfo(paymentSettings, method)}</Text>
                 )}
               </TouchableOpacity>
             ))}
