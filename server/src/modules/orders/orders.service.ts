@@ -556,6 +556,7 @@ export const confirmAdvancePaymentInstallment = async (
               create: {
                 status: 'RECEIVED',
                 comment: `Anticipo de $${total} completado mediante abonos — confirmado por el administrador`,
+                userId: actor?.id,
               },
             },
           },

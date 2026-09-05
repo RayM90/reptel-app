@@ -66,6 +66,11 @@ COGNITO_USER_POOL_ID=...
 COGNITO_CLIENT_ID=...
 AWS_REGION=us-east-1
 PORT=3000
+DEVICE_PASSWORD_ENC_KEY=...
+```
+`DEVICE_PASSWORD_ENC_KEY` es una clave de 32 bytes en hexadecimal (64 caracteres) usada para cifrar `Device.devicePassword` (AES-256-GCM) antes de guardarla en la base de datos. Generarla con:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 ### 2. Instalar dependencias
