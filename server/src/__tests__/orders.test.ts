@@ -85,6 +85,90 @@ describe('Orders — GET /api/orders/track/:orderNumber', () => {
 
 })
 
+// ── GET /api/orders/track/:orderNumber — no debe exponer PII/contraseña ──
+// Usa fixtures propios (no depende de que ya existan clientes/dispositivos/
+// órdenes en la BD de pruebas — el describe de arriba sí depende de eso y
+// se salta si está vacía, lo cual dejaría estos dos tests sin probar nada).
+describe('Orders — GET /api/orders/track/:orderNumber — no debe exponer PII', () => {
+  let piiTestClient: { id: string }
+  let piiTestDevice: { id: string }
+  let piiTestOrderNumber: string
+
+  beforeAll(async () => {
+    const suffix = Date.now()
+
+    piiTestClient = await prisma.client.create({
+      data: {
+        name: 'Cliente',
+        lastName: 'Prueba Tracking',
+        idNumber: `TEST-TRACK-${suffix}`,
+        phone: '04120000000',
+        email: `cliente-track-${suffix}@test.com`,
+        password: '',
+      },
+    })
+
+    piiTestDevice = await prisma.device.create({
+      data: {
+        type: 'LAPTOP',
+        brand: 'TestBrand',
+        model: 'X1',
+        devicePassword: 'secreto123',
+      },
+    })
+
+    piiTestOrderNumber = `TEST-TRACK-ORDER-${suffix}`
+    await prisma.order.create({
+      data: {
+        orderNumber: piiTestOrderNumber,
+        clientId: piiTestClient.id,
+        deviceId: piiTestDevice.id,
+        problem: 'Prueba automatizada — exposición de PII en tracking',
+      },
+    })
+  }, 20000)
+
+  afterAll(async () => {
+    await prisma.order.deleteMany({ where: { orderNumber: piiTestOrderNumber } })
+    await prisma.device.delete({ where: { id: piiTestDevice.id } }).catch(() => {})
+    await prisma.client.delete({ where: { id: piiTestClient.id } }).catch(() => {})
+  })
+
+  it('no debe exponer teléfono ni apellido del cliente', async () => {
+    const res = await request(app)
+      .get(`/api/orders/track/${piiTestOrderNumber}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.client).not.toHaveProperty('phone')
+    expect(res.body.data.client).not.toHaveProperty('lastName')
+  }, 10000)
+
+  it('no debe exponer la contraseña del equipo', async () => {
+    const res = await request(app)
+      .get(`/api/orders/track/${piiTestOrderNumber}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.device).not.toHaveProperty('devicePassword')
+  }, 10000)
+
+})
+
+// ── GET /api/orders/track/:orderNumber — límite de solicitudes ───────────
+describe('Orders — GET /api/orders/track/:orderNumber — rate limiting', () => {
+
+  it('debe retornar 429 tras exceder el límite de solicitudes', async () => {
+    const responses = await Promise.all(
+      Array.from({ length: 25 }, () =>
+        request(app).get('/api/orders/track/REP-000000-0000')
+      )
+    )
+
+    const tooManyRequests = responses.filter((res) => res.status === 429)
+    expect(tooManyRequests.length).toBeGreaterThan(0)
+  }, 20000)
+
+})
+
 // ── POST /api/orders ───────────────────────────────────────────────────────
 describe('Orders — POST /api/orders', () => {
 
