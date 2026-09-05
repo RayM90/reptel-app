@@ -66,9 +66,9 @@ export default function ConfirmDialog() {
         tabIndex={-1}
       >
         <h3 id="confirm-dialog-title">{options.title}</h3>
-        {typeof options.amount === 'number' && (
+        {Number.isFinite(options.amount) && (
           <p style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-primary)', margin: '4px 0' }}>
-            ${options.amount.toFixed(2)}
+            ${options.amount!.toFixed(2)}
           </p>
         )}
         {options.message && <p className="form-hint">{options.message}</p>}
