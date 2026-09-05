@@ -364,8 +364,13 @@ export const uploadReceipt = async (
 export const confirmPartialPayment = async (
   submissionId: string,
   approved: boolean,
-  rejectionReason?: string
+  rejectionReason?: string,
+  actorEmail?: string
 ) => {
+  const actor = actorEmail
+    ? await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true } })
+    : null
+
   const submission = await prisma.productOrderPaymentSubmission.findUnique({
     where: { id: submissionId },
     include: {
@@ -403,6 +408,7 @@ export const confirmPartialPayment = async (
         status: approved ? 'CONFIRMED' : 'REJECTED',
         rejectionReason: approved ? null : rejectionReason,
         confirmedAt: approved ? new Date() : null,
+        confirmedByUserId: actor?.id,
       },
     })
 

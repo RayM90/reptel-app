@@ -200,7 +200,12 @@ export const confirmPartialPayment = async (req: AuthRequest, res: Response): Pr
       return
     }
 
-    const order = await productOrdersService.confirmPartialPayment(submissionId, Boolean(approved), rejectionReason)
+    const order = await productOrdersService.confirmPartialPayment(
+      submissionId,
+      Boolean(approved),
+      rejectionReason,
+      req.user?.email
+    )
     res.json({ success: true, data: order })
   } catch (error) {
     console.error('ERROR CONFIRMAR ABONO:', error)

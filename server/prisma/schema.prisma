@@ -154,6 +154,8 @@ model User {
   notifications        Notification[]
   productDeliveries    ProductDelivery[]  @relation("DeliveryAgent")
   statusChangesMade    OrderStatusHistory[] @relation("StatusChangeActor")
+  advanceSubmissionsConfirmed AdvancePaymentSubmission[] @relation("AdvanceConfirmedBy")
+  productSubmissionsConfirmed ProductOrderPaymentSubmission[] @relation("ProductPaymentConfirmedBy")
 }
 
 model Client {
@@ -436,16 +438,19 @@ model ProductOrderItem {
 }
 
 model ProductOrderPaymentSubmission {
-  id              String               @id @default(uuid())
-  amount          Decimal              @db.Decimal(10, 2)
-  paymentDetails  Json
-  status          PartialPaymentStatus @default(PENDING)
-  rejectionReason String?              @db.Text
-  createdAt       DateTime             @default(now())
-  confirmedAt     DateTime?
+  id                 String               @id @default(uuid())
+  amount             Decimal              @db.Decimal(10, 2)
+  paymentDetails     Json
+  status             PartialPaymentStatus @default(PENDING)
+  rejectionReason    String?              @db.Text
+  createdAt          DateTime             @default(now())
+  confirmedAt        DateTime?
 
-  productOrderId  String
-  productOrder    ProductOrder         @relation(fields: [productOrderId], references: [id])
+  productOrderId     String
+  productOrder       ProductOrder         @relation(fields: [productOrderId], references: [id])
+
+  confirmedByUserId  String?
+  confirmedByUser    User?                @relation("ProductPaymentConfirmedBy", fields: [confirmedByUserId], references: [id])
 
   @@map("productorderpaymentsubmission")
 }
@@ -455,16 +460,19 @@ model ProductOrderPaymentSubmission {
 // independiente, el cliente puede pagar en varias partes y no puede enviar
 // más de lo que falta para completar el total.
 model AdvancePaymentSubmission {
-  id              String               @id @default(uuid())
-  amount          Decimal              @db.Decimal(10, 2)
-  paymentDetails  Json
-  status          PartialPaymentStatus @default(PENDING)
-  rejectionReason String?              @db.Text
-  createdAt       DateTime             @default(now())
-  confirmedAt     DateTime?
+  id                 String               @id @default(uuid())
+  amount             Decimal              @db.Decimal(10, 2)
+  paymentDetails     Json
+  status             PartialPaymentStatus @default(PENDING)
+  rejectionReason    String?              @db.Text
+  createdAt          DateTime             @default(now())
+  confirmedAt        DateTime?
 
-  orderId         String
-  order           Order                @relation(fields: [orderId], references: [id])
+  orderId            String
+  order              Order                @relation(fields: [orderId], references: [id])
+
+  confirmedByUserId  String?
+  confirmedByUser    User?                @relation("AdvanceConfirmedBy", fields: [confirmedByUserId], references: [id])
 
   @@map("advancepaymentsubmission")
 }
