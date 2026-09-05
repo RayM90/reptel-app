@@ -316,8 +316,8 @@ export default function Reports() {
             )}
           </section>
 
-          <section className="card">
-            <h3>Detalle de órdenes</h3>
+          <details className="card">
+            <summary><h3 style={{ display: 'inline' }}>Detalle de órdenes</h3></summary>
             {data.servicio.orders.length === 0 ? (
               <p>No hay datos en este período</p>
             ) : (
@@ -344,7 +344,7 @@ export default function Reports() {
                 </table>
               </div>
             )}
-          </section>
+          </details>
 
           <h2 className="print-break">Tienda</h2>
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
@@ -410,8 +410,8 @@ export default function Reports() {
             )}
           </section>
 
-          <section className="card">
-            <h3>Detalle de pedidos</h3>
+          <details className="card">
+            <summary><h3 style={{ display: 'inline' }}>Detalle de pedidos</h3></summary>
             {data.tienda.orders.length === 0 ? (
               <p>No hay datos en este período</p>
             ) : (
@@ -437,7 +437,7 @@ export default function Reports() {
                 </table>
               </div>
             )}
-          </section>
+          </details>
         </>
       )}
     </div>
