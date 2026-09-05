@@ -294,7 +294,7 @@ export const updateStatus = async (req: AuthRequest, res: Response): Promise<voi
       res.status(400).json({ success: false, message: 'El status es requerido' })
       return
     }
-    const order = await ordersService.updateOrderStatus(id, status, comment, technicianId)
+    const order = await ordersService.updateOrderStatus(id, status, comment, technicianId, req.user?.email)
 
     broadcastOrderUpdate({
       type: 'ORDER_STATUS_UPDATED',

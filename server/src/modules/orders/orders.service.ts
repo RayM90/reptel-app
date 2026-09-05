@@ -585,8 +585,13 @@ export const updateOrderStatus = async (
   id: string,
   status: string,
   comment?: string,
-  technicianId?: string
+  technicianId?: string,
+  actorEmail?: string
 ) => {
+  const actor = actorEmail
+    ? await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true } })
+    : null
+
   const order = await prisma.order.update({
     where: { id },
     data: {
@@ -597,6 +602,7 @@ export const updateOrderStatus = async (
         create: {
           status: status as any,
           comment,
+          userId: actor?.id,
         },
       },
     },
