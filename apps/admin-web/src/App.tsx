@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/auth/Login'
 import ProtectedRoute from './components/ProtectedRoute'
 import Dashboard from './pages/admin/Dashboard'
@@ -15,6 +15,7 @@ function App() {
   return (
     <>
       <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
 
         <Route
@@ -88,6 +89,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
 
       <Toast />
