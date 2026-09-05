@@ -1012,7 +1012,7 @@ export const closeZeroBudgetOrder = async (id: string) => {
 export const approveBudget = async (id: string, email: string) => {
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { clientId: true },
+    select: { id: true, clientId: true },
   })
   if (!user || !user.clientId) {
     throw new Error('Cliente no encontrado para este usuario')
@@ -1037,6 +1037,7 @@ export const approveBudget = async (id: string, email: string) => {
         create: {
           status: 'APPROVED',
           comment: `Presupuesto de $${order.budget} aprobado por el cliente en la app`,
+          userId: user.id,
         },
       },
     },
@@ -1059,7 +1060,7 @@ export const approveBudget = async (id: string, email: string) => {
 export const rejectBudget = async (id: string, email: string, reason: string) => {
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { clientId: true },
+    select: { id: true, clientId: true },
   })
   if (!user || !user.clientId) {
     throw new Error('Cliente no encontrado para este usuario')
@@ -1092,6 +1093,7 @@ export const rejectBudget = async (id: string, email: string, reason: string) =>
         create: {
           status: 'CANCELLED',
           comment: `Cliente rechazó el presupuesto de $${order.budget}. Motivo: ${reason}. Comisión del técnico: $${commission.toFixed(2)} (delivery + 40% revisión).`,
+          userId: user.id,
         },
       },
     },
