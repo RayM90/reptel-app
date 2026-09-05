@@ -452,6 +452,7 @@ export const confirmPartialPayment = async (
           data: {
             status: 'CONFIRMED',
             paidAt: new Date(),
+            version: { increment: 1 },
             statusHistory: {
               create: { status: 'CONFIRMED', comment: 'Pago completado, pedido confirmado', userId: actor?.id },
             },

@@ -592,16 +592,25 @@ export const updateOrderStatus = async (
   status: string,
   comment?: string,
   technicianId?: string,
-  actorEmail?: string
+  actorEmail?: string,
+  expectedVersion?: number
 ) => {
   const actor = actorEmail
     ? await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true } })
     : null
 
+  if (expectedVersion !== undefined) {
+    const current = await prisma.order.findUniqueOrThrow({ where: { id }, select: { version: true } })
+    if (current.version !== expectedVersion) {
+      throw new Error('La orden fue modificada por otro usuario, recarga e intenta de nuevo')
+    }
+  }
+
   const order = await prisma.order.update({
     where: { id },
     data: {
       status: status as any,
+      version: { increment: 1 },
       ...(technicianId && { technicianId }),
       ...(status === 'DELIVERED' && { deliveredAt: new Date() }),
       statusHistory: {

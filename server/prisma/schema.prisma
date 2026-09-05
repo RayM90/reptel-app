@@ -215,6 +215,7 @@ model Order {
   receivedAt     DateTime    @default(now())
   deliveredAt    DateTime?
   updatedAt      DateTime    @updatedAt
+  version        Int         @default(0)
 
   deliveryAmount             Decimal?       @db.Decimal(10, 2)
   revisionAmount             Decimal?       @db.Decimal(10, 2)
@@ -410,6 +411,7 @@ model ProductOrder {
   notes          String?            @db.Text
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
+  version        Int                @default(0)
 
   rejectionReason String? @db.Text
 

@@ -290,12 +290,12 @@ export const getMyTechOrders = async (req: AuthRequest, res: Response): Promise<
 export const updateStatus = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const id = String(req.params.id)
-    const { status, comment, technicianId } = req.body
+    const { status, comment, technicianId, expectedVersion } = req.body
     if (!status) {
       res.status(400).json({ success: false, message: 'El status es requerido' })
       return
     }
-    const order = await ordersService.updateOrderStatus(id, status, comment, technicianId, req.user?.email)
+    const order = await ordersService.updateOrderStatus(id, status, comment, technicianId, req.user?.email, expectedVersion)
 
     broadcastOrderUpdate({
       type: 'ORDER_STATUS_UPDATED',
