@@ -95,6 +95,10 @@ const processOrderItems = async (
       throw new Error(`El producto "${product.name}" ya no está disponible`)
     }
 
+    if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+      throw new Error(`La cantidad de "${product.name}" debe ser un entero mayor a 0`)
+    }
+
     if (product.stock < item.quantity) {
       throw new Error(
         `Stock insuficiente para "${product.name}". Disponible: ${product.stock}, solicitado: ${item.quantity}`
