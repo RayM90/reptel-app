@@ -168,6 +168,35 @@ export default function Reports() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Forzar que los <details className="card"> (Detalle de órdenes/pedidos) se muestren
+  // expandidos al exportar a PDF, sin importar su estado en pantalla. Una regla CSS
+  // (`details.card:not([open]) > *:not(summary) { display: block !important }`) NO funciona:
+  // Chromium oculta el contenido de un <details> cerrado mediante un wrapper interno de
+  // shadow DOM (user-agent), no mediante una regla CSS común, así que ningún selector de
+  // un stylesheet de autor puede alcanzarlo. La única forma real de revelar el contenido es
+  // forzar el atributo `open` de verdad, antes de imprimir, y restaurarlo después.
+  useEffect(() => {
+    const detailsToRestore: HTMLDetailsElement[] = []
+    const handleBeforePrint = () => {
+      document.querySelectorAll<HTMLDetailsElement>('details.card').forEach((d) => {
+        if (!d.open) {
+          d.open = true
+          detailsToRestore.push(d)
+        }
+      })
+    }
+    const handleAfterPrint = () => {
+      detailsToRestore.forEach((d) => { d.open = false })
+      detailsToRestore.length = 0
+    }
+    window.addEventListener('beforeprint', handleBeforePrint)
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint)
+      window.removeEventListener('afterprint', handleAfterPrint)
+    }
+  }, [])
+
   const applyPreset = (preset: 'hoy' | 'semana' | 'mes') => {
     const now = new Date()
     let range: { from: Date; to: Date }

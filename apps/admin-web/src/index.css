@@ -526,11 +526,12 @@ details.card[open] summary::before {
   content: '▾ ';
 }
 
-@media print {
-  details.card {
-    display: block !important;
-  }
-}
+/* NOTE: a `@media print { details.card:not([open]) > *:not(summary) { display: block !important } }`
+   rule was tried here and does NOT work in Chromium. Chrome implements <details> collapsing via an
+   internal user-agent shadow-DOM wrapper around the non-summary content, not via a plain CSS rule
+   matching the light-DOM children — so no author-stylesheet selector (however specific) can reach
+   and override it. The only mechanism that actually works is forcing the real `open` attribute
+   before printing, which is done in JS via `beforeprint`/`afterprint` listeners in Reports.tsx. */
 
 /* ─── Responsive: colapsar tablas a tarjetas en pantallas angostas ─── */
 
