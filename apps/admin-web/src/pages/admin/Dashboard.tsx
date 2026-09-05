@@ -216,43 +216,6 @@ export default function Dashboard() {
     })
   }
 
-  // ── Pago anticipado (delivery + revisión) ──
-  const handleApproveAdvancePayment = async (order: Order) => {
-    const confirmed = await confirmDialog({
-      title: 'Aprobar pago anticipado',
-      message: `Orden ${order.orderNumber} — ${order.client.name} ${order.client.lastName}. Esta acción no se puede deshacer.`,
-      confirmLabel: 'Aprobar',
-    })
-    if (!confirmed) return
-    try {
-      await api.post(`/api/orders/${order.id}/confirm-advance-payment`, { approved: true })
-      showToast('✅ Pago anticipado aprobado. La orden pasó a "Recibida".', 'success')
-      fetchData()
-    } catch (err) {
-      showToast('❌ Error al aprobar el pago', 'error')
-    }
-  }
-
-  const handleRejectAdvancePayment = async (orderId: string) => {
-    const reason = await confirmDialog({
-      title: 'Rechazar pago anticipado',
-      requireText: true,
-      textLabel: 'Motivo del rechazo',
-      confirmLabel: 'Rechazar',
-    })
-    if (!reason) return
-    try {
-      await api.post(`/api/orders/${orderId}/confirm-advance-payment`, {
-        approved: false,
-        rejectionReason: reason,
-      })
-      showToast('✅ Pago rechazado. Se notificó al cliente para que reenvíe sus datos.', 'success')
-      fetchData()
-    } catch (err) {
-      showToast('❌ Error al rechazar el pago', 'error')
-    }
-  }
-
   // ── Anticipo de servicio técnico — abonos individuales (pago en partes) ──
   const handleApproveAdvanceInstallment = async (submissionId: string, amount: string) => {
     const confirmed = await confirmDialog({
