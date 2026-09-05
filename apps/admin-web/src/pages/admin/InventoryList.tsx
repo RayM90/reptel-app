@@ -56,13 +56,13 @@ export default function InventoryList() {
           <table className="styled-table styled-table--sticky-actions">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Nombre</th>
-                <th>Categoría</th>
-                <th className="money">Precio</th>
-                <th>Stock</th>
-                <th>Estado</th>
-                <th>Acciones</th>
+                <th scope="col">ID</th>
+                <th scope="col">Nombre</th>
+                <th scope="col">Categoría</th>
+                <th scope="col" className="money">Precio</th>
+                <th scope="col">Stock</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Acciones</th>
               </tr>
             </thead>
             <tbody>
