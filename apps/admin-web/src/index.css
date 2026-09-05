@@ -572,3 +572,48 @@ details.card[open] summary::before {
     font-size: 13px;
   }
 }
+
+/* ─── Responsive: colapsar tablas a tarjetas en pantallas angostas ───
+   Todo <td> de datos en el código ya trae `data-label` (a diferencia del
+   intento anterior, revertido por no tenerlo — ver commit 11953cc). */
+
+@media (max-width: 640px) {
+  .styled-table thead {
+    display: none;
+  }
+
+  .styled-table, .styled-table tbody, .styled-table tr, .styled-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .styled-table tbody tr {
+    margin-bottom: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 8px 12px;
+  }
+
+  .styled-table tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0;
+    border: none;
+    text-align: right;
+  }
+
+  .styled-table tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-align: left;
+  }
+
+  table.styled-table--sticky-actions td:last-child {
+    position: static;
+    box-shadow: none;
+    background: transparent;
+  }
+}
