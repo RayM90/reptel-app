@@ -1,5 +1,4 @@
-import { Prisma } from '@prisma/client'
-import prisma from '../../lib/prisma'
+import prisma, { ExtendedTransactionClient } from '../../lib/prisma'
 import { INSTALLATION_COST, DELIVERY_COST, DELIVERY_COMMISSION } from '../../config/constants'
 
 // ─────────────────────────────────────────────
@@ -76,7 +75,7 @@ interface ProcessedItem {
 // ─────────────────────────────────────────────
 
 const processOrderItems = async (
-  tx: Prisma.TransactionClient,
+  tx: ExtendedTransactionClient,
   items: CreateProductOrderItemInput[]
 ): Promise<{ itemsToCreate: ProcessedItem[]; total: number }> => {
   let total = 0
