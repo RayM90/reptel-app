@@ -47,21 +47,6 @@ enum OrderStatus {
   CANCELLED
 }
 
-enum ServiceType {
-  PRESENCIAL
-  DELIVERY
-}
-
-enum RequestStatus {
-  PENDING
-  ASSIGNED
-  IN_PROGRESS
-  RESOLVED_ON_SITE
-  TAKEN_TO_SHOP
-  COMPLETED
-  CANCELLED
-}
-
 enum DeliveryStatus {
   ASSIGNED
   LEAVING_STORE
@@ -73,17 +58,6 @@ enum DeliveryStatus {
   RETURNING
   DELIVERED
   CANCELLED
-}
-
-enum DeliveryResult {
-  RESOLVED_ON_SITE
-  TAKEN_TO_SHOP
-}
-
-enum PhotoType {
-  PICKUP
-  PROCESS
-  DELIVERY
 }
 
 enum DocumentType {
@@ -178,7 +152,6 @@ model User {
 
   ordersAsTechnician   Order[]            @relation("TechnicianOrders")
   notifications        Notification[]
-  deliveryAssignments  DeliveryTracking[] @relation("DeliveryUser")
   productDeliveries    ProductDelivery[]  @relation("DeliveryAgent")
 }
 
@@ -197,7 +170,6 @@ model Client {
 
   user            User?
   orders          Order[]
-  serviceRequests ServiceRequest[]
   productOrders   ProductOrder[]
   invoices        Invoice[]
 }
@@ -261,9 +233,6 @@ model Order {
   deviceId     String
   device       Device @relation(fields: [deviceId], references: [id])
 
-  serviceRequestId String?         @unique
-  serviceRequest   ServiceRequest? @relation(fields: [serviceRequestId], references: [id])
-
   serviceCatalogId String?
   serviceCatalog   ServiceCatalog? @relation(fields: [serviceCatalogId], references: [id])
 
@@ -284,69 +253,6 @@ model OrderStatusHistory {
 
   orderId String
   order   Order  @relation(fields: [orderId], references: [id])
-}
-
-// ─────────────────────────────────────────────
-// MÓDULO SERVICIO A DOMICILIO
-// ─────────────────────────────────────────────
-
-model ServiceRequest {
-  id            String        @id @default(uuid())
-  type          ServiceType
-  status        RequestStatus @default(PENDING)
-  deviceType    DeviceType
-  brand         String
-  model         String?
-  description   String        @db.Text
-
-  symptoms      String?       @db.Text
-
-  address       String?
-  paymentMethod PaymentMethod
-  deliveryCost  Decimal?      @db.Decimal(10, 2)
-  tip           Decimal?      @db.Decimal(10, 2)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  clientId String
-  client   Client @relation(fields: [clientId], references: [id])
-
-  order            Order?
-  deliveryTracking DeliveryTracking?
-}
-
-model DeliveryTracking {
-  id        String         @id @default(uuid())
-  status    DeliveryStatus @default(ASSIGNED)
-
-  onSiteDiagnosis String?        @db.Text
-  result          DeliveryResult?
-
-  gpsLatitude     Decimal?       @db.Decimal(10, 7)
-  gpsLongitude    Decimal?       @db.Decimal(10, 7)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  serviceRequestId String         @unique
-  serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id])
-
-  deliveryUserId String
-  deliveryUser   User   @relation("DeliveryUser", fields: [deliveryUserId], references: [id])
-
-  photos DeliveryPhoto[]
-}
-
-model DeliveryPhoto {
-  id                 String    @id @default(uuid())
-  url                String
-  type               PhotoType
-  confirmedByClient  Boolean   @default(false)
-  confirmedByCashier Boolean   @default(false)
-  createdAt          DateTime  @default(now())
-
-  deliveryTrackingId String
-  deliveryTracking   DeliveryTracking @relation(fields: [deliveryTrackingId], references: [id])
 }
 
 // ─────────────────────────────────────────────
