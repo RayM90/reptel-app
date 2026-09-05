@@ -508,6 +508,30 @@ table.styled-table th.money {
   }
 }
 
+details.card summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+details.card summary::-webkit-details-marker {
+  display: none;
+}
+
+details.card summary::before {
+  content: '▸ ';
+  color: var(--color-text-muted);
+}
+
+details.card[open] summary::before {
+  content: '▾ ';
+}
+
+@media print {
+  details.card {
+    display: block !important;
+  }
+}
+
 /* ─── Responsive: colapsar tablas a tarjetas en pantallas angostas ─── */
 
 @media (max-width: 640px) {
