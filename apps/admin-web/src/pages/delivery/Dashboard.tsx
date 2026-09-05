@@ -89,6 +89,7 @@ export default function DeliveryDashboard() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [newIds, setNewIds] = useState<Set<string>>(new Set())
   const [tab, setTab] = useState<'entregas' | 'resumen'>('entregas')
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchData()
@@ -142,18 +143,26 @@ export default function DeliveryDashboard() {
   }
 
   const handleMarkDelivered = async (productOrderId: string) => {
+    if (pendingIds.has(productOrderId)) return
     const confirmed = await confirmDialog({
       title: '¿Confirmas que este pedido fue entregado?',
       confirmLabel: 'Confirmar entrega',
     })
     if (!confirmed) return
 
+    setPendingIds((prev) => new Set(prev).add(productOrderId))
     try {
       await api.patch(`/api/product-orders/${productOrderId}/deliver`)
       showToast('✅ Pedido marcado como entregado', 'success')
       fetchData()
     } catch (err) {
       showToast('❌ Error al marcar el pedido como entregado', 'error')
+    } finally {
+      setPendingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(productOrderId)
+        return next
+      })
     }
   }
 
@@ -285,7 +294,7 @@ export default function DeliveryDashboard() {
                       Asignado: {formatDate(delivery.createdAt)}
                     </p>
 
-                    <button className="btn btn-primary" onClick={() => handleMarkDelivered(order.id)}>
+                    <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => handleMarkDelivered(order.id)}>
                       Marcar como entregado
                     </button>
                   </div>

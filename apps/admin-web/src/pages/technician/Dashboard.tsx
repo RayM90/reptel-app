@@ -107,6 +107,7 @@ export default function TechnicianDashboard() {
 
   const [commentText, setCommentText] = useState<Record<string, string>>({})
   const [statusSelection, setStatusSelection] = useState<Record<string, OrderStatus>>({})
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchData()
@@ -163,6 +164,8 @@ export default function TechnicianDashboard() {
   }
 
   const handleSubmitDiagnosis = async (orderId: string) => {
+    const key = `diag:${orderId}`
+    if (pendingIds.has(key)) return
     const diagnosis = diagnosisText[orderId]
     const budget = budgetText[orderId]
     const serviceCatalogId = catalogSelection[orderId] || undefined
@@ -172,6 +175,7 @@ export default function TechnicianDashboard() {
       return
     }
 
+    setPendingIds((prev) => new Set(prev).add(key))
     try {
       await api.patch(`/api/orders/${orderId}/diagnosis`, {
         diagnosis,
@@ -182,10 +186,18 @@ export default function TechnicianDashboard() {
       fetchData()
     } catch (err) {
       showToast('❌ Error al registrar el diagnóstico', 'error')
+    } finally {
+      setPendingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
     }
   }
 
   const handleSubmitComment = async (orderId: string, currentStatus: OrderStatus) => {
+    const key = `comment:${orderId}`
+    if (pendingIds.has(key)) return
     const comment = commentText[orderId]
     const status = statusSelection[orderId] || currentStatus
 
@@ -194,6 +206,7 @@ export default function TechnicianDashboard() {
       return
     }
 
+    setPendingIds((prev) => new Set(prev).add(key))
     try {
       await api.patch(`/api/orders/${orderId}/status`, { status, comment })
       showToast('✅ Comentario registrado.', 'success')
@@ -201,6 +214,12 @@ export default function TechnicianDashboard() {
       fetchData()
     } catch (err) {
       showToast('❌ Error al registrar el comentario', 'error')
+    } finally {
+      setPendingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
     }
   }
 
@@ -354,7 +373,7 @@ export default function TechnicianDashboard() {
                             }
                           />
                         </div>
-                        <button className="btn btn-primary" onClick={() => handleSubmitDiagnosis(order.id)}>
+                        <button className="btn btn-primary" disabled={pendingIds.has(`diag:${order.id}`)} onClick={() => handleSubmitDiagnosis(order.id)}>
                           Enviar diagnóstico
                         </button>
                       </div>
@@ -391,7 +410,7 @@ export default function TechnicianDashboard() {
                           rows={2}
                         />
                       </div>
-                      <button className="btn btn-primary" onClick={() => handleSubmitComment(order.id, order.status)}>
+                      <button className="btn btn-primary" disabled={pendingIds.has(`comment:${order.id}`)} onClick={() => handleSubmitComment(order.id, order.status)}>
                         Guardar comentario
                       </button>
                     </div>
