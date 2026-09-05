@@ -449,15 +449,15 @@ export default function Dashboard() {
             <table className="styled-table">
               <thead>
                 <tr>
-                  <th>Orden</th>
-                  <th>Cliente</th>
-                  <th>Problema</th>
-                  <th>Estado</th>
-                  <th className="money">Presupuesto</th>
-                  <th>Técnico asignado</th>
-                  <th>Pago anticipado</th>
-                  <th>Pago final</th>
-                  <th>Acciones</th>
+                  <th scope="col">Orden</th>
+                  <th scope="col">Cliente</th>
+                  <th scope="col">Problema</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col" className="money">Presupuesto</th>
+                  <th scope="col">Técnico asignado</th>
+                  <th scope="col">Pago anticipado</th>
+                  <th scope="col">Pago final</th>
+                  <th scope="col">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -470,7 +470,7 @@ export default function Dashboard() {
                     <td>
                       {order.orderNumber}
                       {newOrderIds.has(order.id) && (
-                        <span className="badge" style={NEW_BADGE_STYLE}>🆕 Nuevo</span>
+                        <span className="badge" style={NEW_BADGE_STYLE} aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>
                       )}
                     </td>
                     <td>{order.client.name} {order.client.lastName}</td>
@@ -537,13 +537,13 @@ export default function Dashboard() {
             <table className="styled-table styled-table--sticky-actions">
               <thead>
                 <tr>
-                  <th>Cliente</th>
-                  <th>Productos</th>
-                  <th className="money">Total</th>
-                  <th>Estado</th>
-                  <th>Motorizado asignado</th>
-                  <th>Pagos recibidos</th>
-                  <th>Acciones</th>
+                  <th scope="col">Cliente</th>
+                  <th scope="col">Productos</th>
+                  <th scope="col" className="money">Total</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Motorizado asignado</th>
+                  <th scope="col">Pagos recibidos</th>
+                  <th scope="col">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -556,7 +556,7 @@ export default function Dashboard() {
                     <td>
                       {po.client.name} {po.client.lastName}
                       {newProductOrderIds.has(po.id) && (
-                        <span className="badge" style={NEW_BADGE_STYLE}>🆕 Nuevo</span>
+                        <span className="badge" style={NEW_BADGE_STYLE} aria-label="Pedido nuevo, no revisado todavía">🆕 Nuevo</span>
                       )}
                     </td>
                     <td>{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
@@ -601,13 +601,13 @@ export default function Dashboard() {
           <table className="styled-table">
             <thead>
               <tr>
-                <th>Orden</th>
-                <th>Cliente</th>
-                <th>Estado</th>
-                <th>Técnico</th>
-                <th className="money">Presupuesto</th>
-                <th className="money">Comisión técnico</th>
-                <th>Fecha entrega</th>
+                <th scope="col">Orden</th>
+                <th scope="col">Cliente</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Técnico</th>
+                <th scope="col" className="money">Presupuesto</th>
+                <th scope="col" className="money">Comisión técnico</th>
+                <th scope="col">Fecha entrega</th>
               </tr>
             </thead>
             <tbody>
@@ -647,13 +647,13 @@ export default function Dashboard() {
             <table className="styled-table">
               <thead>
                 <tr>
-                  <th>Cliente</th>
-                  <th>Productos</th>
-                  <th className="money">Total</th>
-                  <th>Estado</th>
-                  <th>Motorizado</th>
-                  <th className="money">Comisión motorizado</th>
-                  <th>Fecha entrega</th>
+                  <th scope="col">Cliente</th>
+                  <th scope="col">Productos</th>
+                  <th scope="col" className="money">Total</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Motorizado</th>
+                  <th scope="col" className="money">Comisión motorizado</th>
+                  <th scope="col">Fecha entrega</th>
                 </tr>
               </thead>
               <tbody>
