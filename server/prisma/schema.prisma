@@ -193,7 +193,7 @@ model Device {
   type           DeviceType
   brand          String
   model          String
-  serialNumber   String?
+  serialNumber   String?    @unique
   color          String?
   accessories    String?
   devicePassword String?
