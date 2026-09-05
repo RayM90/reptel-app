@@ -220,7 +220,7 @@ model Order {
   deliveryAmount             Decimal?       @db.Decimal(10, 2)
   revisionAmount             Decimal?       @db.Decimal(10, 2)
   advancePaymentMethod       PaymentMethod?
-  advanceReceiptUrl          String?
+  advanceReceiptUrl          String?        @db.VarChar(500)
   advancePaymentDetails      Json?
   advancePaymentConfirmed    Boolean        @default(false)
   advancePaymentConfirmedAt  DateTime?
@@ -279,7 +279,7 @@ model OrderStatusHistory {
 model ServiceDocument {
   id           String       @id @default(uuid())
   type         DocumentType
-  pdfUrl       String?
+  pdfUrl       String?      @db.VarChar(500)
   printed      Boolean      @default(false)
 
   clientSignature String?   @db.Text
@@ -323,7 +323,7 @@ model Invoice {
   total          Decimal     @db.Decimal(10, 2)
   totalBs        Decimal?    @db.Decimal(12, 2)
   exchangeRate   Decimal?    @db.Decimal(10, 4)
-  pdfUrl         String?
+  pdfUrl         String?     @db.VarChar(500)
   sentByEmail    Boolean     @default(false)
   sentAt         DateTime?
   createdAt      DateTime    @default(now())
@@ -383,7 +383,7 @@ model Product {
   price       Decimal  @db.Decimal(10, 2)
   stock       Int      @default(0)
   minStock    Int      @default(3)
-  imageUrl    String?
+  imageUrl    String?  @db.VarChar(500)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -409,7 +409,7 @@ model ProductOrder {
   total          Decimal            @db.Decimal(10, 2)
   paymentMethod  PaymentMethod
   paidAt         DateTime?
-  receiptUrl     String?
+  receiptUrl     String?            @db.VarChar(500)
   paymentDetails Json?
   notes          String?            @db.Text
   createdAt      DateTime           @default(now())
@@ -531,7 +531,7 @@ model ProductDelivery {
   status         DeliveryStatus @default(ASSIGNED)
   gpsLatitude    Decimal?       @db.Decimal(10, 7)
   gpsLongitude   Decimal?       @db.Decimal(10, 7)
-  photoUrl       String?
+  photoUrl       String?        @db.VarChar(500)
   deliveredAt    DateTime?
   deliveryCommission Decimal?   @db.Decimal(10, 2)
   createdAt      DateTime       @default(now())
