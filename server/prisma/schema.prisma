@@ -153,6 +153,7 @@ model User {
   ordersAsTechnician   Order[]            @relation("TechnicianOrders")
   notifications        Notification[]
   productDeliveries    ProductDelivery[]  @relation("DeliveryAgent")
+  statusChangesMade    OrderStatusHistory[] @relation("StatusChangeActor")
 }
 
 model Client {
@@ -253,6 +254,9 @@ model OrderStatusHistory {
 
   orderId String
   order   Order  @relation(fields: [orderId], references: [id])
+
+  userId String?
+  user   User?   @relation("StatusChangeActor", fields: [userId], references: [id])
 }
 
 // ─────────────────────────────────────────────
