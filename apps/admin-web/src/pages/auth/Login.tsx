@@ -71,7 +71,11 @@ export default function Login() {
         navigate('/delivery')
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Credenciales inválidas')
+      if (err?.response) {
+        setError(err.response.data?.message || 'Credenciales inválidas')
+      } else {
+        setError('No se pudo conectar con el servidor. Verifica tu conexión e intenta de nuevo.')
+      }
     } finally {
       setLoading(false)
     }
@@ -115,7 +119,11 @@ export default function Login() {
         navigate('/delivery')
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Error al establecer nueva contraseña')
+      if (err?.response) {
+        setError(err.response.data?.message || 'Error al establecer nueva contraseña')
+      } else {
+        setError('No se pudo conectar con el servidor. Verifica tu conexión e intenta de nuevo.')
+      }
     } finally {
       setLoading(false)
     }
