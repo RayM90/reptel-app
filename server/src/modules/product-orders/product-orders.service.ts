@@ -175,6 +175,9 @@ export const createProductOrder = async (data: CreateProductOrderInput) => {
             ({ requiresInstallation, ...item }) => item
           ),
         },
+        statusHistory: {
+          create: { status: 'PENDING', comment: 'Pedido creado por el cliente' },
+        },
       },
       include: {
         items: {
@@ -431,6 +434,9 @@ export const confirmPartialPayment = async (
           data: {
             status: 'CONFIRMED',
             paidAt: new Date(),
+            statusHistory: {
+              create: { status: 'CONFIRMED', comment: 'Pago completado, pedido confirmado', userId: actor?.id },
+            },
           },
         })
 
@@ -490,7 +496,11 @@ export const confirmPartialPayment = async (
 // revertir pagos/asignaciones ya hechas — eso queda fuera de este alcance.
 // ─────────────────────────────────────────────
 
-export const cancelProductOrder = async (productOrderId: string) => {
+export const cancelProductOrder = async (productOrderId: string, actorEmail?: string) => {
+  const actor = actorEmail
+    ? await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true } })
+    : null
+
   const order = await prisma.productOrder.findUnique({
     where: { id: productOrderId },
     include: { items: true, client: { include: { user: true } } },
@@ -516,7 +526,12 @@ export const cancelProductOrder = async (productOrderId: string) => {
 
     return tx.productOrder.update({
       where: { id: productOrderId },
-      data: { status: 'CANCELLED' },
+      data: {
+        status: 'CANCELLED',
+        statusHistory: {
+          create: { status: 'CANCELLED', comment: 'Pedido cancelado, stock liberado', userId: actor?.id },
+        },
+      },
       include: {
         items: { include: { product: true } },
         client: true,
@@ -701,7 +716,12 @@ export const markAsDelivered = async (productOrderId: string, email: string) => 
 
     await tx.productOrder.update({
       where: { id: productOrderId },
-      data: { status: 'DELIVERED' },
+      data: {
+        status: 'DELIVERED',
+        statusHistory: {
+          create: { status: 'DELIVERED', comment: 'Entregado por el motorizado', userId: user.id },
+        },
+      },
     })
 
     return updatedDelivery

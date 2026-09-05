@@ -39,6 +39,7 @@ beforeAll(async () => {
 }, 20000)
 
 afterAll(async () => {
+  await prisma.productOrderStatusHistory.deleteMany({ where: { productOrder: { clientId: client.id } } })
   await prisma.productOrderItem.deleteMany({ where: { productId: product.id } })
   await prisma.productOrder.deleteMany({ where: { clientId: client.id } })
   await prisma.product.delete({ where: { id: product.id } }).catch(() => {})
