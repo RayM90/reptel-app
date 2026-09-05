@@ -310,9 +310,9 @@ export default function Reports() {
                   <tbody>
                     {data.servicio.byTechnician.map((t) => (
                       <tr key={t.technicianId}>
-                        <td>{t.technicianName}</td>
-                        <td>{t.ordersCount}</td>
-                        <td className="money">${t.totalCommission.toFixed(2)}</td>
+                        <td data-label="Técnico">{t.technicianName}</td>
+                        <td data-label="Órdenes">{t.ordersCount}</td>
+                        <td className="money" data-label="Comisión">${t.totalCommission.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -334,9 +334,9 @@ export default function Reports() {
                   <tbody>
                     {data.servicio.byClient.map((c) => (
                       <tr key={c.clientId}>
-                        <td>{c.clientName}</td>
-                        <td>{c.ordersCount}</td>
-                        <td className="money">${c.totalBudget.toFixed(2)}</td>
+                        <td data-label="Cliente">{c.clientName}</td>
+                        <td data-label="Órdenes">{c.ordersCount}</td>
+                        <td className="money" data-label="Presupuesto">${c.totalBudget.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -361,12 +361,12 @@ export default function Reports() {
                   <tbody>
                     {data.servicio.orders.map((o) => (
                       <tr key={o.orderNumber}>
-                        <td>{o.orderNumber}</td>
-                        <td>{o.clientName}</td>
-                        <td>{o.technicianName}</td>
-                        <td className="money">${o.budget.toFixed(2)}</td>
-                        <td className="money">${o.technicianCommission.toFixed(2)}</td>
-                        <td>{formatDate(o.deliveredAt)}</td>
+                        <td data-label="Orden">{o.orderNumber}</td>
+                        <td data-label="Cliente">{o.clientName}</td>
+                        <td data-label="Técnico">{o.technicianName}</td>
+                        <td className="money" data-label="Presupuesto">${o.budget.toFixed(2)}</td>
+                        <td className="money" data-label="Comisión">${o.technicianCommission.toFixed(2)}</td>
+                        <td data-label="Entregado">{formatDate(o.deliveredAt)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -404,9 +404,9 @@ export default function Reports() {
                   <tbody>
                     {data.tienda.byMotorizado.map((m) => (
                       <tr key={m.agentId}>
-                        <td>{m.agentName}</td>
-                        <td>{m.deliveriesCount}</td>
-                        <td className="money">${m.totalCommission.toFixed(2)}</td>
+                        <td data-label="Motorizado">{m.agentName}</td>
+                        <td data-label="Entregas">{m.deliveriesCount}</td>
+                        <td className="money" data-label="Comisión">${m.totalCommission.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -428,9 +428,9 @@ export default function Reports() {
                   <tbody>
                     {data.tienda.byClient.map((c) => (
                       <tr key={c.clientId}>
-                        <td>{c.clientName}</td>
-                        <td>{c.ordersCount}</td>
-                        <td className="money">${c.totalSales.toFixed(2)}</td>
+                        <td data-label="Cliente">{c.clientName}</td>
+                        <td data-label="Pedidos">{c.ordersCount}</td>
+                        <td className="money" data-label="Ventas">${c.totalSales.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -455,11 +455,11 @@ export default function Reports() {
                   <tbody>
                     {data.tienda.orders.map((po) => (
                       <tr key={po.id}>
-                        <td>{po.clientName}</td>
-                        <td>{po.agentName}</td>
-                        <td className="money">${po.total.toFixed(2)}</td>
-                        <td className="money">${po.deliveryCommission.toFixed(2)}</td>
-                        <td>{formatDate(po.deliveredAt)}</td>
+                        <td data-label="Cliente">{po.clientName}</td>
+                        <td data-label="Motorizado">{po.agentName}</td>
+                        <td className="money" data-label="Total">${po.total.toFixed(2)}</td>
+                        <td className="money" data-label="Comisión">${po.deliveryCommission.toFixed(2)}</td>
+                        <td data-label="Entregado">{formatDate(po.deliveredAt)}</td>
                       </tr>
                     ))}
                   </tbody>

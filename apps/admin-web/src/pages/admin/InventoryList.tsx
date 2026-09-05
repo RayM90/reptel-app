@@ -68,23 +68,23 @@ export default function InventoryList() {
             <tbody>
               {products.map((product) => (
                 <tr key={product.id}>
-                  <td>{product.id.slice(0, 8)}…</td>
-                  <td>{product.name}</td>
-                  <td>{product.category.name}</td>
-                  <td className="money">${Number(product.price).toFixed(2)}</td>
-                  <td>
+                  <td data-label="ID">{product.id.slice(0, 8)}…</td>
+                  <td data-label="Nombre">{product.name}</td>
+                  <td data-label="Categoría">{product.category.name}</td>
+                  <td className="money" data-label="Precio">${Number(product.price).toFixed(2)}</td>
+                  <td data-label="Stock">
                     {product.stock <= product.minStock ? (
                       <span className="badge badge-danger">{product.stock}</span>
                     ) : (
                       product.stock
                     )}
                   </td>
-                  <td>
+                  <td data-label="Estado">
                     <span className={product.isActive ? 'badge badge-success' : 'badge badge-danger'}>
                       {product.isActive ? 'Activo' : 'Inactivo'}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Acciones">
                     <Link to={`/admin/inventory/${product.id}/edit`}>Editar</Link>
                   </td>
                 </tr>

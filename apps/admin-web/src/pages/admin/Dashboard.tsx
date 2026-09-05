@@ -511,22 +511,22 @@ export default function Dashboard() {
                     onClick={() => clearNewOrder(order.id)}
                     style={newOrderIds.has(order.id) ? NEW_ROW_STYLE : undefined}
                   >
-                    <td>
+                    <td data-label="Orden">
                       {order.orderNumber}
                       {newOrderIds.has(order.id) && (
                         <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>
                       )}
                     </td>
-                    <td>{order.client.name} {order.client.lastName}</td>
-                    <td>{order.problem}</td>
-                    <td>
+                    <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
+                    <td data-label="Problema">{order.problem}</td>
+                    <td data-label="Estado">
                       <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
                         {getStatusBadge('order', order.status).label}
                       </span>
                     </td>
-                    <td className="money">{order.budget ? `$${order.budget}` : '—'}</td>
-                    <td>{order.technician?.name || 'Sin asignar'}</td>
-                    <td>
+                    <td className="money" data-label="Presupuesto">{order.budget ? `$${order.budget}` : '—'}</td>
+                    <td data-label="Técnico asignado">{order.technician?.name || 'Sin asignar'}</td>
+                    <td data-label="Pago anticipado">
                       <PaymentSubmissionsView
                         submissions={order.advancePaymentSubmissions ?? []}
                         total={String(Number(order.deliveryAmount ?? 10) + Number(order.revisionAmount ?? 15))}
@@ -535,8 +535,8 @@ export default function Dashboard() {
                         pendingIds={pendingIds}
                       />
                     </td>
-                    <td><PaymentDetailsView details={order.finalPaymentDetails} /></td>
-                    <td>
+                    <td data-label="Pago final"><PaymentDetailsView details={order.finalPaymentDetails} /></td>
+                    <td data-label="Acciones">
                       {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') && order.budget != null && Number(order.budget) === 0 ? (
                         <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => handleCloseZeroBudgetOrder(order)}>
                           Marcar como entregada
@@ -598,21 +598,21 @@ export default function Dashboard() {
                     onClick={() => clearNewProductOrder(po.id)}
                     style={newProductOrderIds.has(po.id) ? NEW_ROW_STYLE : undefined}
                   >
-                    <td>
+                    <td data-label="Cliente">
                       {po.client.name} {po.client.lastName}
                       {newProductOrderIds.has(po.id) && (
                         <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Pedido nuevo, no revisado todavía">🆕 Nuevo</span>
                       )}
                     </td>
-                    <td>{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
-                    <td className="money">${po.total}</td>
-                    <td>
+                    <td data-label="Productos">{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
+                    <td className="money" data-label="Total">${po.total}</td>
+                    <td data-label="Estado">
                       <span className={badgeClassName(getStatusBadge('productOrder', po.status).variant)}>
                         {getStatusBadge('productOrder', po.status).label}
                       </span>
                     </td>
-                    <td>{po.delivery?.agent.name || 'Sin asignar'}</td>
-                    <td>
+                    <td data-label="Motorizado asignado">{po.delivery?.agent.name || 'Sin asignar'}</td>
+                    <td data-label="Pagos recibidos">
                       <PaymentSubmissionsView
                         submissions={po.paymentSubmissions}
                         total={po.total}
@@ -621,7 +621,7 @@ export default function Dashboard() {
                         pendingIds={pendingIds}
                       />
                     </td>
-                    <td>
+                    <td data-label="Acciones">
                       {po.status === 'PENDING' ? (
                         <button className="btn btn-danger" disabled={pendingIds.has(po.id)} onClick={() => handleCancelProductOrder(po)}>
                           Cancelar pedido
@@ -664,17 +664,17 @@ export default function Dashboard() {
               ) : (
                 completedOrders.map((order) => (
                   <tr key={order.id}>
-                    <td>{order.orderNumber}</td>
-                    <td>{order.client.name} {order.client.lastName}</td>
-                    <td>
+                    <td data-label="Orden">{order.orderNumber}</td>
+                    <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
+                    <td data-label="Estado">
                       <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
                         {getStatusBadge('order', order.status).label}
                       </span>
                     </td>
-                    <td>{order.technician?.name || 'Sin asignar'}</td>
-                    <td className="money">{order.budget ? `$${order.budget}` : '—'}</td>
-                    <td className="money">{order.technicianCommission ? `$${order.technicianCommission}` : '—'}</td>
-                    <td>{formatDate(order.deliveredAt)}</td>
+                    <td data-label="Técnico">{order.technician?.name || 'Sin asignar'}</td>
+                    <td className="money" data-label="Presupuesto">{order.budget ? `$${order.budget}` : '—'}</td>
+                    <td className="money" data-label="Comisión técnico">{order.technicianCommission ? `$${order.technicianCommission}` : '—'}</td>
+                    <td data-label="Fecha entrega">{formatDate(order.deliveredAt)}</td>
                   </tr>
                 ))
               )}
@@ -705,17 +705,17 @@ export default function Dashboard() {
               <tbody>
                 {completedProductOrders.map((po) => (
                   <tr key={po.id}>
-                    <td>{po.client.name} {po.client.lastName}</td>
-                    <td>{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
-                    <td className="money">${po.total}</td>
-                    <td>
+                    <td data-label="Cliente">{po.client.name} {po.client.lastName}</td>
+                    <td data-label="Productos">{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
+                    <td className="money" data-label="Total">${po.total}</td>
+                    <td data-label="Estado">
                       <span className={badgeClassName(getStatusBadge('productOrder', po.status).variant)}>
                         {getStatusBadge('productOrder', po.status).label}
                       </span>
                     </td>
-                    <td>{po.delivery?.agent.name || 'Sin asignar'}</td>
-                    <td className="money">{po.delivery?.deliveryCommission ? `$${po.delivery.deliveryCommission}` : '—'}</td>
-                    <td>{formatDate(po.delivery?.deliveredAt ?? null)}</td>
+                    <td data-label="Motorizado">{po.delivery?.agent.name || 'Sin asignar'}</td>
+                    <td className="money" data-label="Comisión motorizado">{po.delivery?.deliveryCommission ? `$${po.delivery.deliveryCommission}` : '—'}</td>
+                    <td data-label="Fecha entrega">{formatDate(po.delivery?.deliveredAt ?? null)}</td>
                   </tr>
                 ))}
               </tbody>
