@@ -195,6 +195,15 @@ export const createProductOrder = async (data: CreateProductOrderInput) => {
           stock: { decrement: item.quantity },
         },
       })
+
+      await tx.inventoryMovement.create({
+        data: {
+          productId: item.productId,
+          type: 'OUT',
+          quantity: item.quantity,
+          reason: 'Venta — pedido de tienda',
+        },
+      })
     }
 
     return order
@@ -279,6 +288,15 @@ export const createLinkedProductOrder = async (
       await tx.product.update({
         where: { id: item.productId },
         data: { stock: { decrement: item.quantity } },
+      })
+
+      await tx.inventoryMovement.create({
+        data: {
+          productId: item.productId,
+          type: 'OUT',
+          quantity: item.quantity,
+          reason: 'Venta — pedido vinculado a orden de servicio técnico',
+        },
       })
     }
 
@@ -521,6 +539,16 @@ export const cancelProductOrder = async (productOrderId: string, actorEmail?: st
       await tx.product.update({
         where: { id: item.productId },
         data: { stock: { increment: item.quantity } },
+      })
+
+      await tx.inventoryMovement.create({
+        data: {
+          productId: item.productId,
+          type: 'IN',
+          quantity: item.quantity,
+          reason: 'Pedido cancelado, stock liberado',
+          userId: actor?.id,
+        },
       })
     }
 
