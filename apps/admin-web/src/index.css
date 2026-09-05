@@ -500,3 +500,44 @@ table.styled-table th.money {
     border: 1px solid #ccc;
   }
 }
+
+/* ─── Responsive: colapsar tablas a tarjetas en pantallas angostas ─── */
+
+@media (max-width: 640px) {
+  .styled-table thead {
+    display: none;
+  }
+
+  .styled-table, .styled-table tbody, .styled-table tr, .styled-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .styled-table tr {
+    margin-bottom: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 8px 12px;
+  }
+
+  .styled-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border: none;
+    text-align: right;
+  }
+
+  .styled-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-align: left;
+    padding-right: 12px;
+  }
+
+  .styled-table td.money {
+    text-align: right;
+  }
+}
