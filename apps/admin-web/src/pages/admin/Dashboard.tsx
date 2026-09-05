@@ -404,7 +404,7 @@ export default function Dashboard() {
 
   return (
     <div className="page-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="page-header">
         <h1>Panel de Administrador</h1>
         <button className="btn btn-secondary" onClick={() => fetchData()}>
           ↻ Actualizar

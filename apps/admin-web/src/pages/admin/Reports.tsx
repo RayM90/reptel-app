@@ -186,7 +186,7 @@ export default function Reports() {
 
   return (
     <div className="page-container">
-      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="no-print page-header">
         <h1>Reportes</h1>
         <Link to="/admin" className="btn btn-secondary">← Volver al panel</Link>
       </div>
