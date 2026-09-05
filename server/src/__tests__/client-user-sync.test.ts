@@ -27,4 +27,41 @@ describe('clients.service — sincronización con User vinculado', () => {
     expect(updatedUser?.name).toBe('Nombre Nuevo')
     expect(updatedUser?.phone).toBe('04141111111')
   })
+
+  it('hace rollback de ambas escrituras si falla el update del User (e.g., email @unique conflict)', async () => {
+    // Arrange: crea un User independiente con un email específico
+    const suffix = Date.now()
+    const conflictEmail = `conflict-${suffix}@test.com`
+    const userB = await prisma.user.create({
+      data: {
+        name: 'User B',
+        email: conflictEmail,
+        phone: '0000000000',
+        role: 'CLIENT',
+        password: 'COGNITO_MANAGED',
+      },
+    })
+
+    const originalClientEmail = client.id // lo obtenemos después para comparar
+    const clientBefore = await prisma.client.findUnique({ where: { id: client.id } })
+    const originalEmail = clientBefore?.email
+
+    // Act: intenta actualizar el Client con el email del User B (debe fallar por @unique)
+    let updateFailed = false
+    try {
+      await updateClient(client.id, { email: conflictEmail })
+    } catch (error) {
+      updateFailed = true
+      // Esperamos que Prisma lance un error P2002 (unique constraint violation)
+      expect((error as any)?.code || (error as any)?.message).toBeDefined()
+    }
+
+    // Assert: verifica que la transacción hizo rollback completo
+    expect(updateFailed).toBe(true)
+    const clientAfter = await prisma.client.findUnique({ where: { id: client.id } })
+    expect(clientAfter?.email).toBe(originalEmail) // email debe ser el original, no conflictEmail
+
+    // Cleanup
+    await prisma.user.delete({ where: { id: userB.id } }).catch(() => {})
+  })
 })
