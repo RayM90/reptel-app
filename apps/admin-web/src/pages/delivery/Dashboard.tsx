@@ -251,7 +251,7 @@ export default function DeliveryDashboard() {
                 >
                   <div className="accordion-card-header__summary">
                     <strong>Pedido #{order.id.slice(0, 8)}</strong> — {order.client.name} {order.client.lastName}
-                    {isNew && <span className="badge" style={NEW_BADGE_STYLE} aria-label="Entrega nueva, no revisada todavía">🆕 Nuevo</span>}
+                    {isNew && <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Entrega nueva, no revisada todavía">🆕 Nuevo</span>}
                     <br />
                     <span className={badgeClassName(getStatusBadge('delivery', delivery.status).variant)}>
                       {getStatusBadge('delivery', delivery.status).label}
