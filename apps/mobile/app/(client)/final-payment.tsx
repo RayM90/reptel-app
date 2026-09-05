@@ -15,6 +15,7 @@ import { useState } from 'react'
 import { ordersAPI } from '../../src/services/api'
 import { useToastStore } from '../../src/store/toast.store'
 import { usePaymentDraft } from '../../src/hooks/usePaymentDraft'
+import { usePaymentInfo, formatPaymentInfo } from '../../src/hooks/usePaymentInfo'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -34,12 +35,6 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   BINANCE: '₿ Binance',
 }
 
-const PAYMENT_INFO: Record<PaymentMethod, string> = {
-  PAGO_MOVIL: 'Banco: Banesco • Teléfono: 0414-1234567 • CI: V-12345678',
-  TRANSFERENCIA: 'Banco: Banesco • Cuenta: 0134-0000-00-0000000000 • RIF: J-12345678-9',
-  BINANCE: 'ID Binance: reptel@correo.com • Red: BEP20 (USDT)',
-}
-
 export default function FinalPaymentScreen() {
   const router = useRouter()
   const { orderId, orderNumber, budget, revisionAmount } = useLocalSearchParams<{
@@ -54,6 +49,7 @@ export default function FinalPaymentScreen() {
   const totalNumber = Math.max(budgetNumber - revisionNumber, 0)
 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
+  const { data: paymentSettings } = usePaymentInfo()
 
   const [banco, setBanco] = useState('')
   const [telefono, setTelefono] = useState('')
@@ -195,8 +191,8 @@ export default function FinalPaymentScreen() {
                   <Text style={styles.paymentLabel}>{PAYMENT_LABELS[method]}</Text>
                   <View style={[styles.radio, selectedMethod === method && styles.radioActive]} />
                 </View>
-                {selectedMethod === method && (
-                  <Text style={styles.paymentInfo}>{PAYMENT_INFO[method]}</Text>
+                {selectedMethod === method && paymentSettings && (
+                  <Text style={styles.paymentInfo}>{formatPaymentInfo(paymentSettings, method)}</Text>
                 )}
               </TouchableOpacity>
             ))}
