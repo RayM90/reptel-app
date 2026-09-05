@@ -6,7 +6,6 @@ import ordersRouter from './modules/orders/orders.routes'
 import authRouter from './modules/auth/auth.routes'
 import usersRouter from './modules/users/users.routes'
 import devicesRouter from './modules/devices/devices.routes'
-import chatbotRouter from './modules/chatbot/chatbot.routes'
 import clientsRouter from './modules/clients/clients.routes'
 import catalogRouter from './modules/catalog/catalog.routes'
 import productsRouter from './modules/products/products.routes'
@@ -32,7 +31,6 @@ app.use('/api/auth', authRouter)
 app.use('/api/users', usersRouter)
 app.use('/api/devices', devicesRouter)
 app.use('/api/orders', ordersRouter)
-app.use('/api/chatbot', chatbotRouter)
 app.use('/api/clients', clientsRouter)
 app.use('/api/catalog', catalogRouter)
 app.use('/api/products', productsRouter)

@@ -130,8 +130,3 @@ export const productOrdersAPI = {
     notes?: string
   }) => api.post('/api/product-orders/link-to-service', data),
 }
-
-export const chatbotAPI = {
-  sendMessage: (sessionId: string, message: string) =>
-    api.post('/api/chatbot/message', { sessionId, message }),
-}

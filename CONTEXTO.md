@@ -18,7 +18,7 @@ Cubre dos módulos de negocio: servicio de reparación y tienda de accesorios.
 | Backend | Express + Prisma + MySQL |
 | Auth | AWS Cognito |
 | Estado (admin-web) | Zustand |
-| Extras | AWS Lex v2 (chatbot), WebSockets (real-time), QR codes, Jest |
+| Extras | WebSockets (real-time), QR codes, Jest |
 
 ## 📐 Reglas y convenciones acordadas
 
