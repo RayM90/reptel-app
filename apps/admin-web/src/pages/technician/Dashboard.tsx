@@ -419,7 +419,7 @@ export default function TechnicianDashboard() {
                     <h4>Historial</h4>
                     {order.statusHistory.map((entry) => (
                       <div key={entry.id} className="form-hint">
-                        <strong>{entry.status}</strong> — {formatDate(entry.createdAt)}
+                        <strong>{getStatusBadge('order', entry.status).label}</strong> — {formatDate(entry.createdAt)}
                         {entry.comment && <div>{entry.comment}</div>}
                       </div>
                     ))}
