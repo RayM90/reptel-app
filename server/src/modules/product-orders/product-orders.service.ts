@@ -274,6 +274,12 @@ export const createLinkedProductOrder = async (
             ({ requiresInstallation, ...item }) => item
           ),
         },
+        statusHistory: {
+          create: {
+            status: 'PENDING',
+            comment: 'Pedido de repuesto vinculado a orden de servicio, creado por el cliente',
+          },
+        },
       },
       include: {
         items: {
