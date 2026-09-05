@@ -166,10 +166,15 @@ export const getOrderByNumber = async (orderNumber: string) => {
   return await prisma.order.findUnique({
     where: { orderNumber },
     include: {
+      // Endpoint público (sin autenticación) — solo lo mínimo para que el
+      // cliente identifique su orden. Nunca teléfono/apellido (PII) ni la
+      // contraseña del equipo.
       client: {
-        select: { id: true, name: true, lastName: true, phone: true },
+        select: { id: true, name: true },
       },
-      device: true,
+      device: {
+        select: { id: true, type: true, brand: true, model: true, color: true, accessories: true },
+      },
       statusHistory: { orderBy: { createdAt: 'desc' } },
     },
   })

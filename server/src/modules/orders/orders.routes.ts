@@ -1,12 +1,13 @@
 import { Router } from 'express'
 import * as ordersController from './orders.controller'
 import { authenticate, authorize } from '../../middleware/auth.middleware'
+import { trackOrderLimiter } from '../../middleware/rateLimit.middleware'
 
 const router = Router()
 
 // ─── Rutas públicas (sin autenticación) ───────────────────────────
 // Tracking por número de orden
-router.get('/track/:orderNumber', ordersController.trackOrder)
+router.get('/track/:orderNumber', trackOrderLimiter, ordersController.trackOrder)
 
 // ─── Rutas del CLIENTE — deben ir ANTES de /:id ───────────────────
 // Crear orden propia (self-service: crea device + order en transacción,
