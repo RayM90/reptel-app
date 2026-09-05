@@ -490,8 +490,13 @@ export const submitAdvancePaymentInstallment = async (
 export const confirmAdvancePaymentInstallment = async (
   submissionId: string,
   approved: boolean,
-  rejectionReason?: string
+  rejectionReason?: string,
+  actorEmail?: string
 ) => {
+  const actor = actorEmail
+    ? await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true } })
+    : null
+
   const submission = await prisma.advancePaymentSubmission.findUnique({
     where: { id: submissionId },
     include: {
@@ -528,6 +533,7 @@ export const confirmAdvancePaymentInstallment = async (
         status: approved ? 'CONFIRMED' : 'REJECTED',
         rejectionReason: approved ? null : rejectionReason,
         confirmedAt: approved ? new Date() : null,
+        confirmedByUserId: actor?.id,
       },
     })
 

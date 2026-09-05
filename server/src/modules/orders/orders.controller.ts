@@ -241,7 +241,8 @@ export const confirmAdvancePaymentInstallment = async (req: AuthRequest, res: Re
     const order = await ordersService.confirmAdvancePaymentInstallment(
       submissionId,
       Boolean(approved),
-      rejectionReason
+      rejectionReason,
+      req.user?.email
     )
 
     broadcastOrderUpdate({
