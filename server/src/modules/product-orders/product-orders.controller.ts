@@ -339,7 +339,7 @@ export const confirmReceived = async (req: AuthRequest, res: Response): Promise<
 export const cancelOrder = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const id = String(req.params.id)
-    const order = await productOrdersService.cancelProductOrder(id)
+    const order = await productOrdersService.cancelProductOrder(id, req.user?.email)
     res.json({ success: true, data: order })
   } catch (error) {
     console.error('ERROR CANCELAR PEDIDO:', error)

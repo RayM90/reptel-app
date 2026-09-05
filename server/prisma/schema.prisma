@@ -156,6 +156,7 @@ model User {
   statusChangesMade    OrderStatusHistory[] @relation("StatusChangeActor")
   advanceSubmissionsConfirmed AdvancePaymentSubmission[] @relation("AdvanceConfirmedBy")
   productSubmissionsConfirmed ProductOrderPaymentSubmission[] @relation("ProductPaymentConfirmedBy")
+  productOrderStatusChangesMade ProductOrderStatusHistory[] @relation("ProductOrderStatusActor")
 }
 
 model Client {
@@ -418,8 +419,24 @@ model ProductOrder {
   invoice            Invoice?
   notifications      Notification[]
   paymentSubmissions ProductOrderPaymentSubmission[]
+  statusHistory      ProductOrderStatusHistory[]
 
   @@map("productorder")
+}
+
+model ProductOrderStatusHistory {
+  id        String             @id @default(uuid())
+  status    ProductOrderStatus
+  comment   String?
+  createdAt DateTime           @default(now())
+
+  productOrderId String
+  productOrder   ProductOrder @relation(fields: [productOrderId], references: [id])
+
+  userId String?
+  user   User?   @relation("ProductOrderStatusActor", fields: [userId], references: [id])
+
+  @@map("productorderstatushistory")
 }
 
 model ProductOrderItem {
