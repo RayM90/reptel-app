@@ -291,10 +291,10 @@ export default function TechnicianDashboard() {
             return (
               <div key={order.id} className="card" style={isNew ? NEW_CARD_STYLE : undefined}>
                 <div
-                  style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+                  className="accordion-card-header"
                   onClick={() => toggleExpand(order.id)}
                 >
-                  <div>
+                  <div className="accordion-card-header__summary">
                     <strong>{order.orderNumber}</strong> — {order.client.name} {order.client.lastName}
                     {isNew && <span className="badge" style={NEW_BADGE_STYLE}>🆕 Nuevo</span>}
                     <br />

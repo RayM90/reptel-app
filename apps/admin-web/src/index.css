@@ -541,3 +541,28 @@ table.styled-table th.money {
     text-align: right;
   }
 }
+
+/* ─── Responsive: encabezado de tarjeta acordeón (técnico/motorizado) ─── */
+
+.accordion-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  cursor: pointer;
+  gap: 8px;
+}
+
+.accordion-card-header__summary {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 480px) {
+  .accordion-card-header {
+    flex-wrap: wrap;
+  }
+
+  .accordion-card-header__summary {
+    flex: 1 1 100%;
+  }
+}

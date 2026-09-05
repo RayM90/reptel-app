@@ -246,10 +246,10 @@ export default function DeliveryDashboard() {
             return (
               <div key={delivery.id} className="card" style={isNew ? NEW_CARD_STYLE : undefined}>
                 <div
-                  style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+                  className="accordion-card-header"
                   onClick={() => toggleExpand(delivery.id)}
                 >
-                  <div>
+                  <div className="accordion-card-header__summary">
                     <strong>Pedido #{order.id.slice(0, 8)}</strong> — {order.client.name} {order.client.lastName}
                     {isNew && <span className="badge" style={NEW_BADGE_STYLE}>🆕 Nuevo</span>}
                     <br />
