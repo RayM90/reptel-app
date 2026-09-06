@@ -60,13 +60,6 @@ enum DeliveryStatus {
   CANCELLED
 }
 
-enum DocumentType {
-  RECEIPT_NOTE
-  DELIVERY_NOTE
-  WITHDRAWAL_ACT
-  ON_SITE_RECEIPT
-}
-
 enum PaymentMethod {
   CASH
   TRANSFER
@@ -210,7 +203,6 @@ model Order {
   diagnosis      String?     @db.Text
   budget         Decimal?    @db.Decimal(10, 2)
   budgetApproved Boolean?
-  qrCode         String?     @db.Text
   observations   String?     @db.Text
   receivedAt     DateTime    @default(now())
   deliveredAt    DateTime?
@@ -249,7 +241,6 @@ model Order {
 
   statusHistory    OrderStatusHistory[]
   notifications    Notification[]
-  documents        ServiceDocument[]
   payments         ServicePayment[]
   invoices         Invoice[]
 
@@ -275,23 +266,6 @@ model OrderStatusHistory {
 // ─────────────────────────────────────────────
 // MÓDULO DOCUMENTOS Y PAGOS
 // ─────────────────────────────────────────────
-
-model ServiceDocument {
-  id           String       @id @default(uuid())
-  type         DocumentType
-  pdfUrl       String?      @db.VarChar(500)
-  printed      Boolean      @default(false)
-
-  clientSignature String?   @db.Text
-
-  gpsLatitude   Decimal?    @db.Decimal(10, 7)
-  gpsLongitude  Decimal?    @db.Decimal(10, 7)
-
-  generatedAt  DateTime     @default(now())
-
-  orderId String
-  order   Order  @relation(fields: [orderId], references: [id])
-}
 
 model ServicePayment {
   id            String        @id @default(uuid())
