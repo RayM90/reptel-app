@@ -1,6 +1,5 @@
 import { Prisma } from '@prisma/client'
 import prisma from '../../lib/prisma'
-import QRCode from 'qrcode'
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -157,7 +156,6 @@ export const getOrderById = async (id: string) => {
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
       notifications: true,
-      documents: true,
     },
   })
 }
@@ -205,15 +203,12 @@ export const createOrder = async (data: {
   technicianId?: string
 }) => {
   const orderNumber = generateOrderNumber()
-  const trackingUrl = `http://192.168.0.116:3000/api/orders/track/${orderNumber}`
-  const qrCode = await QRCode.toDataURL(trackingUrl)
 
   const resolvedTechnicianId = data.technicianId ?? (await assignTechnician())
 
   const order = await prisma.order.create({
     data: {
       orderNumber,
-      qrCode,
       clientId: data.clientId,
       deviceId: data.deviceId,
       problem: data.problem,
@@ -286,8 +281,6 @@ export const createSelfServiceOrder = async (data: {
 
   const clientId = user.clientId
   const orderNumber = generateOrderNumber()
-  const trackingUrl = `http://192.168.0.116:3000/api/orders/track/${orderNumber}`
-  const qrCode = await QRCode.toDataURL(trackingUrl)
 
   const resolvedTechnicianId = await assignTechnician()
 
@@ -307,7 +300,6 @@ export const createSelfServiceOrder = async (data: {
     return await tx.order.create({
       data: {
         orderNumber,
-        qrCode,
         clientId,
         deviceId: device.id,
         problem: data.problem,
