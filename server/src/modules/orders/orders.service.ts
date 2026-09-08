@@ -155,7 +155,6 @@ export const getOrderById = async (id: string) => {
       technician: { select: { id: true, name: true, email: true } },
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
-      notifications: true,
     },
   })
 }
@@ -365,7 +364,6 @@ export const submitAdvancePaymentInstallment = async (
   const order = await prisma.order.findFirst({
     where: { id: orderId, clientId: user.clientId },
     include: {
-      client: true,
       // Se cuentan CONFIRMED y PENDING para calcular lo disponible, así el
       // cliente nunca puede enviar de más aunque haya abonos sin revisar.
       advancePaymentSubmissions: { where: { status: { in: ['CONFIRMED', 'PENDING'] } } },
@@ -398,23 +396,6 @@ export const submitAdvancePaymentInstallment = async (
   const submission = await prisma.advancePaymentSubmission.create({
     data: { orderId, amount, paymentDetails },
   })
-
-  const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true },
-    select: { id: true },
-  })
-
-  if (admins.length > 0) {
-    await prisma.notification.createMany({
-      data: admins.map((admin) => ({
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message: `${order.client.name} ${order.client.lastName} envió un abono de $${amount.toFixed(2)} para el anticipo de la orden #${order.orderNumber}`,
-        userId: admin.id,
-        orderId,
-      })),
-    })
-  }
 
   return submission
 }
@@ -702,23 +683,6 @@ export const submitFinalPayment = async (
     },
   })
 
-  const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true },
-    select: { id: true },
-  })
-
-  if (admins.length > 0) {
-    await prisma.notification.createMany({
-      data: admins.map((admin) => ({
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message: `Datos de pago final registrados para la orden #${order.orderNumber}`,
-        userId: admin.id,
-        orderId,
-      })),
-    })
-  }
-
   return updatedOrder
 }
 
@@ -737,7 +701,6 @@ export const confirmFinalPayment = async (
 ) => {
   const order = await prisma.order.findUnique({
     where: { id },
-    include: { client: { include: { user: true } } },
   })
 
   if (!order) {
@@ -786,20 +749,6 @@ export const confirmFinalPayment = async (
     await decrementTechnicianLoad(order.technicianId)
   }
 
-  if (order.client.user) {
-    await prisma.notification.create({
-      data: {
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message: approved
-          ? `Tu pago fue confirmado. La orden #${order.orderNumber} fue completada. ¡Gracias por confiar en RepTel!`
-          : `No pudimos confirmar tu pago final para la orden #${order.orderNumber}: ${rejectionReason}. Por favor envía tus datos de pago nuevamente.`,
-        userId: order.client.user.id,
-        orderId: id,
-      },
-    })
-  }
-
   return updatedOrder
 }
 
@@ -816,7 +765,6 @@ export const confirmFinalPayment = async (
 export const closeZeroBudgetOrder = async (id: string) => {
   const order = await prisma.order.findUnique({
     where: { id },
-    include: { client: { include: { user: true } } },
   })
 
   if (!order) {
@@ -861,18 +809,6 @@ export const closeZeroBudgetOrder = async (id: string) => {
 
   if (order.technicianId) {
     await decrementTechnicianLoad(order.technicianId)
-  }
-
-  if (order.client.user) {
-    await prisma.notification.create({
-      data: {
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message: `La orden #${order.orderNumber} fue completada sin costo adicional. ¡Gracias por confiar en RepTel!`,
-        userId: order.client.user.id,
-        orderId: id,
-      },
-    })
   }
 
   return updatedOrder
@@ -946,7 +882,6 @@ export const rejectBudget = async (id: string, email: string, reason: string) =>
 
   const order = await prisma.order.findFirst({
     where: { id, clientId: user.clientId },
-    include: { client: { include: { user: true } } },
   })
   if (!order) {
     throw new Error('Orden no encontrada')
@@ -985,18 +920,6 @@ export const rejectBudget = async (id: string, email: string, reason: string) =>
 
   if (order.technicianId) {
     await decrementTechnicianLoad(order.technicianId)
-  }
-
-  if (order.client.user) {
-    await prisma.notification.create({
-      data: {
-        type: 'STATUS_CHANGE',
-        channel: 'PUSH',
-        message: `Confirmamos que no se realizará la reparación de la orden #${order.orderNumber}. No se te cobrará nada adicional.`,
-        userId: order.client.user.id,
-        orderId: id,
-      },
-    })
   }
 
   return updatedOrder
@@ -1042,7 +965,7 @@ export const confirmZeroBudgetDiagnosis = async (id: string, email: string) => {
       },
     },
     include: {
-      client: { include: { user: true } },
+      client: true,
       device: true,
       technician: { select: { id: true, name: true } },
       statusHistory: { orderBy: { createdAt: 'desc' } },
@@ -1051,18 +974,6 @@ export const confirmZeroBudgetDiagnosis = async (id: string, email: string) => {
 
   if (order.technicianId) {
     await decrementTechnicianLoad(order.technicianId)
-  }
-
-  if (updatedOrder.client.user) {
-    await prisma.notification.create({
-      data: {
-        type: 'STATUS_CHANGE',
-        channel: 'PUSH',
-        message: `Confirmamos el diagnóstico de la orden #${updatedOrder.orderNumber}: no requiere reparación. No se te cobrará nada adicional.`,
-        userId: updatedOrder.client.user.id,
-        orderId: id,
-      },
-    })
   }
 
   return updatedOrder

@@ -69,22 +69,6 @@ enum PaymentMethod {
   BINANCE
 }
 
-enum NotificationType {
-  STATUS_CHANGE
-  BUDGET_REQUEST
-  READY_FOR_PICKUP
-  DELIVERY_UPDATE
-  PAYMENT_CONFIRMED
-  ORDER_CREATED
-  GENERAL
-}
-
-enum Channel {
-  EMAIL
-  PUSH
-  SMS
-}
-
 enum ProductOrderStatus {
   PENDING
   CONFIRMED
@@ -137,7 +121,6 @@ model User {
   updatedAt         DateTime         @updatedAt
 
   ordersAsTechnician   Order[]            @relation("TechnicianOrders")
-  notifications        Notification[]
   productDeliveries    ProductDelivery[]  @relation("DeliveryAgent")
   statusChangesMade    OrderStatusHistory[] @relation("StatusChangeActor")
   advanceSubmissionsConfirmed AdvancePaymentSubmission[] @relation("AdvanceConfirmedBy")
@@ -221,7 +204,6 @@ model Order {
   serviceCatalog   ServiceCatalog? @relation(fields: [serviceCatalogId], references: [id])
 
   statusHistory    OrderStatusHistory[]
-  notifications    Notification[]
 
   linkedProductOrders ProductOrder[] @relation("ProductOrderToServiceOrder")
 
@@ -325,7 +307,6 @@ model ProductOrder {
 
   items              ProductOrderItem[]
   delivery           ProductDelivery?
-  notifications      Notification[]
   paymentSubmissions ProductOrderPaymentSubmission[]
   statusHistory      ProductOrderStatusHistory[]
 
@@ -424,15 +405,11 @@ model AdvancePaymentSubmission {
 model ProductDelivery {
   id             String         @id @default(uuid())
   status         DeliveryStatus @default(ASSIGNED)
-  gpsLatitude    Decimal?       @db.Decimal(10, 7)
-  gpsLongitude   Decimal?       @db.Decimal(10, 7)
   photoUrl       String?        @db.VarChar(500)
   deliveredAt    DateTime?
   deliveryCommission Decimal?   @db.Decimal(10, 2)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
-
-  clientConfirmedAt DateTime?
 
   productOrderId String       @unique
   productOrder   ProductOrder @relation(fields: [productOrderId], references: [id])
@@ -467,27 +444,3 @@ model BusinessSettings {
   @@map("businesssettings")
 }
 
-// ─────────────────────────────────────────────
-// MÓDULO NOTIFICACIONES
-// ─────────────────────────────────────────────
-
-model Notification {
-  id        String           @id @default(uuid())
-  type      NotificationType
-  channel   Channel
-  message   String           @db.Text
-  sent      Boolean          @default(false)
-  sentAt    DateTime?
-  createdAt DateTime         @default(now())
-
-  orderId        String?
-  order          Order?  @relation(fields: [orderId], references: [id])
-
-  productOrderId String?
-  productOrder   ProductOrder? @relation(fields: [productOrderId], references: [id])
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
-  @@map("notification")
-}
