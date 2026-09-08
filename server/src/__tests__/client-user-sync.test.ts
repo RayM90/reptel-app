@@ -7,7 +7,7 @@ let user: { id: string }
 beforeAll(async () => {
   const suffix = Date.now()
   client = await prisma.client.create({
-    data: { name: 'Nombre Viejo', lastName: 'Sync', idNumber: `TEST-SYNC-${suffix}`, phone: '0000000000', email: `sync-${suffix}@test.com`, password: '' },
+    data: { name: 'Nombre Viejo', lastName: 'Sync', idNumber: `TEST-SYNC-${suffix}`, phone: '0000000000', email: `sync-${suffix}@test.com` },
   })
   user = await prisma.user.create({
     data: { name: 'Nombre Viejo', email: `sync-${suffix}@test.com`, phone: '0000000000', role: 'CLIENT', password: 'COGNITO_MANAGED', clientId: client.id },

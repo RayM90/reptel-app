@@ -17,7 +17,7 @@ let productOrderSubmission: { id: string }
 beforeAll(async () => {
   const suffix = Date.now()
   client = await prisma.client.create({
-    data: { name: 'Cliente', lastName: 'Abono', idNumber: `TEST-ABONO-${suffix}`, phone: '0000000000', email: `abono-${suffix}@test.com`, password: '' },
+    data: { name: 'Cliente', lastName: 'Abono', idNumber: `TEST-ABONO-${suffix}`, phone: '0000000000', email: `abono-${suffix}@test.com` },
   })
   device = await prisma.device.create({ data: { type: 'LAPTOP', brand: 'TestBrand', model: 'X1' } })
   admin = await prisma.user.create({

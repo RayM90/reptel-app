@@ -20,7 +20,7 @@ beforeAll(async () => {
     data: {
       name: 'Cliente', lastName: 'Reportes',
       idNumber: `TEST-REPORTS-A-${suffix}`, phone: '0000000003',
-      email: `cliente-reportes-a-${suffix}@test.com`, password: '',
+      email: `cliente-reportes-a-${suffix}@test.com`,
     },
   })
 
@@ -28,7 +28,7 @@ beforeAll(async () => {
     data: {
       name: 'Cliente', lastName: 'ReportesB',
       idNumber: `TEST-REPORTS-B-${suffix}`, phone: '0000000004',
-      email: `cliente-reportes-b-${suffix}@test.com`, password: '',
+      email: `cliente-reportes-b-${suffix}@test.com`,
     },
   })
 

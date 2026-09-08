@@ -32,7 +32,7 @@ beforeAll(async () => {
     data: {
       name: 'Cliente', lastName: 'Presupuesto A',
       idNumber: `TEST-BUDGET-A-${suffix}`, phone: '0000000001',
-      email: `cliente-budget-a-${suffix}@test.com`, password: '',
+      email: `cliente-budget-a-${suffix}@test.com`,
     },
   })
   userA = await prisma.user.create({
@@ -47,7 +47,7 @@ beforeAll(async () => {
     data: {
       name: 'Cliente', lastName: 'Presupuesto B',
       idNumber: `TEST-BUDGET-B-${suffix}`, phone: '0000000002',
-      email: `cliente-budget-b-${suffix}@test.com`, password: '',
+      email: `cliente-budget-b-${suffix}@test.com`,
     },
   })
   userB = await prisma.user.create({
