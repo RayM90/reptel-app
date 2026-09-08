@@ -42,7 +42,11 @@ export const createClient = async (data: {
   idNumber: string
   phone: string
   email?: string
-  address?: string
+  addressState?: string
+  addressCity?: string
+  addressNeighborhood?: string
+  addressStreet?: string
+  addressBuilding?: string
 }) => {
   return await prisma.client.create({ data })
 }
@@ -54,7 +58,11 @@ export const updateClient = async (
     lastName?: string
     phone?: string
     email?: string
-    address?: string
+    addressState?: string
+    addressCity?: string
+    addressNeighborhood?: string
+    addressStreet?: string
+    addressBuilding?: string
   }
 ) => {
   // Envuelve Client.update y User.update en una transacción para evitar

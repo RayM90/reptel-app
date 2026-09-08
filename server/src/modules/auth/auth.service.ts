@@ -65,7 +65,7 @@ export const registerUser = async (
         idNumber: email,
         phone: phone ?? '',
         email,
-        address: address ?? null,
+        addressStreet: address ?? null,
       },
     });
     clientId = newClient.id;

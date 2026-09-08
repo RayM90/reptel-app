@@ -6,7 +6,6 @@ let clientB: { id: string; name: string; lastName: string }
 let technicianX: { id: string; name: string }
 let technicianY: { id: string; name: string }
 let device: { id: string }
-let motorizado: { id: string; name: string }
 
 const IN_RANGE = new Date('2026-06-15T12:00:00Z')
 const OUT_OF_RANGE = new Date('2026-07-15T12:00:00Z')
@@ -43,13 +42,6 @@ beforeAll(async () => {
     data: {
       name: 'Técnico Y', email: `tecnico-y-reportes-${suffix}@test.com`,
       password: 'x', role: 'TECHNICIAN_DELIVERY',
-    },
-  })
-
-  motorizado = await prisma.user.create({
-    data: {
-      name: 'Motorizado Reportes', email: `motorizado-reportes-${suffix}@test.com`,
-      password: 'x', role: 'DELIVERY',
     },
   })
 
@@ -116,38 +108,15 @@ beforeAll(async () => {
       deliveredAt: OUT_OF_RANGE,
     },
   })
-
-  // Pedido de tienda dentro del rango, con entrega de motorizado
-  const productOrder = await prisma.productOrder.create({
-    data: {
-      status: 'DELIVERED',
-      deliveryMethod: 'HOME_DELIVERY',
-      total: 50,
-      paymentMethod: 'CASH',
-      clientId: clientA.id,
-    },
-  })
-  await prisma.productDelivery.create({
-    data: {
-      status: 'DELIVERED',
-      productOrderId: productOrder.id,
-      agentId: motorizado.id,
-      deliveryCommission: 5,
-      deliveredAt: IN_RANGE,
-    },
-  })
 }, 30000)
 
 afterAll(async () => {
   const clientIds = [clientA.id, clientB.id]
-  await prisma.productDelivery.deleteMany({ where: { agentId: motorizado.id } })
-  await prisma.productOrder.deleteMany({ where: { clientId: { in: clientIds } } })
   await prisma.orderStatusHistory.deleteMany({ where: { order: { clientId: { in: clientIds } } } })
   await prisma.order.deleteMany({ where: { clientId: { in: clientIds } } })
   await prisma.device.delete({ where: { id: device.id } }).catch(() => {})
   await prisma.user.delete({ where: { id: technicianX.id } }).catch(() => {})
   await prisma.user.delete({ where: { id: technicianY.id } }).catch(() => {})
-  await prisma.user.delete({ where: { id: motorizado.id } }).catch(() => {})
   await prisma.client.delete({ where: { id: clientA.id } }).catch(() => {})
   await prisma.client.delete({ where: { id: clientB.id } }).catch(() => {})
 })
@@ -194,22 +163,12 @@ describe('reports.service — getReportSummary', () => {
     expect(byB?.totalBudget).toBe(45)
   })
 
-  it('filtra por clientId cuando se especifica — narrows servicio y tienda', async () => {
+  it('filtra por clientId cuando se especifica', async () => {
     const result = await getReportSummary({ from: RANGE_FROM, to: RANGE_TO, clientId: clientB.id })
 
     expect(result.servicio.ordersCount).toBe(1)
     expect(result.servicio.orders[0].orderNumber).toContain('-5')
     expect(result.servicio.byClient).toHaveLength(1)
-    expect(result.tienda.ordersCount).toBe(0) // clientB no tiene pedidos de tienda en el fixture
-  })
-
-  it('incluye el detalle de tienda con la comisión del motorizado', async () => {
-    const result = await getReportSummary({ from: RANGE_FROM, to: RANGE_TO })
-
-    expect(result.tienda.ordersCount).toBe(1)
-    expect(result.tienda.totalSales).toBe(50)
-    expect(result.tienda.totalDeliveryCommission).toBe(5)
-    expect(result.tienda.byMotorizado[0].agentName).toBe('Motorizado Reportes')
   })
 
   it('retorna todo en cero cuando no hay datos en el rango', async () => {
@@ -222,7 +181,6 @@ describe('reports.service — getReportSummary', () => {
     expect(result.servicio.totalBudget).toBe(0)
     expect(result.servicio.byTechnician).toEqual([])
     expect(result.servicio.byClient).toEqual([])
-    expect(result.tienda.ordersCount).toBe(0)
   })
 })
 
@@ -253,7 +211,6 @@ describe('GET /api/reports/summary', () => {
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
     expect(res.body.data).toHaveProperty('servicio')
-    expect(res.body.data).toHaveProperty('tienda')
   }, 10000)
 
   it('sin from/to retorna 400', async () => {
@@ -282,14 +239,13 @@ describe('GET /api/reports/summary', () => {
     expect(res.body.data.servicio.ordersCount).toBe(1)
   }, 10000)
 
-  it('con clientId filtra ambos módulos (200)', async () => {
+  it('con clientId filtra la respuesta (200)', async () => {
     const res = await request(app)
       .get(`/api/reports/summary?from=2026-06-01&to=2026-06-30&clientId=${clientB.id}`)
       .set('Authorization', `Bearer ${adminToken}`)
 
     expect(res.status).toBe(200)
     expect(res.body.data.servicio.ordersCount).toBe(1)
-    expect(res.body.data.tienda.ordersCount).toBe(0)
   }, 10000)
 })
 
