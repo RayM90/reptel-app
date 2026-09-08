@@ -194,7 +194,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
 };
 
 /**
- * ADMIN crea un usuario de personal (TECHNICIAN_DELIVERY o DELIVERY).
+ * ADMIN crea un usuario de personal (TECHNICIAN_DELIVERY, DELIVERY o TECHNICIAN).
  * Nunca permite crear otro ADMIN desde este endpoint — evita escalación
  * de privilegios accidental o mal uso.
  */
@@ -207,8 +207,8 @@ export const createStaff = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    if (role !== 'TECHNICIAN_DELIVERY' && role !== 'DELIVERY') {
-      res.status(403).json({ message: 'Este endpoint solo permite crear TECHNICIAN_DELIVERY o DELIVERY' });
+    if (role !== 'TECHNICIAN_DELIVERY' && role !== 'DELIVERY' && role !== 'TECHNICIAN') {
+      res.status(403).json({ message: 'Este endpoint solo permite crear TECHNICIAN_DELIVERY, DELIVERY o TECHNICIAN' });
       return;
     }
 

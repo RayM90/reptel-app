@@ -8,6 +8,7 @@ import CreateStaff from './pages/admin/CreateStaff'
 import InventoryList from './pages/admin/InventoryList'
 import InventoryForm from './pages/admin/InventoryForm'
 import Reports from './pages/admin/Reports'
+import Registro from './pages/admin/Registro'
 import Toast from './components/Toast'
 import ConfirmDialog from './components/ConfirmDialog'
 
@@ -77,6 +78,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['TECHNICIAN_DELIVERY']}>
               <TechnicianDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/registro"
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN', 'TECHNICIAN']}>
+              <Registro />
             </ProtectedRoute>
           }
         />

@@ -1,5 +1,11 @@
 import prisma from '../../lib/prisma';
 
+export class InsufficientStockError extends Error {
+  constructor() {
+    super('INSUFFICIENT_STOCK');
+  }
+}
+
 /**
  * Obtiene todas las categorías con sus productos activos
  */
@@ -118,6 +124,38 @@ export const updateProduct = async (
         },
       });
     }
+
+    return updated;
+  });
+};
+
+/**
+ * Venta de mostrador (tienda física) — descuenta stock y registra el
+ * movimiento. Sin monto ni método de pago: el costo se maneja fuera del
+ * sistema (caja física), esto solo lleva el inventario al día.
+ */
+export const sellProduct = async (id: string, quantity: number, userId?: string) => {
+  return prisma.$transaction(async (tx) => {
+    const product = await tx.product.findUniqueOrThrow({ where: { id } });
+
+    if (product.stock < quantity) {
+      throw new InsufficientStockError();
+    }
+
+    const updated = await tx.product.update({
+      where: { id },
+      data: { stock: { decrement: quantity } },
+    });
+
+    await tx.inventoryMovement.create({
+      data: {
+        productId: id,
+        type: 'OUT',
+        quantity,
+        reason: 'Venta mostrador',
+        userId,
+      },
+    });
 
     return updated;
   });

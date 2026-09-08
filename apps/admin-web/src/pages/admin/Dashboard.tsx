@@ -344,6 +344,7 @@ export default function Dashboard() {
       <p>
         <Link to="/admin/create-staff" className="btn btn-accent">➕ Crear usuario de personal</Link>{' '}
         <Link to="/admin/inventory" className="btn btn-secondary">📦 Inventario</Link>{' '}
+        <Link to="/registro" className="btn btn-secondary">🧾 Registro (tienda física)</Link>{' '}
         <Link to="/admin/reportes" className="btn btn-secondary">📊 Reportes</Link>
       </p>
 
