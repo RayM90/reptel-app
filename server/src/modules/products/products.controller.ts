@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
+import prisma from '../../lib/prisma';
 import {
   getProductsWithCategories,
   getAllProducts,
@@ -7,6 +8,8 @@ import {
   getProductById,
   createProduct,
   updateProduct,
+  sellProduct,
+  InsufficientStockError,
 } from './products.service';
 
 /**
@@ -99,6 +102,41 @@ export const createProductHandler = async (req: AuthRequest, res: Response): Pro
     res.status(500).json({ success: false, message: error.message || 'Error al crear el producto' })
   }
 }
+
+/**
+ * POST /api/products/:id/sell
+ * Venta de mostrador (tienda física) — descuenta stock, sin monto ni método de pago.
+ */
+export const sellProductHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id);
+    const quantity = Number(req.body.quantity);
+
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      res.status(400).json({ success: false, message: 'La cantidad debe ser un número entero mayor a 0' });
+      return;
+    }
+
+    let userId: string | undefined;
+    if (req.user?.email) {
+      const dbUser = await prisma.user.findUnique({ where: { email: req.user.email }, select: { id: true } });
+      userId = dbUser?.id;
+    }
+
+    const product = await sellProduct(id, quantity, userId);
+    res.status(200).json({ success: true, data: product });
+  } catch (error: any) {
+    if (error instanceof InsufficientStockError) {
+      res.status(400).json({ success: false, message: 'Stock insuficiente para esta venta' });
+      return;
+    }
+    if (error.code === 'P2025') {
+      res.status(404).json({ success: false, message: 'Producto no encontrado' });
+      return;
+    }
+    res.status(500).json({ success: false, message: error.message || 'Error al procesar la venta' });
+  }
+};
 
 export const updateProductHandler = async (req: AuthRequest, res: Response): Promise<void> => {
   try {

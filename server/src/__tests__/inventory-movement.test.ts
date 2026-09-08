@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma'
-import { createProduct, updateProduct } from '../modules/products/products.service'
+import { createProduct, updateProduct, sellProduct, InsufficientStockError } from '../modules/products/products.service'
 
 let category: { id: string }
 
@@ -34,6 +34,37 @@ describe('InventoryMovement', () => {
     })
     expect(movement?.type).toBe('IN')
     expect(movement?.quantity).toBe(10)
+
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await prisma.product.delete({ where: { id: product.id } })
+  })
+
+  it('sellProduct con stock suficiente descuenta stock y registra un movimiento OUT', async () => {
+    const product = await createProduct({ name: 'Producto Venta', price: 10, stock: 10, categoryId: category.id })
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } }) // limpiar el IN inicial
+
+    const updated = await sellProduct(product.id, 4)
+    expect(updated.stock).toBe(6)
+
+    const movement = await prisma.inventoryMovement.findFirst({
+      where: { productId: product.id }, orderBy: { createdAt: 'desc' },
+    })
+    expect(movement?.type).toBe('OUT')
+    expect(movement?.quantity).toBe(4)
+    expect(movement?.reason).toBe('Venta mostrador')
+
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await prisma.product.delete({ where: { id: product.id } })
+  })
+
+  it('sellProduct con stock insuficiente lanza InsufficientStockError y no modifica el stock', async () => {
+    const product = await createProduct({ name: 'Producto Venta 2', price: 10, stock: 2, categoryId: category.id })
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+
+    await expect(sellProduct(product.id, 5)).rejects.toThrow(InsufficientStockError)
+
+    const unchanged = await prisma.product.findUniqueOrThrow({ where: { id: product.id } })
+    expect(unchanged.stock).toBe(2)
 
     await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
     await prisma.product.delete({ where: { id: product.id } })

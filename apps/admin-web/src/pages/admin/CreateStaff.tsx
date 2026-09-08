@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 
-type StaffRole = 'TECHNICIAN_DELIVERY'
+type StaffRole = 'TECHNICIAN_DELIVERY' | 'TECHNICIAN'
 
 export default function CreateStaff() {
   const [email, setEmail] = useState('')
@@ -73,7 +73,8 @@ export default function CreateStaff() {
               value={role}
               onChange={(e) => setRole(e.target.value as StaffRole)}
             >
-              <option value="TECHNICIAN_DELIVERY">Técnico</option>
+              <option value="TECHNICIAN_DELIVERY">Técnico de Reparación (motorizado)</option>
+              <option value="TECHNICIAN">Personal de Mostrador (tienda física)</option>
             </select>
           </div>
           <div className="form-group">

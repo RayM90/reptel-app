@@ -14,10 +14,10 @@ router.get('/', authenticate, authorize('ADMIN'), clientsController.getClients)
 router.get('/:id', authenticate, authorize('ADMIN'), clientsController.getClient)
 
 // Obtener cliente por número de cédula
-router.get('/idnumber/:idNumber', authenticate, authorize('ADMIN'), clientsController.getClientByIdNumber)
+router.get('/idnumber/:idNumber', authenticate, authorize('ADMIN', 'TECHNICIAN'), clientsController.getClientByIdNumber)
 
 // Crear nuevo cliente
-router.post('/', authenticate, authorize('ADMIN'), clientsController.createClient)
+router.post('/', authenticate, authorize('ADMIN', 'TECHNICIAN'), clientsController.createClient)
 
 // Actualizar cliente
 router.patch('/:id', authenticate, authorize('ADMIN'), clientsController.updateClient)
