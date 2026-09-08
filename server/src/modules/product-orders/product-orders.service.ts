@@ -621,7 +621,6 @@ export const getProductOrderById = async (id: string, clientId: string) => {
       delivery: {
         include: { agent: { select: { id: true, name: true, phone: true } } },
       },
-      invoice: true,
       paymentSubmissions: {
         orderBy: { createdAt: 'asc' },
       },
