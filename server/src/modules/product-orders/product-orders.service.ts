@@ -168,7 +168,6 @@ export const createProductOrder = async (data: CreateProductOrderInput) => {
         total,
         paymentMethod: data.paymentMethod as any,
         notes: data.notes,
-        requiresInstallation: !!data.requiresInstallation,
         installationCost,
         items: {
           create: itemsToCreate.map(
