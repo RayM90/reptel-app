@@ -4,7 +4,6 @@ import { useAuthStore } from '../store/auth.store'
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrador',
   TECHNICIAN_DELIVERY: 'Técnico',
-  DELIVERY: 'Motorizado',
 }
 
 export default function Header() {

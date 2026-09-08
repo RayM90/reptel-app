@@ -23,11 +23,6 @@ interface Order {
   technicianCommission: string | null
 }
 
-interface ProductOrderItem {
-  product: { name: string }
-  quantity: number
-}
-
 interface PaymentSubmission {
   id: string
   amount: string
@@ -35,20 +30,6 @@ interface PaymentSubmission {
   status: 'PENDING' | 'CONFIRMED' | 'REJECTED'
   rejectionReason: string | null
   createdAt: string
-}
-
-interface ProductOrder {
-  id: string
-  status: string
-  total: string
-  client: { name: string; lastName: string }
-  items: ProductOrderItem[]
-  delivery: {
-    agent: { name: string }
-    deliveryCommission: string | null
-    deliveredAt: string | null
-  } | null
-  paymentSubmissions: PaymentSubmission[]
 }
 
 function PaymentDetailsView({ details }: { details: Record<string, string> | null }) {
@@ -139,11 +120,9 @@ const NEW_BADGE_STYLE: CSSProperties = {
 
 export default function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([])
-  const [productOrders, setProductOrders] = useState<ProductOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set())
-  const [newProductOrderIds, setNewProductOrderIds] = useState<Set<string>>(new Set())
   const [view, setView] = useState<'activos' | 'entregados'>('activos')
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
   const showToast = useToastStore((state) => state.showToast)
@@ -172,12 +151,8 @@ export default function Dashboard() {
       setError('')
     }
     try {
-      const [ordersRes, productOrdersRes] = await Promise.all([
-        api.get('/api/orders'),
-        api.get('/api/product-orders'),
-      ])
+      const ordersRes = await api.get('/api/orders')
       const freshOrders: Order[] = ordersRes.data.data
-      const freshProductOrders: ProductOrder[] = productOrdersRes.data.data
 
       if (isPoll) {
         setOrders((prev) => {
@@ -188,17 +163,8 @@ export default function Dashboard() {
           }
           return freshOrders
         })
-        setProductOrders((prev) => {
-          const prevIds = new Set(prev.map((po) => po.id))
-          const freshIds = freshProductOrders.filter((po) => !prevIds.has(po.id)).map((po) => po.id)
-          if (freshIds.length > 0) {
-            setNewProductOrderIds((prevNew) => new Set([...prevNew, ...freshIds]))
-          }
-          return freshProductOrders
-        })
       } else {
         setOrders(freshOrders)
-        setProductOrders(freshProductOrders)
       }
     } catch (err) {
       // En polling silencioso no mostramos el error de página completa —
@@ -211,15 +177,6 @@ export default function Dashboard() {
 
   const clearNewOrder = (id: string) => {
     setNewOrderIds((prev) => {
-      if (!prev.has(id)) return prev
-      const next = new Set(prev)
-      next.delete(id)
-      return next
-    })
-  }
-
-  const clearNewProductOrder = (id: string) => {
-    setNewProductOrderIds((prev) => {
       if (!prev.has(id)) return prev
       const next = new Set(prev)
       next.delete(id)
@@ -345,80 +302,8 @@ export default function Dashboard() {
     }
   }
 
-  // ── Pedidos de tienda — abonos individuales ──
-  const handleApprovePartialPayment = async (submissionId: string, amount: string) => {
-    if (pendingIds.has(submissionId)) return
-    const confirmed = await confirmDialog({
-      title: 'Aprobar abono',
-      message: `Monto: $${Number(amount).toFixed(2)}. Esta acción no se puede deshacer.`,
-      confirmLabel: 'Aprobar',
-      amount: Number(amount),
-    })
-    if (!confirmed) return
-    setBusy(submissionId, true)
-    try {
-      await api.patch(`/api/product-orders/payment-submissions/${submissionId}/confirm`, { approved: true })
-      showToast('✅ Abono aprobado.', 'success')
-      fetchData()
-    } catch (err) {
-      showToast('❌ Error al aprobar el abono', 'error')
-    } finally {
-      setBusy(submissionId, false)
-    }
-  }
-
-  const handleRejectPartialPayment = async (submissionId: string, amount: string) => {
-    if (pendingIds.has(submissionId)) return
-    const reason = await confirmDialog({
-      title: 'Rechazar abono de pago',
-      requireText: true,
-      textLabel: 'Motivo del rechazo',
-      confirmLabel: 'Rechazar',
-      amount: Number(amount),
-    })
-    if (!reason) return
-    setBusy(submissionId, true)
-    try {
-      await api.patch(`/api/product-orders/payment-submissions/${submissionId}/confirm`, {
-        approved: false,
-        rejectionReason: reason,
-      })
-      showToast('✅ Abono rechazado. Se notificó al cliente para que reenvíe sus datos.', 'success')
-      fetchData()
-    } catch (err) {
-      showToast('❌ Error al rechazar el abono', 'error')
-    } finally {
-      setBusy(submissionId, false)
-    }
-  }
-
-  // ── Pedidos de tienda — cancelar (solo mientras está PENDING) ──
-  const handleCancelProductOrder = async (po: ProductOrder) => {
-    if (pendingIds.has(po.id)) return
-    const confirmed = await confirmDialog({
-      title: 'Cancelar pedido',
-      message: `Cliente: ${po.client.name} ${po.client.lastName} — Total: $${Number(po.total).toFixed(2)}. El stock reservado se devolverá al inventario. Esta acción no se puede deshacer.`,
-      confirmLabel: 'Cancelar pedido',
-    })
-    if (!confirmed) return
-    setBusy(po.id, true)
-    try {
-      await api.patch(`/api/product-orders/${po.id}/cancel`)
-      showToast('✅ Pedido cancelado. El stock fue devuelto al inventario.', 'success')
-      fetchData()
-    } catch (err: any) {
-      showToast(err?.response?.data?.message || '❌ Error al cancelar el pedido', 'error')
-    } finally {
-      setBusy(po.id, false)
-    }
-  }
-
   const activeOrders = orders.filter(
     (o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
-  )
-
-  const activeProductOrders = productOrders.filter(
-    (po) => po.status !== 'DELIVERED' && po.status !== 'CANCELLED'
   )
 
   // Total de presupuestos en curso — servicios activos aún no completados,
@@ -432,10 +317,6 @@ export default function Dashboard() {
   // atendió cada uno (técnico o motorizado) y cuánto ganó de comisión.
   const completedOrders = orders.filter(
     (o) => o.status === 'DELIVERED' || o.status === 'CANCELLED'
-  )
-
-  const completedProductOrders = productOrders.filter(
-    (po) => po.status === 'DELIVERED' || po.status === 'CANCELLED'
   )
 
   const formatDate = (dateStr: string | null) => {
@@ -571,71 +452,6 @@ export default function Dashboard() {
           </div>
         )}
       </section>
-
-      <section className="card">
-        <h2>Pedidos de Tienda Activos ({activeProductOrders.length})</h2>
-        {activeProductOrders.length === 0 ? (
-          <p>No hay pedidos activos</p>
-        ) : (
-          <div className="table-wrapper">
-            <table className="styled-table styled-table--sticky-actions">
-              <thead>
-                <tr>
-                  <th scope="col">Cliente</th>
-                  <th scope="col">Productos</th>
-                  <th scope="col" className="money">Total</th>
-                  <th scope="col">Estado</th>
-                  <th scope="col">Motorizado asignado</th>
-                  <th scope="col">Pagos recibidos</th>
-                  <th scope="col">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeProductOrders.map((po) => (
-                  <tr
-                    key={po.id}
-                    onClick={() => clearNewProductOrder(po.id)}
-                    style={newProductOrderIds.has(po.id) ? NEW_ROW_STYLE : undefined}
-                  >
-                    <td data-label="Cliente">
-                      {po.client.name} {po.client.lastName}
-                      {newProductOrderIds.has(po.id) && (
-                        <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Pedido nuevo, no revisado todavía">🆕 Nuevo</span>
-                      )}
-                    </td>
-                    <td data-label="Productos">{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
-                    <td className="money" data-label="Total">${po.total}</td>
-                    <td data-label="Estado">
-                      <span className={badgeClassName(getStatusBadge('productOrder', po.status).variant)}>
-                        {getStatusBadge('productOrder', po.status).label}
-                      </span>
-                    </td>
-                    <td data-label="Motorizado asignado">{po.delivery?.agent.name || 'Sin asignar'}</td>
-                    <td data-label="Pagos recibidos">
-                      <PaymentSubmissionsView
-                        submissions={po.paymentSubmissions}
-                        total={po.total}
-                        onApprove={handleApprovePartialPayment}
-                        onReject={handleRejectPartialPayment}
-                        pendingIds={pendingIds}
-                      />
-                    </td>
-                    <td data-label="Acciones">
-                      {po.status === 'PENDING' ? (
-                        <button className="btn btn-danger" disabled={pendingIds.has(po.id)} onClick={() => handleCancelProductOrder(po)}>
-                          Cancelar pedido
-                        </button>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
         </>
       ) : (
         <>
@@ -680,47 +496,6 @@ export default function Dashboard() {
             </tbody>
           </table>
         </div>
-      </section>
-
-      <section className="card">
-        <h2>Pedidos de Tienda — Historial ({completedProductOrders.length})</h2>
-        <p><Link to="/admin/reportes">Ver reporte completo por técnico y período →</Link></p>
-        {completedProductOrders.length === 0 ? (
-          <p>Aún no hay pedidos entregados o cancelados</p>
-        ) : (
-          <div className="table-wrapper">
-            <table className="styled-table">
-              <thead>
-                <tr>
-                  <th scope="col">Cliente</th>
-                  <th scope="col">Productos</th>
-                  <th scope="col" className="money">Total</th>
-                  <th scope="col">Estado</th>
-                  <th scope="col">Motorizado</th>
-                  <th scope="col" className="money">Comisión motorizado</th>
-                  <th scope="col">Fecha entrega</th>
-                </tr>
-              </thead>
-              <tbody>
-                {completedProductOrders.map((po) => (
-                  <tr key={po.id}>
-                    <td data-label="Cliente">{po.client.name} {po.client.lastName}</td>
-                    <td data-label="Productos">{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
-                    <td className="money" data-label="Total">${po.total}</td>
-                    <td data-label="Estado">
-                      <span className={badgeClassName(getStatusBadge('productOrder', po.status).variant)}>
-                        {getStatusBadge('productOrder', po.status).label}
-                      </span>
-                    </td>
-                    <td data-label="Motorizado">{po.delivery?.agent.name || 'Sin asignar'}</td>
-                    <td className="money" data-label="Comisión motorizado">{po.delivery?.deliveryCommission ? `$${po.delivery.deliveryCommission}` : '—'}</td>
-                    <td data-label="Fecha entrega">{formatDate(po.delivery?.deliveredAt ?? null)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </section>
         </>
       )}
