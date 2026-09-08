@@ -100,34 +100,3 @@ export const ordersAPI = {
   disputeZeroBudgetDiagnosis: (id: string, note?: string) =>
     api.post(`/api/orders/${id}/dispute-zero-budget-diagnosis`, { note }),
 }
-
-export const productOrdersAPI = {
-  create: (data: {
-    items: { productId: string; quantity: number }[]
-    paymentMethod: 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
-    address: string
-    notes?: string
-    requiresInstallation?: boolean
-  }) => api.post('/api/product-orders', data),
-
-  getMyOrders: () => api.get('/api/product-orders/my-orders'),
-
-  getById: (id: string) => api.get(`/api/product-orders/${id}`),
-
-  // Enviar un abono (parcial o total) para un pedido de tienda
-  uploadReceipt: (id: string, paymentDetails: Record<string, string>, amount: number) =>
-    api.patch(`/api/product-orders/${id}/receipt`, { paymentDetails, amount }),
-
-  // Confirmar o rechazar un abono específico (rol ADMIN)
-  confirmPartialPayment: (submissionId: string, approved: boolean, rejectionReason?: string) =>
-    api.patch(`/api/product-orders/payment-submissions/${submissionId}/confirm`, { approved, rejectionReason }),
-
-  // Dirección B — repuesto vinculado a una orden de Servicio Técnico en curso
-  createLinked: (data: {
-    items: { productId: string; quantity: number }[]
-    paymentMethod: 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
-    linkedOrderId: string
-    address: string
-    notes?: string
-  }) => api.post('/api/product-orders/link-to-service', data),
-}
