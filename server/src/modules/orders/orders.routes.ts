@@ -17,9 +17,6 @@ router.post('/self-service', authenticate, authorize('CLIENT'), ordersController
 // Historial de órdenes propias del cliente
 router.get('/my-orders', authenticate, authorize('CLIENT'), ordersController.getMyTechOrders)
 
-// Subir comprobante de pago anticipado (delivery + revisión)
-router.post('/:id/advance-payment', authenticate, authorize('CLIENT'), ordersController.submitAdvancePayment)
-
 // Enviar un abono del anticipo (pago en partes — el cliente decide monto y cuántos)
 router.post('/:id/advance-payment-installment', authenticate, authorize('CLIENT'), ordersController.submitAdvancePaymentInstallment)
 
@@ -57,9 +54,6 @@ router.patch('/:id/status', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVER
 router.patch('/:id/budget', authenticate, authorize('ADMIN'), ordersController.updateBudget)
 
 router.patch('/:id/diagnosis', authenticate, authorize('TECHNICIAN_DELIVERY'), ordersController.submitDiagnosis)
-
-// Confirmar o rechazar el pago anticipado (Fase 4 — ADMIN)
-router.post('/:id/confirm-advance-payment', authenticate, authorize('ADMIN'), ordersController.confirmAdvancePayment)
 
 // Confirmar o rechazar un abono específico del anticipo (pago en partes — ADMIN)
 router.post('/advance-payment-installment/:submissionId/confirm', authenticate, authorize('ADMIN'), ordersController.confirmAdvancePaymentInstallment)
