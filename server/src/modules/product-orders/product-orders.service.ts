@@ -328,7 +328,6 @@ export const uploadReceipt = async (
   const order = await prisma.productOrder.findFirst({
     where: { id: productOrderId, clientId },
     include: {
-      client: true,
       paymentSubmissions: { where: { status: { in: ['CONFIRMED', 'PENDING'] } } },
     },
   })
@@ -361,24 +360,6 @@ export const uploadReceipt = async (
     },
   })
 
-  // Notificar a todos los administradores activos
-  const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true },
-    select: { id: true },
-  })
-
-  if (admins.length > 0) {
-    await prisma.notification.createMany({
-      data: admins.map((admin) => ({
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message: `${order.client.name} ${order.client.lastName} envió un abono de $${amount.toFixed(2)} para el pedido #${productOrderId.slice(0, 8)}`,
-        userId: admin.id,
-        productOrderId,
-      })),
-    })
-  }
-
   return submission
 }
 
@@ -405,7 +386,6 @@ export const confirmPartialPayment = async (
     include: {
       productOrder: {
         include: {
-          client: { include: { user: true } },
           paymentSubmissions: { where: { status: 'CONFIRMED' } },
         },
       },
@@ -489,27 +469,6 @@ export const confirmPartialPayment = async (
     await incrementDeliveryLoad(assignedAgentId)
   }
 
-  if (order.client.user) {
-    let message: string
-    if (!approved) {
-      message = `Tu abono de $${Number(submission.amount).toFixed(2)} para el pedido #${productOrderId.slice(0, 8)} fue rechazado: ${rejectionReason}. Por favor envía los datos nuevamente.`
-    } else if (orderNowComplete) {
-      message = `Tu pago para el pedido #${productOrderId.slice(0, 8)} fue confirmado por completo. Un motorizado fue asignado para tu entrega.`
-    } else {
-      message = `Tu abono de $${Number(submission.amount).toFixed(2)} para el pedido #${productOrderId.slice(0, 8)} fue confirmado. Aún queda un saldo pendiente.`
-    }
-
-    await prisma.notification.create({
-      data: {
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message,
-        userId: order.client.user.id,
-        productOrderId,
-      },
-    })
-  }
-
   return updated
 }
 
@@ -527,7 +486,7 @@ export const cancelProductOrder = async (productOrderId: string, actorEmail?: st
 
   const order = await prisma.productOrder.findUnique({
     where: { id: productOrderId },
-    include: { items: true, client: { include: { user: true } } },
+    include: { items: true },
   })
 
   if (!order) {
@@ -572,18 +531,6 @@ export const cancelProductOrder = async (productOrderId: string, actorEmail?: st
       },
     })
   })
-
-  if (order.client.user) {
-    await prisma.notification.create({
-      data: {
-        type: 'STATUS_CHANGE',
-        channel: 'PUSH',
-        message: `Tu pedido #${productOrderId.slice(0, 8)} fue cancelado. El stock reservado fue liberado.`,
-        userId: order.client.user.id,
-        productOrderId,
-      },
-    })
-  }
 
   return updated
 }
@@ -790,11 +737,7 @@ export const confirmReceived = async (productOrderId: string, clientId: string) 
     throw new Error('El motorizado aún no ha marcado este pedido como entregado')
   }
 
-  return await prisma.productDelivery.update({
-    where: { productOrderId },
-    data: { clientConfirmedAt: new Date() },
-    include: { productOrder: true },
-  })
+  return delivery
 }
 
 // ─────────────────────────────────────────────
