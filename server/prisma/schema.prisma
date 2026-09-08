@@ -311,19 +311,14 @@ model ProductOrder {
   total          Decimal            @db.Decimal(10, 2)
   paymentMethod  PaymentMethod
   paidAt         DateTime?
-  receiptUrl     String?            @db.VarChar(500)
-  paymentDetails Json?
   notes          String?            @db.Text
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
   version        Int                @default(0)
 
-  rejectionReason String? @db.Text
-
   clientId String
   client   Client @relation(fields: [clientId], references: [id])
 
-  requiresInstallation Boolean  @default(false)
   installationCost     Decimal? @db.Decimal(10, 2)
 
   linkedOrderId String?
