@@ -18,7 +18,6 @@ interface Order {
   technician: { id: string; name: string } | null
   deliveryAmount: string | null
   revisionAmount: string | null
-  advancePaymentDetails: Record<string, string> | null
   advancePaymentSubmissions: PaymentSubmission[]
   finalPaymentDetails: Record<string, string> | null
   technicianCommission: string | null

@@ -206,11 +206,6 @@ model Order {
   deliveryAmount             Decimal?       @db.Decimal(10, 2)
   revisionAmount             Decimal?       @db.Decimal(10, 2)
   advancePaymentMethod       PaymentMethod?
-  advanceReceiptUrl          String?        @db.VarChar(500)
-  advancePaymentDetails      Json?
-  advancePaymentConfirmed    Boolean        @default(false)
-  advancePaymentConfirmedAt  DateTime?
-  advancePaymentRejectionReason String?     @db.Text
   advancePaymentSubmissions  AdvancePaymentSubmission[]
 
   // ── NUEVO: pago final (saldo restante) + comisión del técnico ──

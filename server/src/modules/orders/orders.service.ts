@@ -339,66 +339,6 @@ export const createSelfServiceOrder = async (data: {
 }
 
 // ─────────────────────────────────────────────
-// PAGO ANTICIPADO — SUBIR DATOS DE PAGO (cliente)
-// Mismo patrón que product-orders.service.ts → uploadReceipt().
-// Guarda los datos ingresados por el cliente y notifica a los
-// administradores.
-// ─────────────────────────────────────────────
-
-export const submitAdvancePayment = async (
-  orderId: string,
-  email: string,
-  paymentDetails: Record<string, string>
-) => {
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { clientId: true },
-  })
-
-  if (!user || !user.clientId) {
-    throw new Error('Cliente no encontrado para este usuario')
-  }
-
-  const order = await prisma.order.findFirst({
-    where: { id: orderId, clientId: user.clientId },
-  })
-
-  if (!order) {
-    throw new Error('Orden no encontrada')
-  }
-
-  const updatedOrder = await prisma.order.update({
-    where: { id: orderId },
-    data: { advancePaymentDetails: paymentDetails },
-    include: {
-      client: true,
-      device: true,
-      technician: { select: { id: true, name: true } },
-      statusHistory: { orderBy: { createdAt: 'desc' } },
-    },
-  })
-
-  const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true },
-    select: { id: true },
-  })
-
-  if (admins.length > 0) {
-    await prisma.notification.createMany({
-      data: admins.map((admin) => ({
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message: `Datos de pago anticipado registrados para la orden de servicio técnico #${order.orderNumber}`,
-        userId: admin.id,
-        orderId,
-      })),
-    })
-  }
-
-  return updatedOrder
-}
-
-// ─────────────────────────────────────────────
 // PAGO ANTICIPADO EN PARTES (abonos)
 // Mismo patrón que ProductOrderPaymentSubmission: el cliente decide
 // libremente cuántos pagos hace y de qué monto, cada envío es un registro
@@ -541,8 +481,6 @@ export const confirmAdvancePaymentInstallment = async (
         return await tx.order.update({
           where: { id: order.id },
           data: {
-            advancePaymentConfirmed: true,
-            advancePaymentConfirmedAt: new Date(),
             status: 'RECEIVED',
             statusHistory: {
               create: {
@@ -725,74 +663,6 @@ export const submitDiagnosis = async (
       statusHistory: { orderBy: { createdAt: 'desc' } },
     },
   })
-}
-
-// ─────────────────────────────────────────────
-// ADMIN — Confirmar o rechazar el pago anticipado (Fase 4)
-// Al aprobar: la orden pasa de PENDING_PAYMENT a RECEIVED, quedando
-// lista para que el técnico-delivery asignado sea despachado.
-// Al rechazar: se guarda el motivo obligatorio, la orden permanece en
-// PENDING_PAYMENT, y se limpian los datos de pago viejos (para que el
-// botón "Aprobar" del admin no quede habilitado con información
-// incorrecta) — el cliente debe reenviar sus datos.
-// ─────────────────────────────────────────────
-
-export const confirmAdvancePayment = async (
-  id: string,
-  approved: boolean,
-  rejectionReason?: string
-) => {
-  const order = await prisma.order.findUnique({
-    where: { id },
-    include: { client: { include: { user: true } } },
-  })
-
-  if (!order) {
-    throw new Error('Orden no encontrada')
-  }
-
-  const updatedOrder = await prisma.order.update({
-    where: { id },
-    data: {
-      advancePaymentConfirmed: approved,
-      advancePaymentConfirmedAt: approved ? new Date() : null,
-      advancePaymentRejectionReason: approved ? null : rejectionReason,
-      ...(approved
-        ? {}
-        : { advanceReceiptUrl: null, advancePaymentDetails: Prisma.JsonNull }),
-      status: approved ? 'RECEIVED' : 'PENDING_PAYMENT',
-      statusHistory: {
-        create: {
-          status: approved ? 'RECEIVED' : 'PENDING_PAYMENT',
-          comment: approved
-            ? 'Pago anticipado confirmado por el administrador'
-            : `Pago anticipado rechazado: ${rejectionReason}`,
-        },
-      },
-    },
-    include: {
-      client: true,
-      device: true,
-      technician: { select: { id: true, name: true } },
-      statusHistory: { orderBy: { createdAt: 'desc' } },
-    },
-  })
-
-  if (order.client.user) {
-    await prisma.notification.create({
-      data: {
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message: approved
-          ? `Tu pago anticipado para la orden #${order.orderNumber} fue confirmado. El técnico será despachado pronto.`
-          : `No pudimos confirmar tu pago para la orden #${order.orderNumber}: ${rejectionReason}. Por favor envía tus datos de pago nuevamente.`,
-        userId: order.client.user.id,
-        orderId: id,
-      },
-    })
-  }
-
-  return updatedOrder
 }
 
 // ─────────────────────────────────────────────

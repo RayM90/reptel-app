@@ -147,39 +147,9 @@ export const createMyOrder = async (req: AuthRequest, res: Response): Promise<vo
 }
 
 // ─────────────────────────────────────────────
-// CLIENTE — Subir comprobante de pago anticipado
-// Mismo patrón que product-orders: recibe receiptUrl ya resuelto
-// (simulado, sin S3 real por ahora) y lo guarda en la orden.
-// ─────────────────────────────────────────────
-
-export const submitAdvancePayment = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const email = req.user?.email
-    if (!email) {
-      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
-      return
-    }
-
-    const id = String(req.params.id)
-    const { paymentDetails } = req.body
-
-    if (!paymentDetails || typeof paymentDetails !== 'object') {
-      res.status(400).json({ success: false, message: 'paymentDetails es requerido' })
-      return
-    }
-
-    const order = await ordersService.submitAdvancePayment(id, email, paymentDetails)
-    res.json({ success: true, data: order })
-  } catch (error: any) {
-    console.error('ERROR REGISTRAR DATOS DE PAGO ANTICIPADO:', error)
-    res.status(400).json({ success: false, message: error.message || 'Error al registrar los datos de pago' })
-  }
-}
-
-// ─────────────────────────────────────────────
 // CLIENTE — Enviar un abono del anticipo (pago en partes)
 // El cliente decide libremente cuántos abonos hace y de qué monto, hasta
-// completar el total. Reemplaza a submitAdvancePayment para el flujo nuevo.
+// completar el total.
 // ─────────────────────────────────────────────
 
 export const submitAdvancePaymentInstallment = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -393,42 +363,6 @@ export const submitDiagnosis = async (req: AuthRequest, res: Response): Promise<
   } catch (error: any) {
     console.error('ERROR SUBMIT DIAGNOSIS:', error)
     res.status(400).json({ success: false, message: error.message || 'Error al registrar el diagnóstico' })
-  }
-}
-
-// ─────────────────────────────────────────────
-// ADMIN — Confirmar o rechazar el pago anticipado (Fase 4)
-// ─────────────────────────────────────────────
-
-export const confirmAdvancePayment = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const id = String(req.params.id)
-    const { approved, rejectionReason } = req.body
-
-    if (approved === undefined) {
-      res.status(400).json({ success: false, message: 'approved es requerido (true o false)' })
-      return
-    }
-
-    if (approved === false && !rejectionReason) {
-      res.status(400).json({
-        success: false,
-        message: 'rejectionReason es requerido cuando se rechaza el pago',
-      })
-      return
-    }
-
-    const order = await ordersService.confirmAdvancePayment(id, Boolean(approved), rejectionReason)
-
-    broadcastOrderUpdate({
-      type: 'ORDER_STATUS_UPDATED',
-      data: order,
-    })
-
-    res.json({ success: true, data: order })
-  } catch (error: any) {
-    console.error('ERROR CONFIRM ADVANCE PAYMENT:', error)
-    res.status(400).json({ success: false, message: error.message || 'Error al confirmar el pago anticipado' })
   }
 }
 
