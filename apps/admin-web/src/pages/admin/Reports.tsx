@@ -16,13 +16,6 @@ interface ServicioClientRow {
   totalBudget: number
 }
 
-interface TiendaClientRow {
-  clientId: string
-  clientName: string
-  ordersCount: number
-  totalSales: number
-}
-
 interface ClientSearchResult {
   id: string
   name: string
@@ -38,22 +31,6 @@ interface ServicioOrderRow {
   technicianCommission: number
 }
 
-interface MotorizadoRow {
-  agentId: string
-  agentName: string
-  deliveriesCount: number
-  totalCommission: number
-}
-
-interface TiendaOrderRow {
-  id: string
-  clientName: string
-  agentName: string
-  deliveredAt: string | null
-  total: number
-  deliveryCommission: number
-}
-
 interface ReportSummary {
   servicio: {
     totalBudget: number
@@ -62,14 +39,6 @@ interface ReportSummary {
     byTechnician: TechnicianRow[]
     byClient: ServicioClientRow[]
     orders: ServicioOrderRow[]
-  }
-  tienda: {
-    totalSales: number
-    totalDeliveryCommission: number
-    ordersCount: number
-    byMotorizado: MotorizadoRow[]
-    byClient: TiendaClientRow[]
-    orders: TiendaOrderRow[]
   }
 }
 
@@ -367,99 +336,6 @@ export default function Reports() {
                         <td className="money" data-label="Presupuesto">${o.budget.toFixed(2)}</td>
                         <td className="money" data-label="Comisión">${o.technicianCommission.toFixed(2)}</td>
                         <td data-label="Entregado">{formatDate(o.deliveredAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </details>
-
-          <h2 className="print-break">Tienda</h2>
-          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-            <div className="card">
-              <h3>Pedidos completados</h3>
-              <p>{data.tienda.ordersCount}</p>
-            </div>
-            <div className="card">
-              <h3>Ventas totales</h3>
-              <p>${data.tienda.totalSales.toFixed(2)}</p>
-            </div>
-            <div className="card">
-              <h3>Comisión de motorizados</h3>
-              <p>${data.tienda.totalDeliveryCommission.toFixed(2)}</p>
-            </div>
-          </div>
-
-          <section className="card">
-            <h3>Por motorizado</h3>
-            {data.tienda.byMotorizado.length === 0 ? (
-              <p>No hay datos en este período</p>
-            ) : (
-              <div className="table-wrapper">
-                <table className="styled-table">
-                  <thead>
-                    <tr><th scope="col">Motorizado</th><th scope="col">Entregas</th><th scope="col" className="money">Comisión</th></tr>
-                  </thead>
-                  <tbody>
-                    {data.tienda.byMotorizado.map((m) => (
-                      <tr key={m.agentId}>
-                        <td data-label="Motorizado">{m.agentName}</td>
-                        <td data-label="Entregas">{m.deliveriesCount}</td>
-                        <td className="money" data-label="Comisión">${m.totalCommission.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          <section className="card">
-            <h3>Por cliente</h3>
-            {data.tienda.byClient.length === 0 ? (
-              <p>No hay datos en este período</p>
-            ) : (
-              <div className="table-wrapper">
-                <table className="styled-table">
-                  <thead>
-                    <tr><th scope="col">Cliente</th><th scope="col">Pedidos</th><th scope="col" className="money">Ventas</th></tr>
-                  </thead>
-                  <tbody>
-                    {data.tienda.byClient.map((c) => (
-                      <tr key={c.clientId}>
-                        <td data-label="Cliente">{c.clientName}</td>
-                        <td data-label="Pedidos">{c.ordersCount}</td>
-                        <td className="money" data-label="Ventas">${c.totalSales.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          <details className="card">
-            <summary><h3 style={{ display: 'inline' }}>Detalle de pedidos</h3></summary>
-            {data.tienda.orders.length === 0 ? (
-              <p>No hay datos en este período</p>
-            ) : (
-              <div className="table-wrapper">
-                <table className="styled-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Cliente</th><th scope="col">Motorizado</th>
-                      <th scope="col" className="money">Total</th><th scope="col" className="money">Comisión</th><th scope="col">Entregado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.tienda.orders.map((po) => (
-                      <tr key={po.id}>
-                        <td data-label="Cliente">{po.clientName}</td>
-                        <td data-label="Motorizado">{po.agentName}</td>
-                        <td className="money" data-label="Total">${po.total.toFixed(2)}</td>
-                        <td className="money" data-label="Comisión">${po.deliveryCommission.toFixed(2)}</td>
-                        <td data-label="Entregado">{formatDate(po.deliveredAt)}</td>
                       </tr>
                     ))}
                   </tbody>

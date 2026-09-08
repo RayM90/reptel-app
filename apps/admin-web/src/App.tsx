@@ -4,7 +4,6 @@ import ProtectedRoute from './components/ProtectedRoute'
 import RoleHome from './components/RoleHome'
 import Dashboard from './pages/admin/Dashboard'
 import TechnicianDashboard from './pages/technician/Dashboard'
-import DeliveryDashboard from './pages/delivery/Dashboard'
 import CreateStaff from './pages/admin/CreateStaff'
 import InventoryList from './pages/admin/InventoryList'
 import InventoryForm from './pages/admin/InventoryForm'
@@ -82,14 +81,6 @@ function App() {
           }
         />
 
-        <Route
-          path="/delivery"
-          element={
-            <ProtectedRoute allowedRoles={['DELIVERY']}>
-              <DeliveryDashboard />
-            </ProtectedRoute>
-          }
-        />
         <Route path="*" element={<RoleHome />} />
       </Routes>
 
