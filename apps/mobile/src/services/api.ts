@@ -127,6 +127,7 @@ export const productOrdersAPI = {
     items: { productId: string; quantity: number }[]
     paymentMethod: 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
     linkedOrderId: string
+    address: string
     notes?: string
   }) => api.post('/api/product-orders/link-to-service', data),
 }
