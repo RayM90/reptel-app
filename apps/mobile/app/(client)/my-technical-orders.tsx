@@ -576,14 +576,7 @@ export default function MyTechnicalOrdersScreen() {
                           style={styles.linkedProductBtn}
                           onPress={(e) => {
                             e.stopPropagation()
-                            router.push({
-                              pathname: '/(client)/select-linked-products',
-                              params: {
-                                orderId: order.id,
-                                orderNumber: order.orderNumber,
-                                budget: String(order.budget),
-                              },
-                            })
+                            showToast('Esta función estará disponible pronto.', 'info')
                           }}
                         >
                           <Text style={styles.linkedProductBtnText}>🔧 Comprar repuesto para esta orden</Text>

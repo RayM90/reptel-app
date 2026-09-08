@@ -35,18 +35,19 @@ export default function HomeClient() {
 
 const primaryOptions = [
     {
-      id: 'store',
-      emoji: '🛍️',
-      label: 'Tienda',
-      description: 'Accesorios y repuestos de alta calidad',
-      route: '/(client)/store',
-    },
-    {
       id: 'service',
       emoji: '🔧',
       label: 'Servicio Técnico',
       description: 'Solicita tu reparación y hazle seguimiento',
       route: '/(client)/technical-service',
+    },
+    {
+      id: 'store',
+      emoji: '🛍️',
+      label: 'Tienda',
+      description: 'Accesorios y repuestos de alta calidad',
+      // TODO: tienda física en desarrollo — reactivar cuando exista el flujo de mostrador
+      route: null,
     },
   ];
 
@@ -56,7 +57,8 @@ const secondaryOptions = [
       emoji: '📦',
       label: 'Mis Pedidos',
       description: 'Historial de compras',
-      route: '/(client)/my-orders',
+      // TODO: tienda física en desarrollo — reactivar cuando exista el flujo de mostrador
+      route: null,
     },
     {
       id: 'techOrders',
