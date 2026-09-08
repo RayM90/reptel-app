@@ -339,8 +339,7 @@ export const createSelfServiceOrder = async (data: {
 
 // ─────────────────────────────────────────────
 // PAGO ANTICIPADO EN PARTES (abonos)
-// Mismo patrón que ProductOrderPaymentSubmission: el cliente decide
-// libremente cuántos pagos hace y de qué monto, cada envío es un registro
+// El cliente decide libremente cuántos pagos hace y de qué monto, cada envío es un registro
 // independiente, y no puede enviar más de lo que falta para completar el
 // total ($25 = ADVANCE_DELIVERY_AMOUNT + ADVANCE_REVISION_AMOUNT). Al
 // confirmarse abonos que suman el total, la orden pasa a RECEIVED sola.

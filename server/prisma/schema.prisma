@@ -16,10 +16,8 @@ enum Role {
   CASHIER
   TECHNICIAN
   TECHNICIAN_DELIVERY
-  DELIVERY
   CLIENT
   MANAGER
-  SELLER
 }
 
 enum TechnicianStatus {
@@ -47,19 +45,6 @@ enum OrderStatus {
   CANCELLED
 }
 
-enum DeliveryStatus {
-  ASSIGNED
-  LEAVING_STORE
-  ON_THE_WAY
-  AT_LOCATION
-  DIAGNOSING_ON_SITE
-  EQUIPMENT_PICKED_UP
-  AT_THE_SHOP
-  RETURNING
-  DELIVERED
-  CANCELLED
-}
-
 enum PaymentMethod {
   CASH
   TRANSFER
@@ -67,23 +52,6 @@ enum PaymentMethod {
   MOBILE_PAYMENT
   MIXED
   BINANCE
-}
-
-enum ProductOrderStatus {
-  PENDING
-  CONFIRMED
-  REJECTED
-  READY_FOR_PICKUP
-  ASSIGNED_DELIVERY
-  ON_THE_WAY
-  DELIVERED
-  CANCELLED
-}
-
-enum DeliveryMethod {
-  PICKUP_AT_STORE
-  HOME_DELIVERY
-  TECHNICIAN_DELIVERY
 }
 
 enum PartialPaymentStatus {
@@ -121,11 +89,8 @@ model User {
   updatedAt         DateTime         @updatedAt
 
   ordersAsTechnician   Order[]            @relation("TechnicianOrders")
-  productDeliveries    ProductDelivery[]  @relation("DeliveryAgent")
   statusChangesMade    OrderStatusHistory[] @relation("StatusChangeActor")
   advanceSubmissionsConfirmed AdvancePaymentSubmission[] @relation("AdvanceConfirmedBy")
-  productSubmissionsConfirmed ProductOrderPaymentSubmission[] @relation("ProductPaymentConfirmedBy")
-  productOrderStatusChangesMade ProductOrderStatusHistory[] @relation("ProductOrderStatusActor")
   inventoryMovementsMade InventoryMovement[]
 }
 
@@ -136,14 +101,17 @@ model Client {
   idNumber  String   @unique
   phone     String
   email     String?
-  address   String?
+  addressState        String?
+  addressCity         String?
+  addressNeighborhood String?
+  addressStreet       String?
+  addressBuilding     String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user            User?
   orders          Order[]
-  productOrders   ProductOrder[]
 }
 
 // ─────────────────────────────────────────────
@@ -205,8 +173,6 @@ model Order {
 
   statusHistory    OrderStatusHistory[]
 
-  linkedProductOrders ProductOrder[] @relation("ProductOrderToServiceOrder")
-
   @@index([status, deliveredAt])
   @@index([receivedAt])
 }
@@ -245,7 +211,7 @@ model ServiceCatalog {
 }
 
 // ─────────────────────────────────────────────
-// MÓDULO TIENDA
+// MÓDULO TIENDA FÍSICA — catálogo e inventario (mostrador, sin checkout online)
 // ─────────────────────────────────────────────
 
 model ProductCategory {
@@ -274,91 +240,11 @@ model Product {
   categoryId  String
   category    ProductCategory @relation(fields: [categoryId], references: [id])
 
-  orderItems  ProductOrderItem[]
-
   requiresInstallation Boolean @default(false)
 
   movements   InventoryMovement[]
 
   @@map("product")
-}
-
-model ProductOrder {
-  id             String             @id @default(uuid())
-  status         ProductOrderStatus @default(PENDING)
-  deliveryMethod DeliveryMethod
-  address        String?
-  deliveryCost   Decimal?           @db.Decimal(10, 2)
-  total          Decimal            @db.Decimal(10, 2)
-  paymentMethod  PaymentMethod
-  paidAt         DateTime?
-  notes          String?            @db.Text
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  version        Int                @default(0)
-
-  clientId String
-  client   Client @relation(fields: [clientId], references: [id])
-
-  installationCost     Decimal? @db.Decimal(10, 2)
-
-  linkedOrderId String?
-  linkedOrder   Order?  @relation("ProductOrderToServiceOrder", fields: [linkedOrderId], references: [id])
-
-  items              ProductOrderItem[]
-  delivery           ProductDelivery?
-  paymentSubmissions ProductOrderPaymentSubmission[]
-  statusHistory      ProductOrderStatusHistory[]
-
-  @@map("productorder")
-}
-
-model ProductOrderStatusHistory {
-  id        String             @id @default(uuid())
-  status    ProductOrderStatus
-  comment   String?
-  createdAt DateTime           @default(now())
-
-  productOrderId String
-  productOrder   ProductOrder @relation(fields: [productOrderId], references: [id])
-
-  userId String?
-  user   User?   @relation("ProductOrderStatusActor", fields: [userId], references: [id])
-
-  @@map("productorderstatushistory")
-}
-
-model ProductOrderItem {
-  id         String  @id @default(uuid())
-  quantity   Int
-  unitPrice  Decimal @db.Decimal(10, 2)
-  subtotal   Decimal @db.Decimal(10, 2)
-
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-
-  productOrderId String
-  productOrder   ProductOrder @relation(fields: [productOrderId], references: [id])
-
-  @@map("productorderitem")
-}
-
-model ProductOrderPaymentSubmission {
-  id                 String               @id @default(uuid())
-  amount             Decimal              @db.Decimal(10, 2)
-  paymentDetails     Json
-  status             PartialPaymentStatus @default(PENDING)
-  rejectionReason    String?              @db.Text
-  createdAt          DateTime             @default(now())
-  confirmedAt        DateTime?
-
-  productOrderId     String
-  productOrder       ProductOrder         @relation(fields: [productOrderId], references: [id])
-
-  confirmedByUserId  String?
-  confirmedByUser    User?                @relation("ProductPaymentConfirmedBy", fields: [confirmedByUserId], references: [id])
-
-  @@map("productorderpaymentsubmission")
 }
 
 // Historial de movimientos de inventario — registra cada vez que el stock
@@ -381,9 +267,8 @@ model InventoryMovement {
 }
 
 // Abonos parciales del anticipo de Servicio Técnico ($25 = delivery + revisión).
-// Mismo patrón que ProductOrderPaymentSubmission: cada envío es un registro
-// independiente, el cliente puede pagar en varias partes y no puede enviar
-// más de lo que falta para completar el total.
+// Cada envío es un registro independiente, el cliente puede pagar en varias
+// partes y no puede enviar más de lo que falta para completar el total.
 model AdvancePaymentSubmission {
   id                 String               @id @default(uuid())
   amount             Decimal              @db.Decimal(10, 2)
@@ -400,24 +285,6 @@ model AdvancePaymentSubmission {
   confirmedByUser    User?                @relation("AdvanceConfirmedBy", fields: [confirmedByUserId], references: [id])
 
   @@map("advancepaymentsubmission")
-}
-
-model ProductDelivery {
-  id             String         @id @default(uuid())
-  status         DeliveryStatus @default(ASSIGNED)
-  photoUrl       String?        @db.VarChar(500)
-  deliveredAt    DateTime?
-  deliveryCommission Decimal?   @db.Decimal(10, 2)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-
-  productOrderId String       @unique
-  productOrder   ProductOrder @relation(fields: [productOrderId], references: [id])
-
-  agentId String
-  agent   User   @relation("DeliveryAgent", fields: [agentId], references: [id])
-
-  @@map("productdelivery")
 }
 
 // ─────────────────────────────────────────────
@@ -443,4 +310,3 @@ model BusinessSettings {
 
   @@map("businesssettings")
 }
-

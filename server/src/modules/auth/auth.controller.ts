@@ -3,6 +3,7 @@ import { registerUser, loginUser, refreshUserToken, completeNewPasswordChallenge
 import { translateCognitoError } from './auth.errors';
 import prisma from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
+import { formatClientAddress } from '../../lib/clientAddress';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -67,7 +68,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         client: {
           select: {
             id: true,
-            address: true,
+            addressState: true,
+            addressCity: true,
+            addressNeighborhood: true,
+            addressStreet: true,
+            addressBuilding: true,
             phone: true,
             idNumber: true,
           }
@@ -90,7 +95,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           phone: user.phone,
           role: user.role,
           clientId: user.clientId,
-          address: user.client?.address ?? null,
+          address: formatClientAddress(user.client),
         },
         token: tokens.idToken,
         accessToken: tokens.accessToken,
@@ -129,7 +134,11 @@ export const completeNewPassword = async (req: Request, res: Response): Promise<
         client: {
           select: {
             id: true,
-            address: true,
+            addressState: true,
+            addressCity: true,
+            addressNeighborhood: true,
+            addressStreet: true,
+            addressBuilding: true,
             phone: true,
             idNumber: true,
           }
@@ -152,7 +161,7 @@ export const completeNewPassword = async (req: Request, res: Response): Promise<
           phone: user.phone,
           role: user.role,
           clientId: user.clientId,
-          address: user.client?.address ?? null,
+          address: formatClientAddress(user.client),
         },
         token: tokens.idToken,
         accessToken: tokens.accessToken,

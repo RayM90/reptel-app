@@ -1,7 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
 import * as ordersService from './orders.service'
-import { mapPaymentMethod } from '../product-orders/product-orders.service'
+import { mapPaymentMethod } from '../../lib/paymentMethod'
 import { broadcastOrderUpdate } from '../../websocket'
 import prisma from '../../lib/prisma'
 
