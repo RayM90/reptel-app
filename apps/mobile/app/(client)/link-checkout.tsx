@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import { productOrdersAPI } from '../../src/services/api'
+import { useAuthStore } from '../../src/store/auth.store'
 import { useToastStore } from '../../src/store/toast.store'
 import { useConfirm } from '../../src/hooks/useConfirm'
 import { usePaymentInfo, formatPaymentInfo } from '../../src/hooks/usePaymentInfo'
@@ -51,9 +52,17 @@ export default function LinkCheckoutScreen() {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
+  const [useOtherAddress, setUseOtherAddress] = useState(false)
+  const [customAddress, setCustomAddress] = useState('')
   const showToast = useToastStore((state) => state.showToast)
   const confirmDialog = useConfirm()
   const { data: paymentSettings } = usePaymentInfo()
+  const { user } = useAuthStore()
+
+  const getDeliveryAddress = () => {
+    if (useOtherAddress) return customAddress.trim()
+    return user?.address?.trim() || ''
+  }
 
   const handleConfirm = async () => {
     if (!selectedMethod) {
@@ -61,17 +70,28 @@ export default function LinkCheckoutScreen() {
       return
     }
 
+    const address = getDeliveryAddress()
+    if (!address) {
+      showToast(
+        useOtherAddress
+          ? 'Escribe la dirección donde quieres recibir tu repuesto'
+          : 'No tienes una dirección registrada. Activa "usar otra dirección" para escribir una.',
+        'error'
+      )
+      return
+    }
+
     const confirmed = await confirmDialog({
       title: 'Confirmar compra',
-      message: `Total: $${total.toFixed(2)}\nMétodo: ${PAYMENT_LABELS[selectedMethod]}\n\nEl técnico te traerá el repuesto en su próxima visita. ¿Confirmas?`,
+      message: `Total: $${total.toFixed(2)}\nMétodo: ${PAYMENT_LABELS[selectedMethod]}\n\nEl motorizado te traerá el repuesto a la dirección indicada. ¿Confirmas?`,
       confirmLabel: 'Confirmar',
     })
     if (!confirmed) return
 
-    submitOrder()
+    submitOrder(address)
   }
 
-  const submitOrder = async () => {
+  const submitOrder = async (address: string) => {
     if (!selectedMethod) return
     setLoading(true)
     try {
@@ -79,6 +99,7 @@ export default function LinkCheckoutScreen() {
         items: items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
         paymentMethod: selectedMethod,
         linkedOrderId: orderId,
+        address,
         notes: notes.trim() || undefined,
       })
 
@@ -122,10 +143,34 @@ export default function LinkCheckoutScreen() {
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.noteCard}>
-            <Text style={styles.noteText}>
-              🔧 Sin dirección de entrega — el técnico asignado a tu orden trae el repuesto en su próxima visita.
-            </Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>📍 Dirección de entrega</Text>
+            <View style={styles.addressCard}>
+              <Text style={styles.addressName}>{user?.name || 'Cliente'}</Text>
+              <Text style={styles.addressText}>
+                {user?.address || 'Sin dirección registrada'}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.toggleAddressBtn}
+              onPress={() => setUseOtherAddress((prev) => !prev)}
+            >
+              <Text style={styles.toggleAddressText}>
+                {useOtherAddress ? '✕ Cancelar otra dirección' : '✎ Usar otra dirección'}
+              </Text>
+            </TouchableOpacity>
+
+            {useOtherAddress && (
+              <TextInput
+                style={styles.notesInput}
+                placeholder="Escribe la dirección de entrega para este pedido"
+                placeholderTextColor="#9aa5cc"
+                value={customAddress}
+                onChangeText={setCustomAddress}
+                multiline
+              />
+            )}
           </View>
 
           {budgetNumber != null && laborPending != null && (
@@ -221,15 +266,17 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '800', color: '#17247a', marginBottom: 2 },
   subtitle: { fontSize: 14, color: '#5364ad' },
   scrollContent: { paddingHorizontal: 22, paddingBottom: 40 },
-  noteCard: {
-    backgroundColor: '#fff8e1',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#ffe082',
+  addressCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#d0d8ff',
   },
-  noteText: { fontSize: 13, color: '#7a6000', lineHeight: 20 },
+  addressName: { fontSize: 15, fontWeight: '700', color: '#17247a', marginBottom: 4 },
+  addressText: { fontSize: 13, color: '#5364ad', lineHeight: 20 },
+  toggleAddressBtn: { marginTop: 10, alignSelf: 'flex-start' },
+  toggleAddressText: { color: '#5364ad', fontSize: 13, fontWeight: '600' },
   summaryCard: {
     backgroundColor: '#f0f3ff',
     borderRadius: 14,
