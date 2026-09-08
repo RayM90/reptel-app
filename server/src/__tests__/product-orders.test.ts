@@ -33,7 +33,6 @@ beforeAll(async () => {
       idNumber: `TEST-CANCEL-${suffix}`,
       phone: '0000000000',
       email: `cliente-cancel-${suffix}@test.com`,
-      password: '',
     },
   })
 }, 20000)

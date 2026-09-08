@@ -11,7 +11,7 @@ beforeAll(async () => {
   client = await prisma.client.create({
     data: {
       name: 'Cliente', lastName: 'ActorTest', idNumber: `TEST-ACTOR-${suffix}`,
-      phone: '0000000000', email: `cliente-actor-${suffix}@test.com`, password: '',
+      phone: '0000000000', email: `cliente-actor-${suffix}@test.com`,
     },
   })
   device = await prisma.device.create({

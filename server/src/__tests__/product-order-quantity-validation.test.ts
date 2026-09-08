@@ -8,7 +8,7 @@ let product: { id: string }
 beforeAll(async () => {
   const suffix = Date.now()
   client = await prisma.client.create({
-    data: { name: 'Cliente', lastName: 'Qty', idNumber: `TEST-QTY-${suffix}`, phone: '0000000000', email: `qty-${suffix}@test.com`, password: '' },
+    data: { name: 'Cliente', lastName: 'Qty', idNumber: `TEST-QTY-${suffix}`, phone: '0000000000', email: `qty-${suffix}@test.com` },
   })
   category = await prisma.productCategory.create({ data: { name: `Categoria Qty ${suffix}` } })
   product = await prisma.product.create({
