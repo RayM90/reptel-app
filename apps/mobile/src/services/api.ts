@@ -18,7 +18,7 @@ function resolveDevApiUrl(): string | undefined {
 // el desarrollador se entere hasta que falla el login. En builds que no son
 // de desarrollo (producción/staging) no existe hostUri, así que se usa la
 // variable de entorno.
-const API_URL = (__DEV__ && resolveDevApiUrl()) || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
+export const API_URL = (__DEV__ && resolveDevApiUrl()) || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
 
 export const api = axios.create({
   baseURL: API_URL,

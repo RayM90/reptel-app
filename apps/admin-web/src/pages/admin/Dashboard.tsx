@@ -175,6 +175,22 @@ export default function Dashboard() {
     }
   }
 
+  const downloadReceipt = async (order: Order, type: 'intake' | 'final') => {
+    try {
+      const response = await api.get(`/api/orders/${order.id}/receipt/${type}`, { responseType: 'blob' })
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `recibo-${type === 'intake' ? 'recepcion' : 'entrega'}-${order.orderNumber}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      showToast('Error al descargar el recibo', 'error')
+    }
+  }
+
   const clearNewOrder = (id: string) => {
     setNewOrderIds((prev) => {
       if (!prev.has(id)) return prev
@@ -382,6 +398,7 @@ export default function Dashboard() {
                   <th scope="col">Técnico asignado</th>
                   <th scope="col">Pago anticipado</th>
                   <th scope="col">Pago final</th>
+                  <th scope="col">Recibo</th>
                   <th scope="col">Acciones</th>
                 </tr>
               </thead>
@@ -417,6 +434,15 @@ export default function Dashboard() {
                       />
                     </td>
                     <td data-label="Pago final"><PaymentDetailsView details={order.finalPaymentDetails} /></td>
+                    <td data-label="Recibo">
+                      {order.status === 'PENDING_PAYMENT' ? (
+                        '—'
+                      ) : (
+                        <button className="btn btn-outline" onClick={() => downloadReceipt(order, 'intake')}>
+                          📄 Recepción
+                        </button>
+                      )}
+                    </td>
                     <td data-label="Acciones">
                       {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') && order.budget != null && Number(order.budget) === 0 ? (
                         <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => handleCloseZeroBudgetOrder(order)}>
@@ -446,7 +472,7 @@ export default function Dashboard() {
                 <tr>
                   <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>Total presupuesto</td>
                   <td style={{ fontWeight: 700 }}>${activeBudgetTotal.toFixed(2)}</td>
-                  <td colSpan={4}></td>
+                  <td colSpan={5}></td>
                 </tr>
               </tfoot>
             </table>
@@ -470,12 +496,13 @@ export default function Dashboard() {
                 <th scope="col" className="money">Presupuesto</th>
                 <th scope="col" className="money">Comisión técnico</th>
                 <th scope="col">Fecha entrega</th>
+                <th scope="col">Recibos</th>
               </tr>
             </thead>
             <tbody>
               {completedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>Aún no hay servicios entregados o cancelados</td>
+                  <td colSpan={8}>Aún no hay servicios entregados o cancelados</td>
                 </tr>
               ) : (
                 completedOrders.map((order) => (
@@ -491,6 +518,12 @@ export default function Dashboard() {
                     <td className="money" data-label="Presupuesto">{order.budget ? `$${order.budget}` : '—'}</td>
                     <td className="money" data-label="Comisión técnico">{order.technicianCommission ? `$${order.technicianCommission}` : '—'}</td>
                     <td data-label="Fecha entrega">{formatDate(order.deliveredAt)}</td>
+                    <td data-label="Recibos">
+                      <button className="btn btn-outline" onClick={() => downloadReceipt(order, 'intake')}>📄 Recepción</button>{' '}
+                      {order.status === 'DELIVERED' && (
+                        <button className="btn btn-outline" onClick={() => downloadReceipt(order, 'final')}>📄 Entrega</button>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
