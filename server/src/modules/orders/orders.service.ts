@@ -338,6 +338,87 @@ export const createSelfServiceOrder = async (data: {
 }
 
 // ─────────────────────────────────────────────
+// ÓRDENES — CREACIÓN EN MOSTRADOR (tienda física)
+// El cliente está presente y ya pagó los $15 de revisión en persona
+// (verificado por el staff), por eso la orden nace directo en RECEIVED
+// — sin AdvancePaymentSubmission ni paso de confirmación posterior. No
+// hay costo de delivery (no hay motorizado en este flujo).
+// ─────────────────────────────────────────────
+
+export const createCounterOrder = async (data: {
+  actorEmail: string
+  clientId: string
+  device: {
+    type: string
+    brand: string
+    model: string
+    serialNumber?: string
+    color: string
+    accessories: string
+    devicePassword?: string
+  }
+  problem: string
+  advancePaymentMethod: string // ya mapeado al enum PaymentMethod de Prisma
+  serviceCatalogId?: string
+}) => {
+  const actor = await prisma.user.findUnique({ where: { email: data.actorEmail } })
+
+  const orderNumber = generateOrderNumber()
+  const resolvedTechnicianId = await assignTechnician()
+
+  const order = await prisma.$transaction(async (tx) => {
+    const device = await tx.device.create({
+      data: {
+        type: data.device.type as any,
+        brand: data.device.brand,
+        model: data.device.model,
+        serialNumber: data.device.serialNumber,
+        color: data.device.color,
+        accessories: data.device.accessories,
+        devicePassword: data.device.devicePassword,
+      },
+    })
+
+    return await tx.order.create({
+      data: {
+        orderNumber,
+        clientId: data.clientId,
+        deviceId: device.id,
+        problem: data.problem,
+        technicianId: resolvedTechnicianId,
+        status: 'RECEIVED',
+        revisionAmount: ADVANCE_REVISION_AMOUNT,
+        advancePaymentMethod: data.advancePaymentMethod as any,
+        serviceCatalogId: data.serviceCatalogId ?? null,
+        statusHistory: {
+          create: {
+            status: 'RECEIVED',
+            comment: `Orden creada en mostrador por ${actor?.name ?? 'personal de mostrador'} — pago de revisión ($${ADVANCE_REVISION_AMOUNT}) verificado en persona`,
+            userId: actor?.id,
+          },
+        },
+      },
+      include: {
+        client: true,
+        device: true,
+        technician: { select: { id: true, name: true } },
+        statusHistory: true,
+      },
+    })
+  })
+
+  if (resolvedTechnicianId) {
+    await incrementTechnicianLoad(resolvedTechnicianId)
+  }
+
+  return {
+    ...order,
+    technicianAutoAssigned: !!resolvedTechnicianId,
+    noTechnicianAvailable: !resolvedTechnicianId,
+  }
+}
+
+// ─────────────────────────────────────────────
 // PAGO ANTICIPADO EN PARTES (abonos)
 // El cliente decide libremente cuántos pagos hace y de qué monto, cada envío es un registro
 // independiente, y no puede enviar más de lo que falta para completar el
