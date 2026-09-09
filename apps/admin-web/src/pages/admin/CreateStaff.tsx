@@ -7,6 +7,8 @@ type StaffRole = 'TECHNICIAN_DELIVERY' | 'TECHNICIAN'
 export default function CreateStaff() {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [idNumber, setIdNumber] = useState('')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<StaffRole>('TECHNICIAN_DELIVERY')
@@ -20,10 +22,12 @@ export default function CreateStaff() {
     setSuccess('')
     setLoading(true)
     try {
-      await api.post('/api/auth/staff', { email, password, name, role, phone })
-      setSuccess(`Empleado "${name}" creado. Contraseña temporal: ${password} — entrégasela para su primer inicio de sesión.`)
+      await api.post('/api/auth/staff', { email, password, name, lastName, idNumber, role, phone })
+      setSuccess(`Empleado "${name} ${lastName}" creado. Contraseña temporal: ${password} — entrégasela para su primer inicio de sesión.`)
       setEmail('')
       setName('')
+      setLastName('')
+      setIdNumber('')
       setPhone('')
       setPassword('')
       setRole('TECHNICIAN_DELIVERY')
@@ -42,11 +46,29 @@ export default function CreateStaff() {
       <div className="card" style={{ maxWidth: 400 }}>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>Nombre completo</label>
+            <label>Nombre</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>Apellido</label>
+            <input
+              type="text"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>Cédula</label>
+            <input
+              type="text"
+              value={idNumber}
+              onChange={(e) => setIdNumber(e.target.value)}
               required
             />
           </div>

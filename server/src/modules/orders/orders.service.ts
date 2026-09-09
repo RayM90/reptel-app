@@ -393,7 +393,7 @@ export const createCounterOrder = async (data: {
         statusHistory: {
           create: {
             status: 'RECEIVED',
-            comment: `Orden creada en mostrador por ${actor?.name ?? 'personal de mostrador'} — pago de revisión ($${ADVANCE_REVISION_AMOUNT}) verificado en persona`,
+            comment: `Orden creada en mostrador por ${actor ? `${actor.name} ${actor.lastName ?? ''}`.trim() : 'personal de mostrador'} — pago de revisión ($${ADVANCE_REVISION_AMOUNT}) verificado en persona`,
             userId: actor?.id,
           },
         },

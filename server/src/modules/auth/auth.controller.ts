@@ -61,6 +61,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       select: {
         id: true,
         name: true,
+        lastName: true,
         email: true,
         phone: true,
         role: true,
@@ -91,6 +92,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         user: {
           id: user.id,
           name: user.name,
+          lastName: user.lastName,
           email: user.email,
           phone: user.phone,
           role: user.role,
@@ -127,6 +129,7 @@ export const completeNewPassword = async (req: Request, res: Response): Promise<
       select: {
         id: true,
         name: true,
+        lastName: true,
         email: true,
         phone: true,
         role: true,
@@ -157,6 +160,7 @@ export const completeNewPassword = async (req: Request, res: Response): Promise<
         user: {
           id: user.id,
           name: user.name,
+          lastName: user.lastName,
           email: user.email,
           phone: user.phone,
           role: user.role,
@@ -200,9 +204,9 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
  */
 export const createStaff = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, name, role, phone } = req.body;
+    const { email, password, name, lastName, idNumber, role, phone } = req.body;
 
-    if (!email || !password || !name || !role) {
+    if (!email || !password || !name || !lastName || !idNumber || !role) {
       res.status(400).json({ message: 'Todos los campos son requeridos' });
       return;
     }
@@ -217,7 +221,13 @@ export const createStaff = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const result = await createStaffUser(email, name, password, role, phone);
+    const existing = await prisma.user.findUnique({ where: { idNumber } });
+    if (existing) {
+      res.status(400).json({ message: 'Ya existe un empleado con esa cédula' });
+      return;
+    }
+
+    const result = await createStaffUser(email, name, password, role, phone, lastName, idNumber);
     res.status(201).json(result);
   } catch (error: any) {
     res.status(400).json({ message: translateCognitoError(error) || 'Error al crear el empleado' });
