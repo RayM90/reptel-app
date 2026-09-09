@@ -27,12 +27,15 @@ afterAll(async () => {
   if (createdOrderId) {
     const order = await prisma.order.findUnique({
       where: { id: createdOrderId },
-      select: { technicianId: true },
+      select: { technicianId: true, deviceId: true },
     })
     await prisma.orderStatusHistory.deleteMany({ where: { orderId: createdOrderId } })
     await prisma.order.delete({ where: { id: createdOrderId } }).catch(() => {})
     if (order?.technicianId) {
       await decrementTechnicianLoad(order.technicianId)
+    }
+    if (order?.deviceId) {
+      await prisma.device.delete({ where: { id: order.deviceId } }).catch(() => {})
     }
   }
   await prisma.client.delete({ where: { id: client.id } }).catch(() => {})
