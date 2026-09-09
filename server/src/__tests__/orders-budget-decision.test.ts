@@ -74,12 +74,12 @@ beforeAll(async () => {
 afterAll(async () => {
   await prisma.orderStatusHistory.deleteMany({ where: { order: { clientId: { in: [clientA.id, clientB.id] } } } })
   await prisma.order.deleteMany({ where: { clientId: { in: [clientA.id, clientB.id] } } })
-  await prisma.device.delete({ where: { id: device.id } }).catch(() => {})
-  await prisma.user.delete({ where: { id: userA.id } }).catch(() => {})
-  await prisma.user.delete({ where: { id: userB.id } }).catch(() => {})
-  await prisma.user.delete({ where: { id: technician.id } }).catch(() => {})
-  await prisma.client.delete({ where: { id: clientA.id } }).catch(() => {})
-  await prisma.client.delete({ where: { id: clientB.id } }).catch(() => {})
+  await prisma.device.delete({ where: { id: device.id } }).catch((e) => console.error('DEVICE DELETE FAILED', e))
+  await prisma.user.delete({ where: { id: userA.id } }).catch((e) => console.error('USER A DELETE FAILED', e))
+  await prisma.user.delete({ where: { id: userB.id } }).catch((e) => console.error('USER B DELETE FAILED', e))
+  await prisma.user.delete({ where: { id: technician.id } }).catch((e) => console.error('TECH DELETE FAILED', e))
+  await prisma.client.delete({ where: { id: clientA.id } }).catch((e) => console.error('CLIENT A DELETE FAILED', e))
+  await prisma.client.delete({ where: { id: clientB.id } }).catch((e) => console.error('CLIENT B DELETE FAILED', e))
 })
 
 describe('orders.service — approveBudget', () => {
