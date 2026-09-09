@@ -272,7 +272,7 @@ export default function TechnicianDashboard() {
       <div className="page-header">
         <div>
           <h1>Panel del Técnico</h1>
-          <p>Hola, {user?.name}</p>
+          <p>Hola, {user?.lastName ? `${user.name} ${user.lastName}` : user?.name}</p>
         </div>
         <button className="btn btn-secondary" onClick={() => fetchData()}>
           ↻ Actualizar

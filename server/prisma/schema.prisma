@@ -72,6 +72,8 @@ enum InventoryMovementType {
 model User {
   id                String           @id @default(uuid())
   name              String
+  lastName          String?
+  idNumber          String?          @unique
   email             String           @unique
   phone             String?
   password          String

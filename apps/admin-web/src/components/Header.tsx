@@ -24,7 +24,7 @@ export default function Header() {
       </span>
       {user && (
         <div className="header-bar__user">
-          <span>{user.name}</span>
+          <span>{user.lastName ? `${user.name} ${user.lastName}` : user.name}</span>
           <span className="header-bar__role">{ROLE_LABELS[user.role] ?? user.role}</span>
           <button className="btn btn-outline" onClick={handleLogout}>
             Cerrar sesión
