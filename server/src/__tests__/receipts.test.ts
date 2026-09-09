@@ -95,6 +95,19 @@ describe('Orders — GET /:id/receipt/*', () => {
     expect(res.headers['content-type']).toBe('application/pdf')
   }, 10000)
 
+  it('recibo de recepción: 400 si la orden sigue en PENDING_PAYMENT', async () => {
+    await prisma.order.update({ where: { id: orderId }, data: { status: 'PENDING_PAYMENT' } })
+
+    const res = await request(app)
+      .get(`/api/orders/${orderId}/receipt/intake`)
+      .set('Authorization', `Bearer ${authToken}`)
+
+    expect(res.status).toBe(400)
+    expect(res.body.success).toBe(false)
+
+    await prisma.order.update({ where: { id: orderId }, data: { status: 'RECEIVED' } })
+  }, 10000)
+
   it('recibo final: 400 si la orden no está DELIVERED', async () => {
     const res = await request(app)
       .get(`/api/orders/${orderId}/receipt/final`)

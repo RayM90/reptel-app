@@ -26,6 +26,10 @@ export const downloadIntakeReceipt = async (req: AuthRequest, res: Response): Pr
       res.status(404).json({ success: false, message: 'Orden no encontrada' })
       return
     }
+    if (order.status === 'PENDING_PAYMENT') {
+      res.status(400).json({ success: false, message: 'El recibo de recepción no está disponible: el anticipo aún no está confirmado' })
+      return
+    }
     if (!(await canAccessOrder(req, order))) {
       res.status(403).json({ success: false, message: 'No tienes permisos para esta acción' })
       return
