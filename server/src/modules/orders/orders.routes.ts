@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import * as ordersController from './orders.controller'
+import * as receiptsController from '../receipts/receipts.controller'
 import { authenticate, authorize } from '../../middleware/auth.middleware'
 import { trackOrderLimiter } from '../../middleware/rateLimit.middleware'
 
@@ -48,6 +49,11 @@ router.get('/', authenticate, authorize('ADMIN'), ordersController.getOrders)
 
 // Obtener una orden por ID — ADMIN
 router.get('/:id', authenticate, authorize('ADMIN'), ordersController.getOrder)
+
+// Recibos PDF — el propio cliente dueño de la orden, o ADMIN/técnico
+// (la validación fina de "es tu orden" vive dentro del controller)
+router.get('/:id/receipt/intake', authenticate, receiptsController.downloadIntakeReceipt)
+router.get('/:id/receipt/final', authenticate, receiptsController.downloadFinalReceipt)
 
 // Crear una nueva orden (uso interno/admin — no cliente) — ADMIN
 router.post('/', authenticate, authorize('ADMIN'), ordersController.createOrder)
