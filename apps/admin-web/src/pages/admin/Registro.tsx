@@ -32,6 +32,24 @@ interface CartItem {
   stock: number
 }
 
+interface CatalogItem {
+  id: string
+  name: string
+  basePrice: string
+}
+
+const emptyOrderForm = {
+  deviceType: 'LAPTOP',
+  brand: '',
+  model: '',
+  color: '',
+  accessories: '',
+  devicePassword: '',
+  problem: '',
+  serviceCatalogId: '',
+  advancePaymentMethod: 'PAGO_MOVIL',
+}
+
 const emptyForm = {
   name: '',
   lastName: '',
@@ -67,8 +85,17 @@ export default function Registro() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [confirmingSale, setConfirmingSale] = useState(false)
 
+  // ── Paso 2: orden de servicio técnico ──
+  const [catalog, setCatalog] = useState<CatalogItem[]>([])
+  const [orderForm, setOrderForm] = useState(emptyOrderForm)
+  const [creatingOrder, setCreatingOrder] = useState(false)
+  const [orderError, setOrderError] = useState('')
+
   useEffect(() => {
-    if (step === 'sale') fetchProducts()
+    if (step === 'sale') {
+      fetchProducts()
+      fetchCatalog()
+    }
   }, [step])
 
   const fetchProducts = async () => {
@@ -83,6 +110,15 @@ export default function Registro() {
     }
   }
 
+  const fetchCatalog = async () => {
+    try {
+      const response = await api.get('/api/catalog')
+      setCatalog(response.data.data)
+    } catch (err) {
+      showToast('No se pudo cargar el catálogo de servicios', 'error')
+    }
+  }
+
   const resetAll = () => {
     setStep('client')
     setIdNumber('')
@@ -94,6 +130,8 @@ export default function Registro() {
     setCart([])
     setSelectedProductId('')
     setQuantity('1')
+    setOrderForm(emptyOrderForm)
+    setOrderError('')
   }
 
   const handleSearch = async () => {
@@ -192,6 +230,43 @@ export default function Registro() {
       fetchProducts() // refrescar stock por si algún ítem sí se descontó antes del error
     } finally {
       setConfirmingSale(false)
+    }
+  }
+
+  const handleCreateOrder = async () => {
+    if (!activeClient) return
+    if (!orderForm.brand || !orderForm.model || !orderForm.color || !orderForm.accessories) {
+      setOrderError('Marca, modelo, color y accesorios son requeridos')
+      return
+    }
+    if (!orderForm.problem) {
+      setOrderError('La falla o servicio reportado es requerido')
+      return
+    }
+
+    setCreatingOrder(true)
+    setOrderError('')
+    try {
+      const response = await api.post('/api/orders/counter', {
+        clientId: activeClient.id,
+        device: {
+          type: orderForm.deviceType,
+          brand: orderForm.brand,
+          model: orderForm.model,
+          color: orderForm.color,
+          accessories: orderForm.accessories,
+          devicePassword: orderForm.devicePassword || undefined,
+        },
+        problem: orderForm.problem,
+        advancePaymentMethod: orderForm.advancePaymentMethod,
+        serviceCatalogId: orderForm.serviceCatalogId || undefined,
+      })
+      showToast(`✅ Orden ${response.data.data.orderNumber} creada para ${activeClient.name} ${activeClient.lastName}`, 'success')
+      setOrderForm(emptyOrderForm)
+    } catch (err: any) {
+      setOrderError(err?.response?.data?.message || 'Error al crear la orden')
+    } finally {
+      setCreatingOrder(false)
     }
   }
 
@@ -351,13 +426,74 @@ export default function Registro() {
               <p style={{ marginTop: 16 }}>
                 <button className="btn btn-primary" onClick={handleConfirmSale} disabled={cart.length === 0 || confirmingSale}>
                   {confirmingSale ? 'Registrando…' : 'Confirmar venta'}
-                </button>{' '}
-                <button className="btn btn-outline" onClick={resetAll}>
-                  Finalizar sin venta
                 </button>
               </p>
             </>
           )}
+
+          <hr style={{ margin: '24px 0' }} />
+
+          <h2>Orden de servicio técnico</h2>
+          <div className="form-group">
+            <label>Tipo de equipo</label>
+            <select value={orderForm.deviceType} onChange={(e) => setOrderForm({ ...orderForm, deviceType: e.target.value })}>
+              <option value="LAPTOP">Laptop</option>
+              <option value="PC">PC</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Marca</label>
+            <input type="text" value={orderForm.brand} onChange={(e) => setOrderForm({ ...orderForm, brand: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label>Modelo</label>
+            <input type="text" value={orderForm.model} onChange={(e) => setOrderForm({ ...orderForm, model: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label>Color</label>
+            <input type="text" value={orderForm.color} onChange={(e) => setOrderForm({ ...orderForm, color: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label>Accesorios</label>
+            <input type="text" value={orderForm.accessories} onChange={(e) => setOrderForm({ ...orderForm, accessories: e.target.value })} placeholder="Cargador, mouse, etc." />
+          </div>
+          <div className="form-group">
+            <label>Contraseña del equipo (opcional)</label>
+            <input type="text" value={orderForm.devicePassword} onChange={(e) => setOrderForm({ ...orderForm, devicePassword: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label>Servicio del catálogo (opcional, solo referencia)</label>
+            <select value={orderForm.serviceCatalogId} onChange={(e) => setOrderForm({ ...orderForm, serviceCatalogId: e.target.value })}>
+              <option value="">— Ninguno / diagnóstico manual —</option>
+              {catalog.map((c) => (
+                <option key={c.id} value={c.id}>{c.name} (${c.basePrice})</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Descripción del problema</label>
+            <textarea value={orderForm.problem} onChange={(e) => setOrderForm({ ...orderForm, problem: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label>Método de pago de la revisión ($15)</label>
+            <select value={orderForm.advancePaymentMethod} onChange={(e) => setOrderForm({ ...orderForm, advancePaymentMethod: e.target.value })}>
+              <option value="PAGO_MOVIL">Pago Móvil</option>
+              <option value="TRANSFERENCIA">Transferencia</option>
+              <option value="BINANCE">Binance</option>
+            </select>
+          </div>
+
+          {orderError && <p className="alert-error">{orderError}</p>}
+
+          <button className="btn btn-primary" onClick={handleCreateOrder} disabled={creatingOrder}>
+            {creatingOrder ? 'Creando…' : 'Registrar orden'}
+          </button>
+
+          <p style={{ marginTop: 16 }}>
+            <button className="btn btn-outline" onClick={resetAll}>
+              Finalizar — buscar otro cliente
+            </button>
+          </p>
         </div>
       )}
     </div>

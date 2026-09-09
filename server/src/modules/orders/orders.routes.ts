@@ -17,6 +17,10 @@ router.post('/self-service', authenticate, authorize('CLIENT'), ordersController
 // Historial de órdenes propias del cliente
 router.get('/my-orders', authenticate, authorize('CLIENT'), ordersController.getMyTechOrders)
 
+// ─── Mostrador (tienda física) — ADMIN o TECHNICIAN ───────────────
+// Crea device + order en transacción, ya en RECEIVED (pago verificado en persona)
+router.post('/counter', authenticate, authorize('ADMIN', 'TECHNICIAN'), ordersController.createCounterOrder)
+
 // Enviar un abono del anticipo (pago en partes — el cliente decide monto y cuántos)
 router.post('/:id/advance-payment-installment', authenticate, authorize('CLIENT'), ordersController.submitAdvancePaymentInstallment)
 

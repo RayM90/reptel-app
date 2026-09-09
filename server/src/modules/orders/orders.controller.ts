@@ -147,6 +147,76 @@ export const createMyOrder = async (req: AuthRequest, res: Response): Promise<vo
 }
 
 // ─────────────────────────────────────────────
+// CREAR ORDEN EN MOSTRADOR (tienda física — personal TECHNICIAN/ADMIN)
+// El pago de la revisión ($15) ya fue verificado en persona por quien
+// registra, por eso no requiere advancePaymentMethod pendiente de
+// confirmación — la orden nace directo en RECEIVED.
+// ─────────────────────────────────────────────
+
+export const createCounterOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const actorEmail = req.user?.email
+    if (!actorEmail) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const { clientId, device, problem, advancePaymentMethod, serviceCatalogId } = req.body
+
+    if (!clientId) {
+      res.status(400).json({ success: false, message: 'El cliente es requerido' })
+      return
+    }
+
+    if (!device || !device.type || !device.brand || !device.model || !device.color || !device.accessories) {
+      res.status(400).json({
+        success: false,
+        message: 'Datos del equipo incompletos (type, brand, model, color y accessories son requeridos)',
+      })
+      return
+    }
+
+    if (!problem) {
+      res.status(400).json({ success: false, message: 'La falla o servicio reportado es requerido' })
+      return
+    }
+
+    if (!advancePaymentMethod) {
+      res.status(400).json({ success: false, message: 'El método de pago de la revisión es requerido' })
+      return
+    }
+
+    const mappedMethod = mapPaymentMethod(advancePaymentMethod)
+    if (!mappedMethod) {
+      res.status(400).json({
+        success: false,
+        message: `Método de pago no soportado: ${advancePaymentMethod}`,
+      })
+      return
+    }
+
+    const order = await ordersService.createCounterOrder({
+      actorEmail,
+      clientId,
+      device,
+      problem,
+      advancePaymentMethod: mappedMethod,
+      serviceCatalogId,
+    })
+
+    broadcastOrderUpdate({
+      type: 'ORDER_CREATED',
+      data: order,
+    })
+
+    res.status(201).json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR CREAR ORDEN (MOSTRADOR):', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al crear la orden' })
+  }
+}
+
+// ─────────────────────────────────────────────
 // CLIENTE — Enviar un abono del anticipo (pago en partes)
 // El cliente decide libremente cuántos abonos hace y de qué monto, hasta
 // completar el total.
