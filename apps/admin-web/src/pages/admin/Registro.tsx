@@ -22,21 +22,6 @@ interface Client {
   addressBuilding: string | null
 }
 
-interface Product {
-  id: string
-  name: string
-  price: string
-  stock: number
-  category: { id: string; name: string }
-}
-
-interface CartItem {
-  productId: string
-  name: string
-  quantity: number
-  stock: number
-}
-
 interface CatalogItem {
   id: string
   name: string
@@ -71,12 +56,6 @@ export default function Registro() {
   const showToast = useToastStore((state) => state.showToast)
   const role = useAuthStore((state) => state.user?.role)
 
-  const [todaySales, setTodaySales] = useState<{ salesCount: number; salesTotal: number } | null>(null)
-
-  useEffect(() => {
-    api.get('/api/products/summary/today').then((res) => setTodaySales(res.data.data)).catch(() => {})
-  }, [])
-
   const [step, setStep] = useState<'client' | 'sale'>('client')
 
   // ── Paso 1: identificar/crear cliente ──
@@ -89,14 +68,6 @@ export default function Registro() {
   const [savingClient, setSavingClient] = useState(false)
   const [clientError, setClientError] = useState('')
   const [activeClient, setActiveClient] = useState<Client | null>(null)
-
-  // ── Paso 2: venta de mostrador ──
-  const [products, setProducts] = useState<Product[]>([])
-  const [productsLoading, setProductsLoading] = useState(false)
-  const [selectedProductId, setSelectedProductId] = useState('')
-  const [quantity, setQuantity] = useState('1')
-  const [cart, setCart] = useState<CartItem[]>([])
-  const [confirmingSale, setConfirmingSale] = useState(false)
 
   // ── Paso 2: orden de servicio técnico ──
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
@@ -115,22 +86,9 @@ export default function Registro() {
 
   useEffect(() => {
     if (step === 'sale') {
-      fetchProducts()
       fetchCatalog()
     }
   }, [step])
-
-  const fetchProducts = async () => {
-    setProductsLoading(true)
-    try {
-      const response = await api.get('/api/products')
-      setProducts(response.data.data)
-    } catch (err) {
-      showToast('No se pudieron cargar los productos', 'error')
-    } finally {
-      setProductsLoading(false)
-    }
-  }
 
   const fetchCatalog = async () => {
     try {
@@ -150,9 +108,6 @@ export default function Registro() {
     setForm(emptyForm)
     setClientError('')
     setActiveClient(null)
-    setCart([])
-    setSelectedProductId('')
-    setQuantity('1')
     setOrderForm(emptyOrderForm)
     setOrderError('')
     setNoAccessories(false)
@@ -239,48 +194,6 @@ export default function Registro() {
       setClientError(err?.response?.data?.message || 'Error al crear el cliente')
     } finally {
       setSavingClient(false)
-    }
-  }
-
-  const alreadyInCart = (productId: string) =>
-    cart.filter((c) => c.productId === productId).reduce((sum, c) => sum + c.quantity, 0)
-
-  const handleAddToCart = () => {
-    const product = products.find((p) => p.id === selectedProductId)
-    if (!product) return
-    const qty = Number(quantity)
-    if (!Number.isInteger(qty) || qty <= 0) {
-      showToast('La cantidad debe ser un número entero mayor a 0', 'error')
-      return
-    }
-    const available = product.stock - alreadyInCart(product.id)
-    if (qty > available) {
-      showToast(`Solo hay ${available} unidades disponibles de "${product.name}"`, 'error')
-      return
-    }
-    setCart((prev) => [...prev, { productId: product.id, name: product.name, quantity: qty, stock: product.stock }])
-    setQuantity('1')
-  }
-
-  const handleRemoveFromCart = (index: number) => {
-    setCart((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  const handleConfirmSale = async () => {
-    if (cart.length === 0) return
-    setConfirmingSale(true)
-    try {
-      for (const item of cart) {
-        await api.post(`/api/products/${item.productId}/sell`, { quantity: item.quantity })
-      }
-      showToast(`✅ Venta registrada para ${activeClient?.name} ${activeClient?.lastName}`, 'success')
-      resetAll()
-      api.get('/api/products/summary/today').then((res) => setTodaySales(res.data.data)).catch(() => {})
-    } catch (err: any) {
-      showToast(err?.response?.data?.message || 'Error al registrar la venta', 'error')
-      fetchProducts() // refrescar stock por si algún ítem sí se descontó antes del error
-    } finally {
-      setConfirmingSale(false)
     }
   }
 
@@ -408,13 +321,8 @@ export default function Registro() {
   return (
     <div className="page-container">
       <div className="page-header">
-        <h1>Registro — Tienda Física</h1>
+        <h1>Registro — Recepción</h1>
       </div>
-      {todaySales && (
-        <p className="form-hint">
-          Ventas de mostrador hoy: <strong>{todaySales.salesCount}</strong> — monto aproximado: <strong>${todaySales.salesTotal.toFixed(2)}</strong>
-        </p>
-      )}
       {role === 'ADMIN' && <p><Link to="/admin">← Volver al Panel de Administrador</Link></p>}
       {role === 'TECHNICIAN' && <p><Link to="/technician">🔧 Ver reparaciones asignadas</Link></p>}
 
@@ -523,71 +431,6 @@ export default function Registro() {
         <div className="card" style={{ maxWidth: 600 }}>
           <p><strong>Cliente:</strong> {activeClient.name} {activeClient.lastName} — {activeClient.phone}</p>
           <p><button className="btn btn-outline" onClick={resetAll}>← Buscar otro cliente</button></p>
-
-          <h2>Venta de productos</h2>
-          {productsLoading ? (
-            <p>Cargando productos…</p>
-          ) : (
-            <>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 12 }}>
-                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                  <label>Producto</label>
-                  <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)}>
-                    <option value="">— Seleccionar —</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id} disabled={p.stock - alreadyInCart(p.id) <= 0}>
-                        {p.name} (stock: {p.stock - alreadyInCart(p.id)}) — ${p.price}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group" style={{ width: 100, marginBottom: 0 }}>
-                  <label>Cantidad</label>
-                  <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
-                </div>
-                <button className="btn btn-secondary" onClick={handleAddToCart} disabled={!selectedProductId}>
-                  Agregar
-                </button>
-              </div>
-
-              {cart.length === 0 ? (
-                <p>No hay productos agregados todavía.</p>
-              ) : (
-                <div className="table-wrapper">
-                  <table className="styled-table">
-                    <thead>
-                      <tr>
-                        <th scope="col">Producto</th>
-                        <th scope="col">Cantidad</th>
-                        <th scope="col">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cart.map((item, index) => (
-                        <tr key={`${item.productId}-${index}`}>
-                          <td data-label="Producto">{item.name}</td>
-                          <td data-label="Cantidad">{item.quantity}</td>
-                          <td data-label="Acciones">
-                            <button className="btn btn-danger" onClick={() => handleRemoveFromCart(index)}>
-                              Quitar
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              <p style={{ marginTop: 16 }}>
-                <button className="btn btn-primary" onClick={handleConfirmSale} disabled={cart.length === 0 || confirmingSale}>
-                  {confirmingSale ? 'Registrando…' : 'Confirmar venta'}
-                </button>
-              </p>
-            </>
-          )}
-
-          <hr style={{ margin: '24px 0' }} />
 
           <h2>Orden de servicio técnico</h2>
           <div className="form-group">
