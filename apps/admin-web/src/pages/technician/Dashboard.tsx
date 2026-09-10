@@ -364,7 +364,7 @@ export default function TechnicianDashboard() {
         </button>
       </div>
 
-      {user?.role === 'TECHNICIAN' && <p><Link to="/registro">🧾 Ir a Registro (mostrador)</Link></p>}
+      {user?.role === 'TECHNICIAN' && <p><Link to="/registro">🧾 Ir a Registro (Recepción)</Link></p>}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         <button

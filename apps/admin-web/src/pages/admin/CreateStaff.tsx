@@ -93,7 +93,7 @@ export default function CreateStaff() {
               onChange={(e) => setRole(e.target.value as StaffRole)}
             >
               <option value="TECHNICIAN_DELIVERY">Técnico de Reparación (motorizado)</option>
-              <option value="TECHNICIAN">Personal de Mostrador (tienda física)</option>
+              <option value="TECHNICIAN">Personal de Recepción</option>
             </select>
           </div>
           <div className="form-group">
