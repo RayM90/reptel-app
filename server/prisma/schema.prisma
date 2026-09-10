@@ -65,13 +65,15 @@ enum InventoryMovementType {
   OUT
 }
 
-// Por dónde salió/entró el producto. Hoy solo existe MOSTRADOR (única vía real
-// de venta); SERVICIO_TECNICO queda reservado para si se reintroduce el flujo
-// de repuesto vinculado a una orden (eliminado en el sub-proyecto de
-// remoción de tienda online).
+// Por dónde salió/entró el producto. MOSTRADOR queda como valor histórico —
+// ya no se genera venta al público, así que ningún código nuevo lo produce.
+// AJUSTE_MANUAL es el default: ajustes de stock que hace el admin desde el
+// panel (creación de producto, corrección manual). SERVICIO_TECNICO es el
+// repuesto usado en una orden de reparación.
 enum InventoryChannel {
   MOSTRADOR
   SERVICIO_TECNICO
+  AJUSTE_MANUAL
 }
 
 // ─────────────────────────────────────────────
@@ -265,7 +267,7 @@ model Product {
 model InventoryMovement {
   id        String                 @id @default(uuid())
   type      InventoryMovementType
-  channel   InventoryChannel       @default(MOSTRADOR)
+  channel   InventoryChannel       @default(AJUSTE_MANUAL)
   quantity  Int
   reason    String
   createdAt DateTime               @default(now())
