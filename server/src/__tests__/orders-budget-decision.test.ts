@@ -32,7 +32,7 @@ beforeAll(async () => {
     data: {
       name: 'Cliente', lastName: 'Presupuesto A',
       idNumber: `TEST-BUDGET-A-${suffix}`, phone: '0000000001',
-      email: `cliente-budget-a-${suffix}@test.com`, password: '',
+      email: `cliente-budget-a-${suffix}@test.com`,
     },
   })
   userA = await prisma.user.create({
@@ -47,7 +47,7 @@ beforeAll(async () => {
     data: {
       name: 'Cliente', lastName: 'Presupuesto B',
       idNumber: `TEST-BUDGET-B-${suffix}`, phone: '0000000002',
-      email: `cliente-budget-b-${suffix}@test.com`, password: '',
+      email: `cliente-budget-b-${suffix}@test.com`,
     },
   })
   userB = await prisma.user.create({
@@ -74,19 +74,19 @@ beforeAll(async () => {
 afterAll(async () => {
   await prisma.orderStatusHistory.deleteMany({ where: { order: { clientId: { in: [clientA.id, clientB.id] } } } })
   await prisma.order.deleteMany({ where: { clientId: { in: [clientA.id, clientB.id] } } })
-  await prisma.device.delete({ where: { id: device.id } }).catch(() => {})
-  await prisma.user.delete({ where: { id: userA.id } }).catch(() => {})
-  await prisma.user.delete({ where: { id: userB.id } }).catch(() => {})
-  await prisma.user.delete({ where: { id: technician.id } }).catch(() => {})
-  await prisma.client.delete({ where: { id: clientA.id } }).catch(() => {})
-  await prisma.client.delete({ where: { id: clientB.id } }).catch(() => {})
+  await prisma.device.delete({ where: { id: device.id } }).catch((e) => console.error('DEVICE DELETE FAILED', e))
+  await prisma.user.delete({ where: { id: userA.id } }).catch((e) => console.error('USER A DELETE FAILED', e))
+  await prisma.user.delete({ where: { id: userB.id } }).catch((e) => console.error('USER B DELETE FAILED', e))
+  await prisma.user.delete({ where: { id: technician.id } }).catch((e) => console.error('TECH DELETE FAILED', e))
+  await prisma.client.delete({ where: { id: clientA.id } }).catch((e) => console.error('CLIENT A DELETE FAILED', e))
+  await prisma.client.delete({ where: { id: clientB.id } }).catch((e) => console.error('CLIENT B DELETE FAILED', e))
 })
 
 describe('orders.service — approveBudget', () => {
-  it('aprueba una orden en WAITING_APPROVAL', async () => {
+  it('aprueba una orden en WAITING_APPROVAL y autoriza a reparar de inmediato', async () => {
     const order = await makeOrder()
     const result = await approveBudget(order.id, userA.email)
-    expect(result.status).toBe('APPROVED')
+    expect(result.status).toBe('REPAIRING')
     expect(result.budgetApproved).toBe(true)
   })
 

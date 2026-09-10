@@ -1,6 +1,7 @@
 import request from 'supertest'
 import app from '../app'
 import prisma from '../lib/prisma'
+import { authorize } from '../middleware/auth.middleware'
 
 let adminToken: string
 let productId: string
@@ -12,14 +13,45 @@ beforeAll(async () => {
     .send({ email: 'admin@reptel.com', password: 'RepTel2024*' })
   adminToken = loginRes.body.data.token
 
-  const listRes = await request(app).get('/api/products')
+  const listRes = await request(app)
+    .get('/api/products')
+    .set('Authorization', `Bearer ${adminToken}`)
   productId = listRes.body.data?.[0]?.id
 }, 20000)
 
 afterAll(async () => {
   if (createdProductId) {
+    await prisma.inventoryMovement.deleteMany({ where: { productId: createdProductId } }).catch(() => {})
     await prisma.product.delete({ where: { id: createdProductId } }).catch(() => {})
   }
+})
+
+describe('Products — GET / y GET /categories protegidos por rol', () => {
+  it('GET /api/products sin token debe retornar 401', async () => {
+    const res = await request(app).get('/api/products')
+    expect(res.status).toBe(401)
+  })
+
+  it('GET /api/products con token ADMIN debe retornar 200 y un arreglo', async () => {
+    const res = await request(app)
+      .get('/api/products')
+      .set('Authorization', `Bearer ${adminToken}`)
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.data)).toBe(true)
+  }, 10000)
+
+  it('GET /api/products/categories sin token debe retornar 401', async () => {
+    const res = await request(app).get('/api/products/categories')
+    expect(res.status).toBe(401)
+  })
+
+  it('GET /api/products/categories con token ADMIN debe retornar 200 y un arreglo', async () => {
+    const res = await request(app)
+      .get('/api/products/categories')
+      .set('Authorization', `Bearer ${adminToken}`)
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.data)).toBe(true)
+  }, 10000)
 })
 
 describe('Products — GET /admin protegido por rol', () => {
@@ -61,7 +93,9 @@ describe('Products — POST / crear producto (admin)', () => {
   })
 
   it('POST con precio negativo debe retornar 400', async () => {
-    const categoriesRes = await request(app).get('/api/products/categories')
+    const categoriesRes = await request(app)
+      .get('/api/products/categories')
+      .set('Authorization', `Bearer ${adminToken}`)
     const categoryId = categoriesRes.body.data?.[0]?.id
     if (!categoryId) return
     const res = await request(app)
@@ -72,7 +106,9 @@ describe('Products — POST / crear producto (admin)', () => {
   }, 10000)
 
   it('POST con datos validos debe crear el producto (201)', async () => {
-    const categoriesRes = await request(app).get('/api/products/categories')
+    const categoriesRes = await request(app)
+      .get('/api/products/categories')
+      .set('Authorization', `Bearer ${adminToken}`)
     const categoryId = categoriesRes.body.data?.[0]?.id
     if (!categoryId) return
     const res = await request(app)
@@ -102,9 +138,11 @@ describe('Products — PUT /:id editar producto (admin)', () => {
     expect(res.body.data.isActive).toBe(false)
   }, 10000)
 
-  it('el producto desactivado no debe aparecer en GET /api/products (publico)', async () => {
+  it('el producto desactivado no debe aparecer en GET /api/products (staff)', async () => {
     if (!createdProductId) return
-    const res = await request(app).get('/api/products')
+    const res = await request(app)
+      .get('/api/products')
+      .set('Authorization', `Bearer ${adminToken}`)
     const found = res.body.data.find((p: any) => p.id === createdProductId)
     expect(found).toBeUndefined()
   })
@@ -117,4 +155,23 @@ describe('Products — PUT /:id editar producto (admin)', () => {
     const found = res.body.data.find((p: any) => p.id === createdProductId)
     expect(found).toBeDefined()
   }, 10000)
+})
+
+describe('Products — authorize() rechaza rol CLIENT (unitario, sin credenciales sembradas de CLIENT/TECHNICIAN)', () => {
+  // No existe en este proyecto un usuario TECHNICIAN o CLIENT con credenciales
+  // reales de Cognito para hacer login vía supertest (solo admin@reptel.com las
+  // tiene) — el mismo patrón se usa en catalog.test.ts y clients.test.ts para
+  // probar el rechazo de rol sin depender de un login real.
+  it('retorna 403 cuando el usuario autenticado tiene rol CLIENT en GET /api/products y GET /api/products/categories', () => {
+    const middleware = authorize('ADMIN', 'TECHNICIAN', 'TECHNICIAN_DELIVERY')
+    const req: any = { user: { sub: 'x', email: 'cliente@x.com', groups: ['CLIENT'] } }
+    const json = jest.fn()
+    const res: any = { status: jest.fn(() => ({ json })) }
+    const next = jest.fn()
+
+    middleware(req, res, next)
+
+    expect(res.status).toHaveBeenCalledWith(403)
+    expect(next).not.toHaveBeenCalled()
+  })
 })

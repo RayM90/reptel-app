@@ -7,6 +7,7 @@ import {
   getProductById,
   createProduct,
   updateProduct,
+  getInventoryMovements,
 } from './products.service';
 
 /**
@@ -29,6 +30,26 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
     res.status(200).json({ success: true, data: categories });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Error al obtener categorías' });
+  }
+};
+
+/**
+ * GET /api/products/movements
+ * Historial de movimientos de inventario (fecha, producto, tipo, cantidad,
+ * motivo, canal, quién) con filtros opcionales por producto/canal/fecha.
+ */
+export const getInventoryMovementsHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { productId, channel, from, to } = req.query;
+    const movements = await getInventoryMovements({
+      productId: productId ? String(productId) : undefined,
+      channel: channel ? String(channel) : undefined,
+      from: from ? new Date(String(from)) : undefined,
+      to: to ? new Date(String(to)) : undefined,
+    });
+    res.status(200).json({ success: true, data: movements });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Error al obtener el historial de inventario' });
   }
 };
 

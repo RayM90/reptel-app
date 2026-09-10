@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import * as ordersController from './orders.controller'
+import * as receiptsController from '../receipts/receipts.controller'
 import { authenticate, authorize } from '../../middleware/auth.middleware'
 import { trackOrderLimiter } from '../../middleware/rateLimit.middleware'
 
@@ -17,11 +18,16 @@ router.post('/self-service', authenticate, authorize('CLIENT'), ordersController
 // Historial de órdenes propias del cliente
 router.get('/my-orders', authenticate, authorize('CLIENT'), ordersController.getMyTechOrders)
 
-// Subir comprobante de pago anticipado (delivery + revisión)
-router.post('/:id/advance-payment', authenticate, authorize('CLIENT'), ordersController.submitAdvancePayment)
+// ─── Recepción — ADMIN o TECHNICIAN ───────────────
+// Crea device + order en transacción, ya en RECEIVED (pago verificado en persona)
+router.post('/counter', authenticate, authorize('ADMIN', 'TECHNICIAN'), ordersController.createCounterOrder)
 
 // Enviar un abono del anticipo (pago en partes — el cliente decide monto y cuántos)
 router.post('/:id/advance-payment-installment', authenticate, authorize('CLIENT'), ordersController.submitAdvancePaymentInstallment)
+
+// Abono adicional en orden de recepción — lo reporta el staff, no el cliente
+// (mismo endpoint de confirmación de arriba sirve para ambos casos)
+router.post('/:id/counter-payment-installment', authenticate, authorize('ADMIN', 'TECHNICIAN'), ordersController.submitCounterAdvanceInstallmentHandler)
 
 // Aprobar o rechazar el presupuesto tras el diagnóstico del técnico
 router.post('/:id/approve-budget', authenticate, authorize('CLIENT'), ordersController.approveBudget)
@@ -39,7 +45,7 @@ router.get('/today', authenticate, authorize('ADMIN'), ordersController.getToday
 router.get('/technicians', authenticate, authorize('ADMIN'), ordersController.getAvailableTechnicians)
 
 // Órdenes asignadas al técnico autenticado (Fase 4 — panel del técnico)
-router.get('/technician/my-orders', authenticate, authorize('TECHNICIAN_DELIVERY'), ordersController.getMyTechnicianOrders)
+router.get('/technician/my-orders', authenticate, authorize('TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.getMyTechnicianOrders)
 
 // ─── Rutas con parámetros dinámicos (personal) ────────────────────
 // Obtener todas las órdenes — ADMIN
@@ -48,18 +54,20 @@ router.get('/', authenticate, authorize('ADMIN'), ordersController.getOrders)
 // Obtener una orden por ID — ADMIN
 router.get('/:id', authenticate, authorize('ADMIN'), ordersController.getOrder)
 
+// Recibos PDF — el propio cliente dueño de la orden, o ADMIN/técnico
+// (la validación fina de "es tu orden" vive dentro del controller)
+router.get('/:id/receipt/intake', authenticate, receiptsController.downloadIntakeReceipt)
+router.get('/:id/receipt/final', authenticate, receiptsController.downloadFinalReceipt)
+
 // Crear una nueva orden (uso interno/admin — no cliente) — ADMIN
 router.post('/', authenticate, authorize('ADMIN'), ordersController.createOrder)
 
 // Actualizar el estado de una orden (incluye comentarios de progreso del técnico)
-router.patch('/:id/status', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVERY'), ordersController.updateStatus)
+router.patch('/:id/status', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.updateStatus)
 // Actualizar presupuesto de una orden — ADMIN
 router.patch('/:id/budget', authenticate, authorize('ADMIN'), ordersController.updateBudget)
 
-router.patch('/:id/diagnosis', authenticate, authorize('TECHNICIAN_DELIVERY'), ordersController.submitDiagnosis)
-
-// Confirmar o rechazar el pago anticipado (Fase 4 — ADMIN)
-router.post('/:id/confirm-advance-payment', authenticate, authorize('ADMIN'), ordersController.confirmAdvancePayment)
+router.patch('/:id/diagnosis', authenticate, authorize('TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.submitDiagnosis)
 
 // Confirmar o rechazar un abono específico del anticipo (pago en partes — ADMIN)
 router.post('/advance-payment-installment/:submissionId/confirm', authenticate, authorize('ADMIN'), ordersController.confirmAdvancePaymentInstallment)
@@ -72,5 +80,11 @@ router.post('/:id/confirm-final-payment', authenticate, authorize('ADMIN'), orde
 
 // ADMIN cierra una orden con presupuesto $0 (sin pago final que aprobar)
 router.post('/:id/close-zero-budget', authenticate, authorize('ADMIN'), ordersController.closeZeroBudgetOrder)
+
+// Repuestos de inventario usados en la orden — solo el técnico asignado
+// (la validación fina "es tu orden" vive dentro del service)
+router.get('/:id/parts', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.getPartsUsedInOrderHandler)
+router.post('/:id/parts', authenticate, authorize('TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.useProductInOrderHandler)
+router.delete('/:id/parts/:movementId', authenticate, authorize('TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.revertProductUsageHandler)
 
 export default router

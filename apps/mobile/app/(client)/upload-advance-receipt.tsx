@@ -15,6 +15,9 @@ import { useState } from 'react'
 import { ordersAPI } from '../../src/services/api'
 import { useToastStore } from '../../src/store/toast.store'
 import { usePaymentDraft } from '../../src/hooks/usePaymentDraft'
+import PhoneInput from '../../src/components/PhoneInput'
+import SelectField from '../../src/components/SelectField'
+import { VENEZUELAN_BANKS } from '../../src/constants/venezuela'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -161,15 +164,18 @@ export default function UploadAdvanceReceiptScreen() {
           <View style={styles.form}>
             {paymentMethod === 'PAGO_MOVIL' && (
               <>
-                <Field label="Banco" value={banco} onChangeText={setBanco} placeholder="Ej. Banesco" />
-                <Field label="Teléfono emisor" value={telefono} onChangeText={(text) => setTelefono(onlyDigits(text))} placeholder="Ej. 0414-1234567" keyboardType="phone-pad" />
+                <SelectField label="Banco" value={banco} options={VENEZUELAN_BANKS.map((b) => b.name)} onChange={setBanco} allowOther />
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Teléfono emisor</Text>
+                  <PhoneInput value={telefono} onChange={setTelefono} />
+                </View>
                 <Field label="Últimos 4 dígitos de la referencia" value={referencia} onChangeText={(text) => setReferencia(onlyDigits(text))} placeholder="Ej. 1234" keyboardType="number-pad" maxLength={4} />
               </>
             )}
 
             {paymentMethod === 'TRANSFERENCIA' && (
               <>
-                <Field label="Banco" value={banco} onChangeText={setBanco} placeholder="Ej. Banesco" />
+                <SelectField label="Banco" value={banco} options={VENEZUELAN_BANKS.map((b) => b.name)} onChange={setBanco} allowOther />
                 <Field label="Nombre del titular" value={titular} onChangeText={setTitular} placeholder="Nombre completo" />
                 <View style={styles.fieldGroup}>
                   <Text style={styles.fieldLabel}>Cédula</Text>

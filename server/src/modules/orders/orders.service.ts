@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client'
 import prisma from '../../lib/prisma'
-import QRCode from 'qrcode'
+import { InsufficientStockError } from '../products/products.service'
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -31,10 +31,15 @@ const ADVANCE_REVISION_AMOUNT = 15
 // Prioridad 3: null → asignación manual
 // ─────────────────────────────────────────────
 
-const assignTechnician = async (): Promise<string | null> => {
+// includeReception: las órdenes de recepción (equipo ya en el local) también
+// pueden asignarse a un TECHNICIAN — a diferencia de self-service+delivery,
+// que requiere ir a buscar el equipo y sigue siendo solo TECHNICIAN_DELIVERY.
+const assignTechnician = async (includeReception = false): Promise<string | null> => {
+  const roles = includeReception ? ['TECHNICIAN_DELIVERY', 'TECHNICIAN'] : ['TECHNICIAN_DELIVERY']
+
   const available = await prisma.user.findMany({
     where: {
-      role: 'TECHNICIAN_DELIVERY',
+      role: { in: roles as any },
       isActive: true,
       technicianStatus: 'AVAILABLE',
     },
@@ -50,7 +55,7 @@ const assignTechnician = async (): Promise<string | null> => {
 
   const busy = await prisma.user.findMany({
     where: {
-      role: 'TECHNICIAN_DELIVERY',
+      role: { in: roles as any },
       isActive: true,
       technicianStatus: 'BUSY',
     },
@@ -156,8 +161,6 @@ export const getOrderById = async (id: string) => {
       technician: { select: { id: true, name: true, email: true } },
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
-      notifications: true,
-      documents: true,
     },
   })
 }
@@ -205,15 +208,12 @@ export const createOrder = async (data: {
   technicianId?: string
 }) => {
   const orderNumber = generateOrderNumber()
-  const trackingUrl = `http://192.168.0.116:3000/api/orders/track/${orderNumber}`
-  const qrCode = await QRCode.toDataURL(trackingUrl)
 
   const resolvedTechnicianId = data.technicianId ?? (await assignTechnician())
 
   const order = await prisma.order.create({
     data: {
       orderNumber,
-      qrCode,
       clientId: data.clientId,
       deviceId: data.deviceId,
       problem: data.problem,
@@ -286,8 +286,6 @@ export const createSelfServiceOrder = async (data: {
 
   const clientId = user.clientId
   const orderNumber = generateOrderNumber()
-  const trackingUrl = `http://192.168.0.116:3000/api/orders/track/${orderNumber}`
-  const qrCode = await QRCode.toDataURL(trackingUrl)
 
   const resolvedTechnicianId = await assignTechnician()
 
@@ -307,7 +305,6 @@ export const createSelfServiceOrder = async (data: {
     return await tx.order.create({
       data: {
         orderNumber,
-        qrCode,
         clientId,
         deviceId: device.id,
         problem: data.problem,
@@ -347,69 +344,104 @@ export const createSelfServiceOrder = async (data: {
 }
 
 // ─────────────────────────────────────────────
-// PAGO ANTICIPADO — SUBIR DATOS DE PAGO (cliente)
-// Mismo patrón que product-orders.service.ts → uploadReceipt().
-// Guarda los datos ingresados por el cliente y notifica a los
-// administradores.
+// ÓRDENES — CREACIÓN EN RECEPCIÓN
+// El cliente está presente y ya pagó los $15 de revisión en persona
+// (verificado por el staff), por eso la orden nace directo en RECEIVED
+// — sin AdvancePaymentSubmission ni paso de confirmación posterior. No
+// hay costo de delivery (no hay motorizado en este flujo).
 // ─────────────────────────────────────────────
 
-export const submitAdvancePayment = async (
-  orderId: string,
-  email: string,
+export const createCounterOrder = async (data: {
+  actorEmail: string
+  clientId: string
+  device: {
+    type: string
+    brand: string
+    model: string
+    serialNumber?: string
+    color: string
+    accessories: string
+    devicePassword?: string
+  }
+  problem: string
+  advancePaymentMethod: string // ya mapeado al enum PaymentMethod de Prisma
   paymentDetails: Record<string, string>
-) => {
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { clientId: true },
-  })
+  amount?: number // permite abonar por partes — default: el total de la revisión
+  serviceCatalogId?: string
+}) => {
+  const actor = await prisma.user.findUnique({ where: { email: data.actorEmail } })
 
-  if (!user || !user.clientId) {
-    throw new Error('Cliente no encontrado para este usuario')
-  }
+  const orderNumber = generateOrderNumber()
+  const resolvedTechnicianId = await assignTechnician(true)
 
-  const order = await prisma.order.findFirst({
-    where: { id: orderId, clientId: user.clientId },
-  })
-
-  if (!order) {
-    throw new Error('Orden no encontrada')
-  }
-
-  const updatedOrder = await prisma.order.update({
-    where: { id: orderId },
-    data: { advancePaymentDetails: paymentDetails },
-    include: {
-      client: true,
-      device: true,
-      technician: { select: { id: true, name: true } },
-      statusHistory: { orderBy: { createdAt: 'desc' } },
-    },
-  })
-
-  const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true },
-    select: { id: true },
-  })
-
-  if (admins.length > 0) {
-    await prisma.notification.createMany({
-      data: admins.map((admin) => ({
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message: `Datos de pago anticipado registrados para la orden de servicio técnico #${order.orderNumber}`,
-        userId: admin.id,
-        orderId,
-      })),
+  const order = await prisma.$transaction(async (tx) => {
+    const device = await tx.device.create({
+      data: {
+        type: data.device.type as any,
+        brand: data.device.brand,
+        model: data.device.model,
+        serialNumber: data.device.serialNumber,
+        color: data.device.color,
+        accessories: data.device.accessories,
+        devicePassword: data.device.devicePassword,
+      },
     })
+
+    return await tx.order.create({
+      data: {
+        orderNumber,
+        clientId: data.clientId,
+        deviceId: device.id,
+        problem: data.problem,
+        technicianId: resolvedTechnicianId,
+        status: 'RECEIVED',
+        revisionAmount: ADVANCE_REVISION_AMOUNT,
+        advancePaymentMethod: data.advancePaymentMethod as any,
+        serviceCatalogId: data.serviceCatalogId ?? null,
+        statusHistory: {
+          create: {
+            status: 'RECEIVED',
+            comment: `Orden creada en Recepción por ${actor ? `${actor.name} ${actor.lastName ?? ''}`.trim() : 'personal de Recepción'} — abono de $${data.amount ?? ADVANCE_REVISION_AMOUNT} reportado, pendiente de confirmar por el administrador`,
+            userId: actor?.id,
+          },
+        },
+        // Mismo flujo que el self-service: el staff de recepción reporta los
+        // datos del pago, pero queda PENDING hasta que un ADMIN lo confirme
+        // desde el Dashboard (PaymentSubmissionsView) — no se auto-confirma.
+        // `amount` puede ser menor al total: el resto se abona después con
+        // submitCounterAdvanceInstallment (pago por partes, igual que self-service).
+        advancePaymentSubmissions: {
+          create: {
+            amount: data.amount ?? ADVANCE_REVISION_AMOUNT,
+            paymentDetails: data.paymentDetails,
+            status: 'PENDING',
+          },
+        },
+      },
+      include: {
+        client: true,
+        device: true,
+        technician: { select: { id: true, name: true, lastName: true } },
+        statusHistory: true,
+        advancePaymentSubmissions: true,
+      },
+    })
+  })
+
+  if (resolvedTechnicianId) {
+    await incrementTechnicianLoad(resolvedTechnicianId)
   }
 
-  return updatedOrder
+  return {
+    ...order,
+    technicianAutoAssigned: !!resolvedTechnicianId,
+    noTechnicianAvailable: !resolvedTechnicianId,
+  }
 }
 
 // ─────────────────────────────────────────────
 // PAGO ANTICIPADO EN PARTES (abonos)
-// Mismo patrón que ProductOrderPaymentSubmission: el cliente decide
-// libremente cuántos pagos hace y de qué monto, cada envío es un registro
+// El cliente decide libremente cuántos pagos hace y de qué monto, cada envío es un registro
 // independiente, y no puede enviar más de lo que falta para completar el
 // total ($25 = ADVANCE_DELIVERY_AMOUNT + ADVANCE_REVISION_AMOUNT). Al
 // confirmarse abonos que suman el total, la orden pasa a RECEIVED sola.
@@ -433,7 +465,6 @@ export const submitAdvancePaymentInstallment = async (
   const order = await prisma.order.findFirst({
     where: { id: orderId, clientId: user.clientId },
     include: {
-      client: true,
       // Se cuentan CONFIRMED y PENDING para calcular lo disponible, así el
       // cliente nunca puede enviar de más aunque haya abonos sin revisar.
       advancePaymentSubmissions: { where: { status: { in: ['CONFIRMED', 'PENDING'] } } },
@@ -467,31 +498,19 @@ export const submitAdvancePaymentInstallment = async (
     data: { orderId, amount, paymentDetails },
   })
 
-  const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true },
-    select: { id: true },
-  })
-
-  if (admins.length > 0) {
-    await prisma.notification.createMany({
-      data: admins.map((admin) => ({
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message: `${order.client.name} ${order.client.lastName} envió un abono de $${amount.toFixed(2)} para el anticipo de la orden #${order.orderNumber}`,
-        userId: admin.id,
-        orderId,
-      })),
-    })
-  }
-
   return submission
 }
 
 export const confirmAdvancePaymentInstallment = async (
   submissionId: string,
   approved: boolean,
-  rejectionReason?: string
+  rejectionReason?: string,
+  actorEmail?: string
 ) => {
+  const actor = actorEmail
+    ? await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true } })
+    : null
+
   const submission = await prisma.advancePaymentSubmission.findUnique({
     where: { id: submissionId },
     include: {
@@ -517,9 +536,12 @@ export const confirmAdvancePaymentInstallment = async (
   }
 
   const order = submission.order
+  // Órdenes de recepción no tienen deliveryAmount (no hay que ir a buscar el
+  // equipo) — su total es solo la revisión, no revisión+delivery como self-service.
   const total =
-    Number(order.deliveryAmount ?? ADVANCE_DELIVERY_AMOUNT) +
-    Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+    order.deliveryAmount != null
+      ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+      : Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
 
   const updatedOrder = await prisma.$transaction(async (tx) => {
     await tx.advancePaymentSubmission.update({
@@ -528,6 +550,7 @@ export const confirmAdvancePaymentInstallment = async (
         status: approved ? 'CONFIRMED' : 'REJECTED',
         rejectionReason: approved ? null : rejectionReason,
         confirmedAt: approved ? new Date() : null,
+        confirmedByUserId: actor?.id,
       },
     })
 
@@ -540,17 +563,25 @@ export const confirmAdvancePaymentInstallment = async (
       const orderNowComplete = newTotalConfirmed + 0.009 >= total
 
       if (orderNowComplete) {
+        // Pago completo confirmado por el admin → autoriza al técnico a
+        // proceder de inmediato (revisar en recepción, o ir a buscar el
+        // equipo en delivery — "revisión" incluye ese viaje en ese caso).
         return await tx.order.update({
           where: { id: order.id },
           data: {
-            advancePaymentConfirmed: true,
-            advancePaymentConfirmedAt: new Date(),
-            status: 'RECEIVED',
+            status: 'DIAGNOSING',
             statusHistory: {
-              create: {
-                status: 'RECEIVED',
-                comment: `Anticipo de $${total} completado mediante abonos — confirmado por el administrador`,
-              },
+              create: [
+                {
+                  status: 'RECEIVED',
+                  comment: `Anticipo de $${total} completado mediante abonos — confirmado por el administrador`,
+                  userId: actor?.id,
+                },
+                {
+                  status: 'DIAGNOSING',
+                  comment: 'Pago confirmado — técnico autorizado a proceder con la revisión',
+                },
+              ],
             },
           },
           include: {
@@ -585,18 +616,33 @@ export const updateOrderStatus = async (
   id: string,
   status: string,
   comment?: string,
-  technicianId?: string
+  technicianId?: string,
+  actorEmail?: string,
+  expectedVersion?: number
 ) => {
+  const actor = actorEmail
+    ? await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true } })
+    : null
+
+  if (expectedVersion !== undefined) {
+    const current = await prisma.order.findUniqueOrThrow({ where: { id }, select: { version: true } })
+    if (current.version !== expectedVersion) {
+      throw new Error('La orden fue modificada por otro usuario, recarga e intenta de nuevo')
+    }
+  }
+
   const order = await prisma.order.update({
     where: { id },
     data: {
       status: status as any,
+      version: { increment: 1 },
       ...(technicianId && { technicianId }),
       ...(status === 'DELIVERED' && { deliveredAt: new Date() }),
       statusHistory: {
         create: {
           status: status as any,
           comment,
+          userId: actor?.id,
         },
       },
     },
@@ -628,14 +674,14 @@ export const updateOrderBudget = async (
     data: {
       budget,
       budgetApproved: approved,
-      status: approved ? 'APPROVED' : 'WAITING_APPROVAL',
+      status: approved ? 'REPAIRING' : 'WAITING_APPROVAL',
       statusHistory: {
-        create: {
-          status: approved ? 'APPROVED' : 'WAITING_APPROVAL',
-          comment: approved
-            ? `Presupuesto de $${budget} aprobado por el cliente`
-            : `Presupuesto de $${budget} enviado al cliente para aprobación`,
-        },
+        create: approved
+          ? [
+              { status: 'APPROVED', comment: `Presupuesto de $${budget} aprobado por el cliente` },
+              { status: 'REPAIRING', comment: 'Presupuesto aprobado — técnico autorizado a iniciar la reparación' },
+            ]
+          : [{ status: 'WAITING_APPROVAL', comment: `Presupuesto de $${budget} enviado al cliente para aprobación` }],
       },
     },
     include: {
@@ -653,7 +699,7 @@ export const updateOrderBudget = async (
 export const getAvailableTechnicians = async () => {
   return await prisma.user.findMany({
     where: {
-      role: 'TECHNICIAN_DELIVERY',
+      role: { in: ['TECHNICIAN_DELIVERY', 'TECHNICIAN'] },
       isActive: true,
       technicianStatus: { in: ['AVAILABLE', 'BUSY'] },
     },
@@ -714,74 +760,6 @@ export const submitDiagnosis = async (
 }
 
 // ─────────────────────────────────────────────
-// ADMIN — Confirmar o rechazar el pago anticipado (Fase 4)
-// Al aprobar: la orden pasa de PENDING_PAYMENT a RECEIVED, quedando
-// lista para que el técnico-delivery asignado sea despachado.
-// Al rechazar: se guarda el motivo obligatorio, la orden permanece en
-// PENDING_PAYMENT, y se limpian los datos de pago viejos (para que el
-// botón "Aprobar" del admin no quede habilitado con información
-// incorrecta) — el cliente debe reenviar sus datos.
-// ─────────────────────────────────────────────
-
-export const confirmAdvancePayment = async (
-  id: string,
-  approved: boolean,
-  rejectionReason?: string
-) => {
-  const order = await prisma.order.findUnique({
-    where: { id },
-    include: { client: { include: { user: true } } },
-  })
-
-  if (!order) {
-    throw new Error('Orden no encontrada')
-  }
-
-  const updatedOrder = await prisma.order.update({
-    where: { id },
-    data: {
-      advancePaymentConfirmed: approved,
-      advancePaymentConfirmedAt: approved ? new Date() : null,
-      advancePaymentRejectionReason: approved ? null : rejectionReason,
-      ...(approved
-        ? {}
-        : { advanceReceiptUrl: null, advancePaymentDetails: Prisma.JsonNull }),
-      status: approved ? 'RECEIVED' : 'PENDING_PAYMENT',
-      statusHistory: {
-        create: {
-          status: approved ? 'RECEIVED' : 'PENDING_PAYMENT',
-          comment: approved
-            ? 'Pago anticipado confirmado por el administrador'
-            : `Pago anticipado rechazado: ${rejectionReason}`,
-        },
-      },
-    },
-    include: {
-      client: true,
-      device: true,
-      technician: { select: { id: true, name: true } },
-      statusHistory: { orderBy: { createdAt: 'desc' } },
-    },
-  })
-
-  if (order.client.user) {
-    await prisma.notification.create({
-      data: {
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message: approved
-          ? `Tu pago anticipado para la orden #${order.orderNumber} fue confirmado. El técnico será despachado pronto.`
-          : `No pudimos confirmar tu pago para la orden #${order.orderNumber}: ${rejectionReason}. Por favor envía tus datos de pago nuevamente.`,
-        userId: order.client.user.id,
-        orderId: id,
-      },
-    })
-  }
-
-  return updatedOrder
-}
-
-// ─────────────────────────────────────────────
 // CLIENTE — Enviar datos del pago final (saldo restante tras reparación)
 // ─────────────────────────────────────────────
 
@@ -818,23 +796,6 @@ export const submitFinalPayment = async (
     },
   })
 
-  const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true },
-    select: { id: true },
-  })
-
-  if (admins.length > 0) {
-    await prisma.notification.createMany({
-      data: admins.map((admin) => ({
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message: `Datos de pago final registrados para la orden #${order.orderNumber}`,
-        userId: admin.id,
-        orderId,
-      })),
-    })
-  }
-
   return updatedOrder
 }
 
@@ -853,7 +814,6 @@ export const confirmFinalPayment = async (
 ) => {
   const order = await prisma.order.findUnique({
     where: { id },
-    include: { client: { include: { user: true } } },
   })
 
   if (!order) {
@@ -902,20 +862,6 @@ export const confirmFinalPayment = async (
     await decrementTechnicianLoad(order.technicianId)
   }
 
-  if (order.client.user) {
-    await prisma.notification.create({
-      data: {
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message: approved
-          ? `Tu pago fue confirmado. La orden #${order.orderNumber} fue completada. ¡Gracias por confiar en RepTel!`
-          : `No pudimos confirmar tu pago final para la orden #${order.orderNumber}: ${rejectionReason}. Por favor envía tus datos de pago nuevamente.`,
-        userId: order.client.user.id,
-        orderId: id,
-      },
-    })
-  }
-
   return updatedOrder
 }
 
@@ -932,7 +878,6 @@ export const confirmFinalPayment = async (
 export const closeZeroBudgetOrder = async (id: string) => {
   const order = await prisma.order.findUnique({
     where: { id },
-    include: { client: { include: { user: true } } },
   })
 
   if (!order) {
@@ -979,18 +924,6 @@ export const closeZeroBudgetOrder = async (id: string) => {
     await decrementTechnicianLoad(order.technicianId)
   }
 
-  if (order.client.user) {
-    await prisma.notification.create({
-      data: {
-        type: 'PAYMENT_CONFIRMED',
-        channel: 'PUSH',
-        message: `La orden #${order.orderNumber} fue completada sin costo adicional. ¡Gracias por confiar en RepTel!`,
-        userId: order.client.user.id,
-        orderId: id,
-      },
-    })
-  }
-
   return updatedOrder
 }
 
@@ -1006,7 +939,7 @@ export const closeZeroBudgetOrder = async (id: string) => {
 export const approveBudget = async (id: string, email: string) => {
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { clientId: true },
+    select: { id: true, clientId: true },
   })
   if (!user || !user.clientId) {
     throw new Error('Cliente no encontrado para este usuario')
@@ -1026,12 +959,21 @@ export const approveBudget = async (id: string, email: string) => {
     where: { id },
     data: {
       budgetApproved: true,
-      status: 'APPROVED',
+      // El presupuesto aprobado autoriza al técnico a empezar la reparación
+      // de inmediato — no queda un paso manual extra para "iniciar reparación".
+      status: 'REPAIRING',
       statusHistory: {
-        create: {
-          status: 'APPROVED',
-          comment: `Presupuesto de $${order.budget} aprobado por el cliente en la app`,
-        },
+        create: [
+          {
+            status: 'APPROVED',
+            comment: `Presupuesto de $${order.budget} aprobado por el cliente en la app`,
+            userId: user.id,
+          },
+          {
+            status: 'REPAIRING',
+            comment: 'Presupuesto aprobado — técnico autorizado a iniciar la reparación',
+          },
+        ],
       },
     },
     include: {
@@ -1053,7 +995,7 @@ export const approveBudget = async (id: string, email: string) => {
 export const rejectBudget = async (id: string, email: string, reason: string) => {
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { clientId: true },
+    select: { id: true, clientId: true },
   })
   if (!user || !user.clientId) {
     throw new Error('Cliente no encontrado para este usuario')
@@ -1061,7 +1003,6 @@ export const rejectBudget = async (id: string, email: string, reason: string) =>
 
   const order = await prisma.order.findFirst({
     where: { id, clientId: user.clientId },
-    include: { client: { include: { user: true } } },
   })
   if (!order) {
     throw new Error('Orden no encontrada')
@@ -1086,6 +1027,7 @@ export const rejectBudget = async (id: string, email: string, reason: string) =>
         create: {
           status: 'CANCELLED',
           comment: `Cliente rechazó el presupuesto de $${order.budget}. Motivo: ${reason}. Comisión del técnico: $${commission.toFixed(2)} (delivery + 40% revisión).`,
+          userId: user.id,
         },
       },
     },
@@ -1099,18 +1041,6 @@ export const rejectBudget = async (id: string, email: string, reason: string) =>
 
   if (order.technicianId) {
     await decrementTechnicianLoad(order.technicianId)
-  }
-
-  if (order.client.user) {
-    await prisma.notification.create({
-      data: {
-        type: 'STATUS_CHANGE',
-        channel: 'PUSH',
-        message: `Confirmamos que no se realizará la reparación de la orden #${order.orderNumber}. No se te cobrará nada adicional.`,
-        userId: order.client.user.id,
-        orderId: id,
-      },
-    })
   }
 
   return updatedOrder
@@ -1156,7 +1086,7 @@ export const confirmZeroBudgetDiagnosis = async (id: string, email: string) => {
       },
     },
     include: {
-      client: { include: { user: true } },
+      client: true,
       device: true,
       technician: { select: { id: true, name: true } },
       statusHistory: { orderBy: { createdAt: 'desc' } },
@@ -1165,18 +1095,6 @@ export const confirmZeroBudgetDiagnosis = async (id: string, email: string) => {
 
   if (order.technicianId) {
     await decrementTechnicianLoad(order.technicianId)
-  }
-
-  if (updatedOrder.client.user) {
-    await prisma.notification.create({
-      data: {
-        type: 'STATUS_CHANGE',
-        channel: 'PUSH',
-        message: `Confirmamos el diagnóstico de la orden #${updatedOrder.orderNumber}: no requiere reparación. No se te cobrará nada adicional.`,
-        userId: updatedOrder.client.user.id,
-        orderId: id,
-      },
-    })
   }
 
   return updatedOrder
@@ -1234,5 +1152,161 @@ export const getOrdersByTechnician = async (technicianId: string) => {
       statusHistory: { orderBy: { createdAt: 'desc' } },
     },
     orderBy: { receivedAt: 'desc' },
+  })
+}
+// ─────────────────────────────────────────────
+// REPUESTOS DE INVENTARIO USADOS EN LA ORDEN
+// Solo el técnico asignado a la orden puede registrar/revertir. Se suma al
+// budget de inmediato, incluso si ya fue aprobado por el cliente — el
+// diagnóstico previo debería cubrir todo, pero puede aparecer una falla
+// adicional mientras se repara.
+// ─────────────────────────────────────────────
+
+export const useProductInOrder = async (
+  orderId: string,
+  productId: string,
+  quantity: number,
+  actorEmail: string
+) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const order = await prisma.order.findUnique({ where: { id: orderId } })
+  if (!order) throw new Error('Orden no encontrada')
+  if (order.technicianId !== actor.id) {
+    throw new Error('Solo el técnico asignado a esta orden puede registrar repuestos')
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const product = await tx.product.findUniqueOrThrow({ where: { id: productId } })
+    if (product.stock < quantity) {
+      throw new InsufficientStockError()
+    }
+
+    await tx.product.update({
+      where: { id: productId },
+      data: { stock: { decrement: quantity } },
+    })
+
+    const movement = await tx.inventoryMovement.create({
+      data: {
+        productId,
+        type: 'OUT',
+        channel: 'SERVICIO_TECNICO',
+        quantity,
+        reason: `Repuesto usado en orden ${order.orderNumber}`,
+        userId: actor.id,
+        orderId,
+        unitPriceAtUse: product.price,
+      },
+    })
+
+    const addedCost = Number(product.price) * quantity
+    const updatedOrder = await tx.order.update({
+      where: { id: orderId },
+      data: { budget: { increment: addedCost } },
+    })
+
+    return { movement, order: updatedOrder }
+  })
+}
+
+export const revertProductUsage = async (movementId: string, actorEmail: string) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const movement = await prisma.inventoryMovement.findUnique({ where: { id: movementId } })
+  if (!movement) throw new Error('Movimiento no encontrado')
+  if (movement.channel !== 'SERVICIO_TECNICO' || !movement.orderId) {
+    throw new Error('Este movimiento no corresponde a un repuesto de orden de servicio')
+  }
+  if (movement.reversedAt) {
+    throw new Error('Este repuesto ya fue revertido')
+  }
+
+  const order = await prisma.order.findUnique({ where: { id: movement.orderId } })
+  if (!order) throw new Error('Orden no encontrada')
+  if (order.technicianId !== actor.id) {
+    throw new Error('Solo el técnico asignado a esta orden puede revertir este repuesto')
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    await tx.product.update({
+      where: { id: movement.productId },
+      data: { stock: { increment: movement.quantity } },
+    })
+
+    const revertedCost = Number(movement.unitPriceAtUse ?? 0) * movement.quantity
+    const updatedOrder = await tx.order.update({
+      where: { id: movement.orderId! },
+      data: { budget: { decrement: revertedCost } },
+    })
+
+    const updatedMovement = await tx.inventoryMovement.update({
+      where: { id: movementId },
+      data: { reversedAt: new Date(), reversedByUserId: actor.id },
+    })
+
+    return { movement: updatedMovement, order: updatedOrder }
+  })
+}
+
+export const getPartsUsedInOrder = async (orderId: string) => {
+  return await prisma.inventoryMovement.findMany({
+    where: { orderId, channel: 'SERVICIO_TECNICO' },
+    include: {
+      product: { select: { id: true, name: true } },
+      user: { select: { id: true, name: true, lastName: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
+// ─────────────────────────────────────────────
+// ABONO ADICIONAL EN ORDEN DE RECEPCIÓN — staff (ADMIN/TECHNICIAN), no el
+// cliente. A diferencia de submitAdvancePaymentInstallment (self-service,
+// requiere que el actor SEA el Client dueño de la orden), aquí el actor es
+// personal de recepción que reporta lo que el cliente pagó en persona.
+// ─────────────────────────────────────────────
+
+export const submitCounterAdvanceInstallment = async (
+  orderId: string,
+  actorEmail: string,
+  paymentDetails: Record<string, string>,
+  amount: number
+) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      advancePaymentSubmissions: { where: { status: { in: ['CONFIRMED', 'PENDING'] } } },
+    },
+  })
+  if (!order) throw new Error('Orden no encontrada')
+
+  if (amount == null || amount <= 0) {
+    throw new Error('El monto del pago debe ser mayor a cero')
+  }
+
+  const total =
+    order.deliveryAmount != null
+      ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+      : Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+  const alreadyAccounted = order.advancePaymentSubmissions.reduce((sum, s) => sum + Number(s.amount), 0)
+  const remaining = total - alreadyAccounted
+
+  if (amount > remaining + 0.009) {
+    throw new Error(`El monto excede lo que falta por pagar ($${remaining.toFixed(2)})`)
+  }
+
+  return await prisma.advancePaymentSubmission.create({
+    data: {
+      orderId,
+      amount,
+      paymentDetails,
+      status: 'PENDING',
+    },
   })
 }

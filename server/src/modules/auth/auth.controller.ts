@@ -3,6 +3,8 @@ import { registerUser, loginUser, refreshUserToken, completeNewPasswordChallenge
 import { translateCognitoError } from './auth.errors';
 import prisma from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
+import { formatClientAddress } from '../../lib/clientAddress';
+import { isValidVenezuelanPhone, isValidVenezuelanIdNumber } from '../../lib/venezuela';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -19,6 +21,11 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     // POST /staff (pendiente de construir), nunca este.
     if (role !== 'CLIENT') {
       res.status(403).json({ message: 'Este endpoint solo permite el registro de clientes' });
+      return;
+    }
+
+    if (phone && !isValidVenezuelanPhone(phone)) {
+      res.status(400).json({ message: 'El teléfono debe ser un número venezolano válido (04XX + 7 dígitos)' });
       return;
     }
 
@@ -60,6 +67,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       select: {
         id: true,
         name: true,
+        lastName: true,
         email: true,
         phone: true,
         role: true,
@@ -67,7 +75,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         client: {
           select: {
             id: true,
-            address: true,
+            addressState: true,
+            addressCity: true,
+            addressNeighborhood: true,
+            addressStreet: true,
+            addressBuilding: true,
             phone: true,
             idNumber: true,
           }
@@ -86,11 +98,12 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         user: {
           id: user.id,
           name: user.name,
+          lastName: user.lastName,
           email: user.email,
           phone: user.phone,
           role: user.role,
           clientId: user.clientId,
-          address: user.client?.address ?? null,
+          address: formatClientAddress(user.client),
         },
         token: tokens.idToken,
         accessToken: tokens.accessToken,
@@ -122,6 +135,7 @@ export const completeNewPassword = async (req: Request, res: Response): Promise<
       select: {
         id: true,
         name: true,
+        lastName: true,
         email: true,
         phone: true,
         role: true,
@@ -129,7 +143,11 @@ export const completeNewPassword = async (req: Request, res: Response): Promise<
         client: {
           select: {
             id: true,
-            address: true,
+            addressState: true,
+            addressCity: true,
+            addressNeighborhood: true,
+            addressStreet: true,
+            addressBuilding: true,
             phone: true,
             idNumber: true,
           }
@@ -148,11 +166,12 @@ export const completeNewPassword = async (req: Request, res: Response): Promise<
         user: {
           id: user.id,
           name: user.name,
+          lastName: user.lastName,
           email: user.email,
           phone: user.phone,
           role: user.role,
           clientId: user.clientId,
-          address: user.client?.address ?? null,
+          address: formatClientAddress(user.client),
         },
         token: tokens.idToken,
         accessToken: tokens.accessToken,
@@ -185,21 +204,21 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
 };
 
 /**
- * ADMIN crea un usuario de personal (TECHNICIAN_DELIVERY o DELIVERY).
+ * ADMIN crea un usuario de personal (TECHNICIAN_DELIVERY, DELIVERY o TECHNICIAN).
  * Nunca permite crear otro ADMIN desde este endpoint — evita escalación
  * de privilegios accidental o mal uso.
  */
 export const createStaff = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, name, role, phone } = req.body;
+    const { email, password, name, lastName, idNumber, role, phone } = req.body;
 
-    if (!email || !password || !name || !role) {
+    if (!email || !password || !name || !lastName || !idNumber || !role) {
       res.status(400).json({ message: 'Todos los campos son requeridos' });
       return;
     }
 
-    if (role !== 'TECHNICIAN_DELIVERY' && role !== 'DELIVERY') {
-      res.status(403).json({ message: 'Este endpoint solo permite crear TECHNICIAN_DELIVERY o DELIVERY' });
+    if (role !== 'TECHNICIAN_DELIVERY' && role !== 'TECHNICIAN') {
+      res.status(403).json({ message: 'Este endpoint solo permite crear TECHNICIAN_DELIVERY o TECHNICIAN' });
       return;
     }
 
@@ -208,7 +227,23 @@ export const createStaff = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const result = await createStaffUser(email, name, password, role, phone);
+    if (!isValidVenezuelanIdNumber(idNumber)) {
+      res.status(400).json({ message: 'La cédula debe tener el formato V-12345678 o E-12345678' });
+      return;
+    }
+
+    if (phone && !isValidVenezuelanPhone(phone)) {
+      res.status(400).json({ message: 'El teléfono debe ser un número venezolano válido (04XX + 7 dígitos)' });
+      return;
+    }
+
+    const existing = await prisma.user.findUnique({ where: { idNumber } });
+    if (existing) {
+      res.status(400).json({ message: 'Ya existe un empleado con esa cédula' });
+      return;
+    }
+
+    const result = await createStaffUser(email, name, password, role, phone, lastName, idNumber);
     res.status(201).json(result);
   } catch (error: any) {
     res.status(400).json({ message: translateCognitoError(error) || 'Error al crear el empleado' });

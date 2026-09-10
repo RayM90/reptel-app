@@ -16,10 +16,8 @@ enum Role {
   CASHIER
   TECHNICIAN
   TECHNICIAN_DELIVERY
-  DELIVERY
   CLIENT
   MANAGER
-  SELLER
 }
 
 enum TechnicianStatus {
@@ -47,26 +45,6 @@ enum OrderStatus {
   CANCELLED
 }
 
-enum DeliveryStatus {
-  ASSIGNED
-  LEAVING_STORE
-  ON_THE_WAY
-  AT_LOCATION
-  DIAGNOSING_ON_SITE
-  EQUIPMENT_PICKED_UP
-  AT_THE_SHOP
-  RETURNING
-  DELIVERED
-  CANCELLED
-}
-
-enum DocumentType {
-  RECEIPT_NOTE
-  DELIVERY_NOTE
-  WITHDRAWAL_ACT
-  ON_SITE_RECEIPT
-}
-
 enum PaymentMethod {
   CASH
   TRANSFER
@@ -76,55 +54,26 @@ enum PaymentMethod {
   BINANCE
 }
 
-enum PaymentStatus {
-  PENDING
-  PAID
-  REFUNDED
-}
-
-enum NotificationType {
-  STATUS_CHANGE
-  BUDGET_REQUEST
-  READY_FOR_PICKUP
-  DELIVERY_UPDATE
-  PAYMENT_CONFIRMED
-  ORDER_CREATED
-  GENERAL
-}
-
-enum Channel {
-  EMAIL
-  PUSH
-  SMS
-}
-
-enum InvoiceType {
-  SERVICE
-  STORE_PURCHASE
-  DELIVERY_SERVICE
-}
-
-enum ProductOrderStatus {
-  PENDING
-  CONFIRMED
-  REJECTED
-  READY_FOR_PICKUP
-  ASSIGNED_DELIVERY
-  ON_THE_WAY
-  DELIVERED
-  CANCELLED
-}
-
-enum DeliveryMethod {
-  PICKUP_AT_STORE
-  HOME_DELIVERY
-  TECHNICIAN_DELIVERY
-}
-
 enum PartialPaymentStatus {
   PENDING
   CONFIRMED
   REJECTED
+}
+
+enum InventoryMovementType {
+  IN
+  OUT
+}
+
+// Por dónde salió/entró el producto. MOSTRADOR queda como valor histórico —
+// ya no se genera venta al público, así que ningún código nuevo lo produce.
+// AJUSTE_MANUAL es el default: ajustes de stock que hace el admin desde el
+// panel (creación de producto, corrección manual). SERVICIO_TECNICO es el
+// repuesto usado en una orden de reparación.
+enum InventoryChannel {
+  MOSTRADOR
+  SERVICIO_TECNICO
+  AJUSTE_MANUAL
 }
 
 // ─────────────────────────────────────────────
@@ -134,6 +83,8 @@ enum PartialPaymentStatus {
 model User {
   id                String           @id @default(uuid())
   name              String
+  lastName          String?
+  idNumber          String?          @unique
   email             String           @unique
   phone             String?
   password          String
@@ -151,8 +102,9 @@ model User {
   updatedAt         DateTime         @updatedAt
 
   ordersAsTechnician   Order[]            @relation("TechnicianOrders")
-  notifications        Notification[]
-  productDeliveries    ProductDelivery[]  @relation("DeliveryAgent")
+  statusChangesMade    OrderStatusHistory[] @relation("StatusChangeActor")
+  advanceSubmissionsConfirmed AdvancePaymentSubmission[] @relation("AdvanceConfirmedBy")
+  inventoryMovementsMade InventoryMovement[]
 }
 
 model Client {
@@ -162,16 +114,17 @@ model Client {
   idNumber  String   @unique
   phone     String
   email     String?
-  address   String?
-  password  String?
+  addressState        String?
+  addressCity         String?
+  addressNeighborhood String?
+  addressStreet       String?
+  addressBuilding     String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user            User?
   orders          Order[]
-  productOrders   ProductOrder[]
-  invoices        Invoice[]
 }
 
 // ─────────────────────────────────────────────
@@ -183,7 +136,7 @@ model Device {
   type           DeviceType
   brand          String
   model          String
-  serialNumber   String?
+  serialNumber   String?    @unique
   color          String?
   accessories    String?
   devicePassword String?
@@ -200,20 +153,15 @@ model Order {
   diagnosis      String?     @db.Text
   budget         Decimal?    @db.Decimal(10, 2)
   budgetApproved Boolean?
-  qrCode         String?     @db.Text
   observations   String?     @db.Text
   receivedAt     DateTime    @default(now())
   deliveredAt    DateTime?
   updatedAt      DateTime    @updatedAt
+  version        Int         @default(0)
 
   deliveryAmount             Decimal?       @db.Decimal(10, 2)
   revisionAmount             Decimal?       @db.Decimal(10, 2)
   advancePaymentMethod       PaymentMethod?
-  advanceReceiptUrl          String?
-  advancePaymentDetails      Json?
-  advancePaymentConfirmed    Boolean        @default(false)
-  advancePaymentConfirmedAt  DateTime?
-  advancePaymentRejectionReason String?     @db.Text
   advancePaymentSubmissions  AdvancePaymentSubmission[]
 
   // ── NUEVO: pago final (saldo restante) + comisión del técnico ──
@@ -237,12 +185,10 @@ model Order {
   serviceCatalog   ServiceCatalog? @relation(fields: [serviceCatalogId], references: [id])
 
   statusHistory    OrderStatusHistory[]
-  notifications    Notification[]
-  documents        ServiceDocument[]
-  payments         ServicePayment[]
-  invoices         Invoice[]
+  inventoryMovements InventoryMovement[]
 
-  linkedProductOrders ProductOrder[] @relation("ProductOrderToServiceOrder")
+  @@index([status, deliveredAt])
+  @@index([receivedAt])
 }
 
 model OrderStatusHistory {
@@ -253,75 +199,9 @@ model OrderStatusHistory {
 
   orderId String
   order   Order  @relation(fields: [orderId], references: [id])
-}
 
-// ─────────────────────────────────────────────
-// MÓDULO DOCUMENTOS Y PAGOS
-// ─────────────────────────────────────────────
-
-model ServiceDocument {
-  id           String       @id @default(uuid())
-  type         DocumentType
-  pdfUrl       String?
-  printed      Boolean      @default(false)
-
-  clientSignature String?   @db.Text
-
-  gpsLatitude   Decimal?    @db.Decimal(10, 7)
-  gpsLongitude  Decimal?    @db.Decimal(10, 7)
-
-  generatedAt  DateTime     @default(now())
-
-  orderId String
-  order   Order  @relation(fields: [orderId], references: [id])
-}
-
-model ServicePayment {
-  id            String        @id @default(uuid())
-  amount        Decimal       @db.Decimal(10, 2)
-  amountBs      Decimal?      @db.Decimal(12, 2)
-  exchangeRate  Decimal?      @db.Decimal(10, 4)
-  method        PaymentMethod
-  status        PaymentStatus @default(PENDING)
-  reference     String?
-  description   String?
-  paidAt        DateTime?
-  createdAt     DateTime      @default(now())
-
-  orderId String
-  order   Order  @relation(fields: [orderId], references: [id])
-
-  invoice Invoice?
-}
-
-model Invoice {
-  id             String      @id @default(uuid())
-  invoiceNumber  String      @unique
-  controlNumber  String?
-  series         String?     @default("A")
-  type           InvoiceType
-  subtotal       Decimal     @db.Decimal(10, 2)
-  igtfBase       Decimal?    @db.Decimal(10, 2)
-  igtfAmount     Decimal?    @db.Decimal(10, 2)
-  total          Decimal     @db.Decimal(10, 2)
-  totalBs        Decimal?    @db.Decimal(12, 2)
-  exchangeRate   Decimal?    @db.Decimal(10, 4)
-  pdfUrl         String?
-  sentByEmail    Boolean     @default(false)
-  sentAt         DateTime?
-  createdAt      DateTime    @default(now())
-
-  orderId        String?
-  order          Order?      @relation(fields: [orderId], references: [id])
-
-  servicePaymentId String?   @unique
-  servicePayment   ServicePayment? @relation(fields: [servicePaymentId], references: [id])
-
-  productOrderId String?     @unique
-  productOrder   ProductOrder? @relation(fields: [productOrderId], references: [id])
-
-  clientId       String
-  client         Client      @relation(fields: [clientId], references: [id])
+  userId String?
+  user   User?   @relation("StatusChangeActor", fields: [userId], references: [id])
 }
 
 // ─────────────────────────────────────────────
@@ -345,7 +225,7 @@ model ServiceCatalog {
 }
 
 // ─────────────────────────────────────────────
-// MÓDULO TIENDA
+// MÓDULO TIENDA FÍSICA — catálogo e inventario (mostrador, sin checkout online)
 // ─────────────────────────────────────────────
 
 model ProductCategory {
@@ -366,7 +246,7 @@ model Product {
   price       Decimal  @db.Decimal(10, 2)
   stock       Int      @default(0)
   minStock    Int      @default(3)
-  imageUrl    String?
+  imageUrl    String?  @db.VarChar(500)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -374,140 +254,84 @@ model Product {
   categoryId  String
   category    ProductCategory @relation(fields: [categoryId], references: [id])
 
-  orderItems  ProductOrderItem[]
-
   requiresInstallation Boolean @default(false)
+
+  movements   InventoryMovement[]
 
   @@map("product")
 }
 
-model ProductOrder {
-  id             String             @id @default(uuid())
-  status         ProductOrderStatus @default(PENDING)
-  deliveryMethod DeliveryMethod
-  address        String?
-  deliveryCost   Decimal?           @db.Decimal(10, 2)
-  total          Decimal            @db.Decimal(10, 2)
-  paymentMethod  PaymentMethod
-  paidAt         DateTime?
-  receiptUrl     String?
-  paymentDetails Json?
-  notes          String?            @db.Text
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-
-  rejectionReason String? @db.Text
-
-  clientId String
-  client   Client @relation(fields: [clientId], references: [id])
-
-  requiresInstallation Boolean  @default(false)
-  installationCost     Decimal? @db.Decimal(10, 2)
-
-  linkedOrderId String?
-  linkedOrder   Order?  @relation("ProductOrderToServiceOrder", fields: [linkedOrderId], references: [id])
-
-  items              ProductOrderItem[]
-  delivery           ProductDelivery?
-  invoice            Invoice?
-  notifications      Notification[]
-  paymentSubmissions ProductOrderPaymentSubmission[]
-
-  @@map("productorder")
-}
-
-model ProductOrderItem {
-  id         String  @id @default(uuid())
-  quantity   Int
-  unitPrice  Decimal @db.Decimal(10, 2)
-  subtotal   Decimal @db.Decimal(10, 2)
+// Historial de movimientos de inventario — registra cada vez que el stock
+// de un Product cambia (creación, ajuste manual, venta, cancelación) para
+// dejar rastro de por qué cambió, sin exponer reportes ni endpoints nuevos.
+model InventoryMovement {
+  id        String                 @id @default(uuid())
+  type      InventoryMovementType
+  channel   InventoryChannel       @default(AJUSTE_MANUAL)
+  quantity  Int
+  reason    String
+  createdAt DateTime               @default(now())
 
   productId String
   product   Product @relation(fields: [productId], references: [id])
 
-  productOrderId String
-  productOrder   ProductOrder @relation(fields: [productOrderId], references: [id])
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 
-  @@map("productorderitem")
-}
+  // Repuesto usado en una orden de servicio técnico (channel SERVICIO_TECNICO) —
+  // null para movimientos de mostrador/ajustes. unitPriceAtUse guarda el precio
+  // del producto al momento del uso, para poder revertir el presupuesto
+  // exactamente aunque el precio del producto haya cambiado después.
+  orderId       String?
+  order         Order?   @relation(fields: [orderId], references: [id])
+  unitPriceAtUse Decimal? @db.Decimal(10, 2)
+  reversedAt    DateTime?
+  reversedByUserId String?
 
-model ProductOrderPaymentSubmission {
-  id              String               @id @default(uuid())
-  amount          Decimal              @db.Decimal(10, 2)
-  paymentDetails  Json
-  status          PartialPaymentStatus @default(PENDING)
-  rejectionReason String?              @db.Text
-  createdAt       DateTime             @default(now())
-  confirmedAt     DateTime?
-
-  productOrderId  String
-  productOrder    ProductOrder         @relation(fields: [productOrderId], references: [id])
-
-  @@map("productorderpaymentsubmission")
+  @@map("inventorymovement")
 }
 
 // Abonos parciales del anticipo de Servicio Técnico ($25 = delivery + revisión).
-// Mismo patrón que ProductOrderPaymentSubmission: cada envío es un registro
-// independiente, el cliente puede pagar en varias partes y no puede enviar
-// más de lo que falta para completar el total.
+// Cada envío es un registro independiente, el cliente puede pagar en varias
+// partes y no puede enviar más de lo que falta para completar el total.
 model AdvancePaymentSubmission {
-  id              String               @id @default(uuid())
-  amount          Decimal              @db.Decimal(10, 2)
-  paymentDetails  Json
-  status          PartialPaymentStatus @default(PENDING)
-  rejectionReason String?              @db.Text
-  createdAt       DateTime             @default(now())
-  confirmedAt     DateTime?
+  id                 String               @id @default(uuid())
+  amount             Decimal              @db.Decimal(10, 2)
+  paymentDetails     Json
+  status             PartialPaymentStatus @default(PENDING)
+  rejectionReason    String?              @db.Text
+  createdAt          DateTime             @default(now())
+  confirmedAt        DateTime?
 
-  orderId         String
-  order           Order                @relation(fields: [orderId], references: [id])
+  orderId            String
+  order              Order                @relation(fields: [orderId], references: [id])
+
+  confirmedByUserId  String?
+  confirmedByUser    User?                @relation("AdvanceConfirmedBy", fields: [confirmedByUserId], references: [id])
 
   @@map("advancepaymentsubmission")
 }
 
-model ProductDelivery {
-  id             String         @id @default(uuid())
-  status         DeliveryStatus @default(ASSIGNED)
-  gpsLatitude    Decimal?       @db.Decimal(10, 7)
-  gpsLongitude   Decimal?       @db.Decimal(10, 7)
-  photoUrl       String?
-  deliveredAt    DateTime?
-  deliveryCommission Decimal?   @db.Decimal(10, 2)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-
-  clientConfirmedAt DateTime?
-
-  productOrderId String       @unique
-  productOrder   ProductOrder @relation(fields: [productOrderId], references: [id])
-
-  agentId String
-  agent   User   @relation("DeliveryAgent", fields: [agentId], references: [id])
-
-  @@map("productdelivery")
-}
-
 // ─────────────────────────────────────────────
-// MÓDULO NOTIFICACIONES
+// MÓDULO CONFIGURACIÓN DEL NEGOCIO
 // ─────────────────────────────────────────────
 
-model Notification {
-  id        String           @id @default(uuid())
-  type      NotificationType
-  channel   Channel
-  message   String           @db.Text
-  sent      Boolean          @default(false)
-  sentAt    DateTime?
-  createdAt DateTime         @default(now())
+// Datos de pago de la tienda (banco, teléfono Pago Móvil, cédula, cuenta
+// bancaria, RIF, wallet Binance) — antes hardcodeados como constantes
+// idénticas duplicadas en 4 archivos del frontend móvil (advance-payment.tsx,
+// checkout.tsx, final-payment.tsx, link-checkout.tsx). Se centralizan aquí
+// para que el ADMIN los edite en un solo lugar sin recompilar la app.
+model BusinessSettings {
+  id                     String   @id @default(uuid())
+  pagoMovilBanco         String
+  pagoMovilTelefono      String
+  pagoMovilCedula        String
+  transferenciaBanco     String
+  transferenciaCuenta    String
+  transferenciaRif       String
+  binanceId              String
+  binanceRed             String
+  updatedAt              DateTime @updatedAt
 
-  orderId        String?
-  order          Order?  @relation(fields: [orderId], references: [id])
-
-  productOrderId String?
-  productOrder   ProductOrder? @relation(fields: [productOrderId], references: [id])
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
-  @@map("notification")
+  @@map("businesssettings")
 }

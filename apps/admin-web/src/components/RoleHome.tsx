@@ -4,7 +4,9 @@ import { useAuthStore } from '../store/auth.store'
 const ROLE_HOME: Record<string, string> = {
   ADMIN: '/admin',
   TECHNICIAN_DELIVERY: '/technician',
-  DELIVERY: '/delivery',
+  // Mismo panel que el técnico delivery — ve/documenta reparaciones asignadas.
+  // El acceso a Registro (Recepción) sigue disponible desde un link ahí dentro.
+  TECHNICIAN: '/technician',
 }
 
 /**

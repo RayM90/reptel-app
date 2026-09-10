@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
@@ -12,21 +12,16 @@ interface Order {
   orderNumber: string
   status: string
   problem: string
+  diagnosis: string | null
   budget: string | null
   deliveredAt: string | null
   client: { name: string; lastName: string }
   technician: { id: string; name: string } | null
   deliveryAmount: string | null
   revisionAmount: string | null
-  advancePaymentDetails: Record<string, string> | null
   advancePaymentSubmissions: PaymentSubmission[]
   finalPaymentDetails: Record<string, string> | null
   technicianCommission: string | null
-}
-
-interface ProductOrderItem {
-  product: { name: string }
-  quantity: number
 }
 
 interface PaymentSubmission {
@@ -36,20 +31,6 @@ interface PaymentSubmission {
   status: 'PENDING' | 'CONFIRMED' | 'REJECTED'
   rejectionReason: string | null
   createdAt: string
-}
-
-interface ProductOrder {
-  id: string
-  status: string
-  total: string
-  client: { name: string; lastName: string }
-  items: ProductOrderItem[]
-  delivery: {
-    agent: { name: string }
-    deliveryCommission: string | null
-    deliveredAt: string | null
-  } | null
-  paymentSubmissions: PaymentSubmission[]
 }
 
 function PaymentDetailsView({ details }: { details: Record<string, string> | null }) {
@@ -140,13 +121,11 @@ const NEW_BADGE_STYLE: CSSProperties = {
 
 export default function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([])
-  const [productOrders, setProductOrders] = useState<ProductOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set())
-  const [newProductOrderIds, setNewProductOrderIds] = useState<Set<string>>(new Set())
-  const [view, setView] = useState<'activos' | 'entregados'>('activos')
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const showToast = useToastStore((state) => state.showToast)
   const confirmDialog = useConfirm()
 
@@ -173,12 +152,8 @@ export default function Dashboard() {
       setError('')
     }
     try {
-      const [ordersRes, productOrdersRes] = await Promise.all([
-        api.get('/api/orders'),
-        api.get('/api/product-orders'),
-      ])
+      const ordersRes = await api.get('/api/orders')
       const freshOrders: Order[] = ordersRes.data.data
-      const freshProductOrders: ProductOrder[] = productOrdersRes.data.data
 
       if (isPoll) {
         setOrders((prev) => {
@@ -189,17 +164,8 @@ export default function Dashboard() {
           }
           return freshOrders
         })
-        setProductOrders((prev) => {
-          const prevIds = new Set(prev.map((po) => po.id))
-          const freshIds = freshProductOrders.filter((po) => !prevIds.has(po.id)).map((po) => po.id)
-          if (freshIds.length > 0) {
-            setNewProductOrderIds((prevNew) => new Set([...prevNew, ...freshIds]))
-          }
-          return freshProductOrders
-        })
       } else {
         setOrders(freshOrders)
-        setProductOrders(freshProductOrders)
       }
     } catch (err) {
       // En polling silencioso no mostramos el error de página completa —
@@ -210,17 +176,30 @@ export default function Dashboard() {
     }
   }
 
-  const clearNewOrder = (id: string) => {
-    setNewOrderIds((prev) => {
-      if (!prev.has(id)) return prev
-      const next = new Set(prev)
-      next.delete(id)
-      return next
-    })
+  // Self-service + delivery: RECEIVED solo significa "pago confirmado", no que el
+  // técnico ya fue a buscar el equipo. Hasta que haya diagnóstico, el recibo de
+  // intake se etiqueta como "anticipo" en vez de "recepción".
+  const isIntakePendingPickup = (order: Order) => order.deliveryAmount != null && !order.diagnosis
+
+  const downloadReceipt = async (order: Order, type: 'intake' | 'final') => {
+    try {
+      const response = await api.get(`/api/orders/${order.id}/receipt/${type}`, { responseType: 'blob' })
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+      const link = document.createElement('a')
+      link.href = url
+      const pendingPickup = type === 'intake' && isIntakePendingPickup(order)
+      link.download = `recibo-${type === 'final' ? 'entrega' : pendingPickup ? 'anticipo' : 'recepcion'}-${order.orderNumber}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      showToast('Error al descargar el recibo', 'error')
+    }
   }
 
-  const clearNewProductOrder = (id: string) => {
-    setNewProductOrderIds((prev) => {
+  const clearNewOrder = (id: string) => {
+    setNewOrderIds((prev) => {
       if (!prev.has(id)) return prev
       const next = new Set(prev)
       next.delete(id)
@@ -346,80 +325,8 @@ export default function Dashboard() {
     }
   }
 
-  // ── Pedidos de tienda — abonos individuales ──
-  const handleApprovePartialPayment = async (submissionId: string, amount: string) => {
-    if (pendingIds.has(submissionId)) return
-    const confirmed = await confirmDialog({
-      title: 'Aprobar abono',
-      message: `Monto: $${Number(amount).toFixed(2)}. Esta acción no se puede deshacer.`,
-      confirmLabel: 'Aprobar',
-      amount: Number(amount),
-    })
-    if (!confirmed) return
-    setBusy(submissionId, true)
-    try {
-      await api.patch(`/api/product-orders/payment-submissions/${submissionId}/confirm`, { approved: true })
-      showToast('✅ Abono aprobado.', 'success')
-      fetchData()
-    } catch (err) {
-      showToast('❌ Error al aprobar el abono', 'error')
-    } finally {
-      setBusy(submissionId, false)
-    }
-  }
-
-  const handleRejectPartialPayment = async (submissionId: string, amount: string) => {
-    if (pendingIds.has(submissionId)) return
-    const reason = await confirmDialog({
-      title: 'Rechazar abono de pago',
-      requireText: true,
-      textLabel: 'Motivo del rechazo',
-      confirmLabel: 'Rechazar',
-      amount: Number(amount),
-    })
-    if (!reason) return
-    setBusy(submissionId, true)
-    try {
-      await api.patch(`/api/product-orders/payment-submissions/${submissionId}/confirm`, {
-        approved: false,
-        rejectionReason: reason,
-      })
-      showToast('✅ Abono rechazado. Se notificó al cliente para que reenvíe sus datos.', 'success')
-      fetchData()
-    } catch (err) {
-      showToast('❌ Error al rechazar el abono', 'error')
-    } finally {
-      setBusy(submissionId, false)
-    }
-  }
-
-  // ── Pedidos de tienda — cancelar (solo mientras está PENDING) ──
-  const handleCancelProductOrder = async (po: ProductOrder) => {
-    if (pendingIds.has(po.id)) return
-    const confirmed = await confirmDialog({
-      title: 'Cancelar pedido',
-      message: `Cliente: ${po.client.name} ${po.client.lastName} — Total: $${Number(po.total).toFixed(2)}. El stock reservado se devolverá al inventario. Esta acción no se puede deshacer.`,
-      confirmLabel: 'Cancelar pedido',
-    })
-    if (!confirmed) return
-    setBusy(po.id, true)
-    try {
-      await api.patch(`/api/product-orders/${po.id}/cancel`)
-      showToast('✅ Pedido cancelado. El stock fue devuelto al inventario.', 'success')
-      fetchData()
-    } catch (err: any) {
-      showToast(err?.response?.data?.message || '❌ Error al cancelar el pedido', 'error')
-    } finally {
-      setBusy(po.id, false)
-    }
-  }
-
   const activeOrders = orders.filter(
     (o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
-  )
-
-  const activeProductOrders = productOrders.filter(
-    (po) => po.status !== 'DELIVERED' && po.status !== 'CANCELLED'
   )
 
   // Total de presupuestos en curso — servicios activos aún no completados,
@@ -428,27 +335,6 @@ export default function Dashboard() {
     (sum, o) => sum + (o.budget ? Number(o.budget) : 0),
     0
   )
-
-  // Historial — pedidos ya entregados o cancelados, para auditoría de quién
-  // atendió cada uno (técnico o motorizado) y cuánto ganó de comisión.
-  const completedOrders = orders.filter(
-    (o) => o.status === 'DELIVERED' || o.status === 'CANCELLED'
-  )
-
-  const completedProductOrders = productOrders.filter(
-    (po) => po.status === 'DELIVERED' || po.status === 'CANCELLED'
-  )
-
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleDateString('es-VE', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
 
   if (loading) return <div className="page-container"><p>Cargando…</p></div>
   if (error) return <div className="page-container"><p className="alert-error">{error}</p></div>
@@ -464,26 +350,10 @@ export default function Dashboard() {
       <p>
         <Link to="/admin/create-staff" className="btn btn-accent">➕ Crear usuario de personal</Link>{' '}
         <Link to="/admin/inventory" className="btn btn-secondary">📦 Inventario</Link>{' '}
+        <Link to="/registro" className="btn btn-secondary">🧾 Registro (Recepción)</Link>{' '}
         <Link to="/admin/reportes" className="btn btn-secondary">📊 Reportes</Link>
       </p>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-        <button
-          className={view === 'activos' ? 'btn btn-primary' : 'btn btn-outline'}
-          onClick={() => setView('activos')}
-        >
-          Activos
-        </button>
-        <button
-          className={view === 'entregados' ? 'btn btn-primary' : 'btn btn-outline'}
-          onClick={() => setView('entregados')}
-        >
-          📦 Pedidos Entregados
-        </button>
-      </div>
-
-      {view === 'activos' ? (
-        <>
       <section className="card">
         <h2>Servicios Técnicos Activos ({activeOrders.length})</h2>
         {activeOrders.length === 0 ? (
@@ -494,237 +364,121 @@ export default function Dashboard() {
               <thead>
                 <tr>
                   <th scope="col">Orden</th>
+                  <th scope="col">Origen</th>
                   <th scope="col">Cliente</th>
-                  <th scope="col">Problema</th>
+                  <th scope="col">Técnico</th>
                   <th scope="col">Estado</th>
-                  <th scope="col" className="money">Presupuesto</th>
-                  <th scope="col">Técnico asignado</th>
-                  <th scope="col">Pago anticipado</th>
-                  <th scope="col">Pago final</th>
-                  <th scope="col">Acciones</th>
+                  <th scope="col"></th>
                 </tr>
               </thead>
               <tbody>
-                {activeOrders.map((order) => (
-                  <tr
-                    key={order.id}
-                    onClick={() => clearNewOrder(order.id)}
-                    style={newOrderIds.has(order.id) ? NEW_ROW_STYLE : undefined}
-                  >
-                    <td data-label="Orden">
-                      {order.orderNumber}
-                      {newOrderIds.has(order.id) && (
-                        <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>
+                {activeOrders.map((order) => {
+                  const isExpanded = expandedId === order.id
+                  return (
+                    <Fragment key={order.id}>
+                      <tr
+                        key={order.id}
+                        onClick={() => {
+                          setExpandedId((prev) => (prev === order.id ? null : order.id))
+                          clearNewOrder(order.id)
+                        }}
+                        style={newOrderIds.has(order.id) ? NEW_ROW_STYLE : undefined}
+                      >
+                        <td data-label="Orden">
+                          {order.orderNumber}
+                          {newOrderIds.has(order.id) && (
+                            <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>
+                          )}
+                        </td>
+                        <td data-label="Origen">{order.deliveryAmount != null ? '📱 App' : '🏢 Recepción'}</td>
+                        <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
+                        <td data-label="Técnico">{order.technician?.name || 'Sin asignar'}</td>
+                        <td data-label="Estado">
+                          <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
+                            {getStatusBadge('order', order.status).label}
+                          </span>
+                        </td>
+                        <td data-label="">
+                          <button className="btn btn-outline">{isExpanded ? '▲ Cerrar' : '▼ Detalles'}</button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr key={`${order.id}-detail`}>
+                          <td colSpan={6}>
+                            <p><strong>Problema:</strong> {order.problem}</p>
+                            <p><strong>Presupuesto:</strong> {order.budget ? `$${order.budget}` : '—'}</p>
+
+                            <div className="card">
+                              <h4>Pago anticipado</h4>
+                              <PaymentSubmissionsView
+                                submissions={order.advancePaymentSubmissions ?? []}
+                                total={String(
+                                  order.deliveryAmount != null
+                                    ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? 15)
+                                    : Number(order.revisionAmount ?? 15)
+                                )}
+                                onApprove={handleApproveAdvanceInstallment}
+                                onReject={handleRejectAdvanceInstallment}
+                                pendingIds={pendingIds}
+                              />
+                            </div>
+
+                            <div className="card">
+                              <h4>Pago final</h4>
+                              <PaymentDetailsView details={order.finalPaymentDetails} />
+                            </div>
+
+                            <p>
+                              <strong>Recibo:</strong>{' '}
+                              {order.status === 'PENDING_PAYMENT' ? (
+                                '—'
+                              ) : (
+                                <button className="btn btn-outline" onClick={() => downloadReceipt(order, 'intake')}>
+                                  📄 {isIntakePendingPickup(order) ? 'Anticipo' : 'Recepción'}
+                                </button>
+                              )}
+                            </p>
+
+                            <p>
+                              <strong>Acciones:</strong>{' '}
+                              {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') && order.budget != null && Number(order.budget) === 0 ? (
+                                <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => handleCloseZeroBudgetOrder(order)}>
+                                  Marcar como entregada
+                                </button>
+                              ) : order.status === 'READY' ? (
+                                <>
+                                  <button
+                                    className="btn btn-primary"
+                                    onClick={() => handleApproveFinalPayment(order)}
+                                    disabled={!order.finalPaymentDetails || pendingIds.has(order.id)}
+                                  >
+                                    Aprobar pago final
+                                  </button>{' '}
+                                  <button className="btn btn-danger" disabled={pendingIds.has(order.id)} onClick={() => handleRejectFinalPayment(order)}>
+                                    Rechazar
+                                  </button>
+                                </>
+                              ) : (
+                                '—'
+                              )}
+                            </p>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
-                    <td data-label="Problema">{order.problem}</td>
-                    <td data-label="Estado">
-                      <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
-                        {getStatusBadge('order', order.status).label}
-                      </span>
-                    </td>
-                    <td className="money" data-label="Presupuesto">{order.budget ? `$${order.budget}` : '—'}</td>
-                    <td data-label="Técnico asignado">{order.technician?.name || 'Sin asignar'}</td>
-                    <td data-label="Pago anticipado">
-                      <PaymentSubmissionsView
-                        submissions={order.advancePaymentSubmissions ?? []}
-                        total={String(Number(order.deliveryAmount ?? 10) + Number(order.revisionAmount ?? 15))}
-                        onApprove={handleApproveAdvanceInstallment}
-                        onReject={handleRejectAdvanceInstallment}
-                        pendingIds={pendingIds}
-                      />
-                    </td>
-                    <td data-label="Pago final"><PaymentDetailsView details={order.finalPaymentDetails} /></td>
-                    <td data-label="Acciones">
-                      {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') && order.budget != null && Number(order.budget) === 0 ? (
-                        <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => handleCloseZeroBudgetOrder(order)}>
-                          Marcar como entregada
-                        </button>
-                      ) : order.status === 'READY' ? (
-                        <>
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => handleApproveFinalPayment(order)}
-                            disabled={!order.finalPaymentDetails || pendingIds.has(order.id)}
-                          >
-                            Aprobar pago final
-                          </button>{' '}
-                          <button className="btn btn-danger" disabled={pendingIds.has(order.id)} onClick={() => handleRejectFinalPayment(order)}>
-                            Rechazar
-                          </button>
-                        </>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                    </Fragment>
+                  )
+                })}
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>Total presupuesto</td>
+                  <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700 }}>Total presupuesto</td>
                   <td style={{ fontWeight: 700 }}>${activeBudgetTotal.toFixed(2)}</td>
-                  <td colSpan={4}></td>
                 </tr>
               </tfoot>
             </table>
           </div>
         )}
       </section>
-
-      <section className="card">
-        <h2>Pedidos de Tienda Activos ({activeProductOrders.length})</h2>
-        {activeProductOrders.length === 0 ? (
-          <p>No hay pedidos activos</p>
-        ) : (
-          <div className="table-wrapper">
-            <table className="styled-table styled-table--sticky-actions">
-              <thead>
-                <tr>
-                  <th scope="col">Cliente</th>
-                  <th scope="col">Productos</th>
-                  <th scope="col" className="money">Total</th>
-                  <th scope="col">Estado</th>
-                  <th scope="col">Motorizado asignado</th>
-                  <th scope="col">Pagos recibidos</th>
-                  <th scope="col">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeProductOrders.map((po) => (
-                  <tr
-                    key={po.id}
-                    onClick={() => clearNewProductOrder(po.id)}
-                    style={newProductOrderIds.has(po.id) ? NEW_ROW_STYLE : undefined}
-                  >
-                    <td data-label="Cliente">
-                      {po.client.name} {po.client.lastName}
-                      {newProductOrderIds.has(po.id) && (
-                        <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Pedido nuevo, no revisado todavía">🆕 Nuevo</span>
-                      )}
-                    </td>
-                    <td data-label="Productos">{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
-                    <td className="money" data-label="Total">${po.total}</td>
-                    <td data-label="Estado">
-                      <span className={badgeClassName(getStatusBadge('productOrder', po.status).variant)}>
-                        {getStatusBadge('productOrder', po.status).label}
-                      </span>
-                    </td>
-                    <td data-label="Motorizado asignado">{po.delivery?.agent.name || 'Sin asignar'}</td>
-                    <td data-label="Pagos recibidos">
-                      <PaymentSubmissionsView
-                        submissions={po.paymentSubmissions}
-                        total={po.total}
-                        onApprove={handleApprovePartialPayment}
-                        onReject={handleRejectPartialPayment}
-                        pendingIds={pendingIds}
-                      />
-                    </td>
-                    <td data-label="Acciones">
-                      {po.status === 'PENDING' ? (
-                        <button className="btn btn-danger" disabled={pendingIds.has(po.id)} onClick={() => handleCancelProductOrder(po)}>
-                          Cancelar pedido
-                        </button>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-        </>
-      ) : (
-        <>
-      <section className="card">
-        <h2>Servicios Técnicos — Historial ({completedOrders.length})</h2>
-        <p><Link to="/admin/reportes">Ver reporte completo por técnico y período →</Link></p>
-        <div className="table-wrapper">
-          <table className="styled-table">
-            <thead>
-              <tr>
-                <th scope="col">Orden</th>
-                <th scope="col">Cliente</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Técnico</th>
-                <th scope="col" className="money">Presupuesto</th>
-                <th scope="col" className="money">Comisión técnico</th>
-                <th scope="col">Fecha entrega</th>
-              </tr>
-            </thead>
-            <tbody>
-              {completedOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={7}>Aún no hay servicios entregados o cancelados</td>
-                </tr>
-              ) : (
-                completedOrders.map((order) => (
-                  <tr key={order.id}>
-                    <td data-label="Orden">{order.orderNumber}</td>
-                    <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
-                    <td data-label="Estado">
-                      <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
-                        {getStatusBadge('order', order.status).label}
-                      </span>
-                    </td>
-                    <td data-label="Técnico">{order.technician?.name || 'Sin asignar'}</td>
-                    <td className="money" data-label="Presupuesto">{order.budget ? `$${order.budget}` : '—'}</td>
-                    <td className="money" data-label="Comisión técnico">{order.technicianCommission ? `$${order.technicianCommission}` : '—'}</td>
-                    <td data-label="Fecha entrega">{formatDate(order.deliveredAt)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="card">
-        <h2>Pedidos de Tienda — Historial ({completedProductOrders.length})</h2>
-        <p><Link to="/admin/reportes">Ver reporte completo por técnico y período →</Link></p>
-        {completedProductOrders.length === 0 ? (
-          <p>Aún no hay pedidos entregados o cancelados</p>
-        ) : (
-          <div className="table-wrapper">
-            <table className="styled-table">
-              <thead>
-                <tr>
-                  <th scope="col">Cliente</th>
-                  <th scope="col">Productos</th>
-                  <th scope="col" className="money">Total</th>
-                  <th scope="col">Estado</th>
-                  <th scope="col">Motorizado</th>
-                  <th scope="col" className="money">Comisión motorizado</th>
-                  <th scope="col">Fecha entrega</th>
-                </tr>
-              </thead>
-              <tbody>
-                {completedProductOrders.map((po) => (
-                  <tr key={po.id}>
-                    <td data-label="Cliente">{po.client.name} {po.client.lastName}</td>
-                    <td data-label="Productos">{po.items.map((i) => `${i.product.name} x${i.quantity}`).join(', ')}</td>
-                    <td className="money" data-label="Total">${po.total}</td>
-                    <td data-label="Estado">
-                      <span className={badgeClassName(getStatusBadge('productOrder', po.status).variant)}>
-                        {getStatusBadge('productOrder', po.status).label}
-                      </span>
-                    </td>
-                    <td data-label="Motorizado">{po.delivery?.agent.name || 'Sin asignar'}</td>
-                    <td className="money" data-label="Comisión motorizado">{po.delivery?.deliveryCommission ? `$${po.delivery.deliveryCommission}` : '—'}</td>
-                    <td data-label="Fecha entrega">{formatDate(po.delivery?.deliveredAt ?? null)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-        </>
-      )}
     </div>
   )
 }
