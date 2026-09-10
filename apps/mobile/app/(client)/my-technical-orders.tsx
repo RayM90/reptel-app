@@ -167,7 +167,8 @@ export default function MyTechnicalOrdersScreen() {
     const key = `${order.id}-${type}`
     setDownloadingReceipt(key)
     try {
-      const filename = `recibo-${type === 'intake' ? 'recepcion' : 'entrega'}-${order.orderNumber}.pdf`
+      const pendingPickup = type === 'intake' && order.deliveryAmount != null && !order.diagnosis
+      const filename = `recibo-${type === 'final' ? 'entrega' : pendingPickup ? 'anticipo' : 'recepcion'}-${order.orderNumber}.pdf`
       const destination = new File(Paths.cache, filename)
       if (destination.exists) destination.delete()
 
@@ -649,17 +650,25 @@ export default function MyTechnicalOrdersScreen() {
                         </TouchableOpacity>
                       )}
 
-                      {/* Recibos descargables — recepción disponible desde que el
-                          anticipo está confirmado; entrega solo si ya se entregó */}
-                      {status !== 'PENDING_PAYMENT' && (
-                        <TouchableOpacity
-                          style={styles.linkedProductBtn}
-                          onPress={(e) => { e.stopPropagation(); handleDownloadReceipt(order, 'intake') }}
-                          disabled={downloadingReceipt === `${order.id}-intake`}
-                        >
-                          <Text style={styles.linkedProductBtnText}>📄 Descargar recibo de recepción</Text>
-                        </TouchableOpacity>
-                      )}
+                      {/* Recibos descargables — disponible desde que el anticipo está
+                          confirmado; entrega solo si ya se entregó. En self-service con
+                          delivery, RECEIVED solo significa "pago confirmado", no que el
+                          técnico ya fue a buscar el equipo — hasta que haya diagnóstico
+                          se etiqueta como "recibo del anticipo" en vez de "recepción". */}
+                      {status !== 'PENDING_PAYMENT' && (() => {
+                        const pendingPickup = order.deliveryAmount != null && !order.diagnosis
+                        return (
+                          <TouchableOpacity
+                            style={styles.linkedProductBtn}
+                            onPress={(e) => { e.stopPropagation(); handleDownloadReceipt(order, 'intake') }}
+                            disabled={downloadingReceipt === `${order.id}-intake`}
+                          >
+                            <Text style={styles.linkedProductBtnText}>
+                              📄 Descargar {pendingPickup ? 'recibo del anticipo' : 'recibo de recepción'}
+                            </Text>
+                          </TouchableOpacity>
+                        )
+                      })()}
                       {status === 'DELIVERED' && (
                         <TouchableOpacity
                           style={styles.linkedProductBtn}

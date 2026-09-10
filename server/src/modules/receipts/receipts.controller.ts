@@ -2,7 +2,7 @@ import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
 import prisma from '../../lib/prisma'
 import { getOrderById } from '../orders/orders.service'
-import { generateIntakeReceipt, generateFinalReceipt } from './receipts.service'
+import { generateIntakeReceipt, generateFinalReceipt, getIntakeReceiptLabels } from './receipts.service'
 
 // Cliente dueño de la orden, o ADMIN/técnico asignado — nunca otro cliente.
 const canAccessOrder = async (
@@ -35,8 +35,9 @@ export const downloadIntakeReceipt = async (req: AuthRequest, res: Response): Pr
       return
     }
 
+    const { pendingPickup } = getIntakeReceiptLabels(order as any)
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `attachment; filename="recibo-recepcion-${order.orderNumber}.pdf"`)
+    res.setHeader('Content-Disposition', `attachment; filename="recibo-${pendingPickup ? 'anticipo' : 'recepcion'}-${order.orderNumber}.pdf"`)
     const doc = generateIntakeReceipt(order as any)
     doc.pipe(res)
   } catch (error: any) {
