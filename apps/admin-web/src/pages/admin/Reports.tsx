@@ -32,6 +32,21 @@ interface ServicioOrderRow {
   technicianCommission: number
 }
 
+interface ProductRow {
+  productId: string
+  productName: string
+  quantitySold: number
+  totalAmount: number
+}
+
+interface SaleRow {
+  id: string
+  productName: string
+  quantity: number
+  amount: number
+  createdAt: string
+}
+
 interface ReportSummary {
   servicio: {
     totalBudget: number
@@ -40,6 +55,12 @@ interface ReportSummary {
     byTechnician: TechnicianRow[]
     byClient: ServicioClientRow[]
     orders: ServicioOrderRow[]
+  }
+  tienda: {
+    totalSalesAmount: number
+    salesCount: number
+    byProduct: ProductRow[]
+    sales: SaleRow[]
   }
 }
 
@@ -358,6 +379,67 @@ export default function Reports() {
                           <button className="btn btn-outline" onClick={() => downloadReceipt(o, 'intake')}>📄 Recepción</button>{' '}
                           <button className="btn btn-outline" onClick={() => downloadReceipt(o, 'final')}>📄 Entrega</button>
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </details>
+
+          <h2>Tienda Física</h2>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+            <div className="card">
+              <h3>Ventas de mostrador</h3>
+              <p>{data.tienda.salesCount}</p>
+            </div>
+            <div className="card">
+              <h3>Monto aproximado</h3>
+              <p>${data.tienda.totalSalesAmount.toFixed(2)}</p>
+            </div>
+          </div>
+
+          <section className="card">
+            <h3>Por producto</h3>
+            {data.tienda.byProduct.length === 0 ? (
+              <p>No hay datos en este período</p>
+            ) : (
+              <div className="table-wrapper">
+                <table className="styled-table">
+                  <thead>
+                    <tr><th scope="col">Producto</th><th scope="col">Cantidad vendida</th><th scope="col" className="money">Monto</th></tr>
+                  </thead>
+                  <tbody>
+                    {data.tienda.byProduct.map((p) => (
+                      <tr key={p.productId}>
+                        <td data-label="Producto">{p.productName}</td>
+                        <td data-label="Cantidad vendida">{p.quantitySold}</td>
+                        <td className="money" data-label="Monto">${p.totalAmount.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <details className="card">
+            <summary><h3 style={{ display: 'inline' }}>Detalle de ventas</h3></summary>
+            {data.tienda.sales.length === 0 ? (
+              <p>No hay datos en este período</p>
+            ) : (
+              <div className="table-wrapper">
+                <table className="styled-table">
+                  <thead>
+                    <tr><th scope="col">Producto</th><th scope="col">Cantidad</th><th scope="col" className="money">Monto</th><th scope="col">Fecha</th></tr>
+                  </thead>
+                  <tbody>
+                    {data.tienda.sales.map((s) => (
+                      <tr key={s.id}>
+                        <td data-label="Producto">{s.productName}</td>
+                        <td data-label="Cantidad">{s.quantity}</td>
+                        <td className="money" data-label="Monto">${s.amount.toFixed(2)}</td>
+                        <td data-label="Fecha">{formatDate(s.createdAt)}</td>
                       </tr>
                     ))}
                   </tbody>
