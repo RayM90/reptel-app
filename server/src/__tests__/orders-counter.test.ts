@@ -76,7 +76,7 @@ describe('Orders — POST /api/orders/counter', () => {
     expect((submissions[0].paymentDetails as any).banco).toBe('Banesco')
 
     const history = await prisma.orderStatusHistory.findFirst({ where: { orderId: createdOrderId } })
-    expect(history?.comment).toMatch(/mostrador/i)
+    expect(history?.comment).toMatch(/recepción/i)
     expect(history?.userId).toBeTruthy()
   }, 15000)
 

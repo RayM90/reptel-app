@@ -401,11 +401,11 @@ export const createCounterOrder = async (data: {
         statusHistory: {
           create: {
             status: 'RECEIVED',
-            comment: `Orden creada en mostrador por ${actor ? `${actor.name} ${actor.lastName ?? ''}`.trim() : 'personal de mostrador'} — abono de $${data.amount ?? ADVANCE_REVISION_AMOUNT} reportado, pendiente de confirmar por el administrador`,
+            comment: `Orden creada en Recepción por ${actor ? `${actor.name} ${actor.lastName ?? ''}`.trim() : 'personal de Recepción'} — abono de $${data.amount ?? ADVANCE_REVISION_AMOUNT} reportado, pendiente de confirmar por el administrador`,
             userId: actor?.id,
           },
         },
-        // Mismo flujo que el self-service: el staff de mostrador reporta los
+        // Mismo flujo que el self-service: el staff de recepción reporta los
         // datos del pago, pero queda PENDING hasta que un ADMIN lo confirme
         // desde el Dashboard (PaymentSubmissionsView) — no se auto-confirma.
         // `amount` puede ser menor al total: el resto se abona después con
@@ -536,7 +536,7 @@ export const confirmAdvancePaymentInstallment = async (
   }
 
   const order = submission.order
-  // Órdenes de mostrador no tienen deliveryAmount (no hay que ir a buscar el
+  // Órdenes de recepción no tienen deliveryAmount (no hay que ir a buscar el
   // equipo) — su total es solo la revisión, no revisión+delivery como self-service.
   const total =
     order.deliveryAmount != null
@@ -564,7 +564,7 @@ export const confirmAdvancePaymentInstallment = async (
 
       if (orderNowComplete) {
         // Pago completo confirmado por el admin → autoriza al técnico a
-        // proceder de inmediato (revisar en mostrador, o ir a buscar el
+        // proceder de inmediato (revisar en recepción, o ir a buscar el
         // equipo en delivery — "revisión" incluye ese viaje en ese caso).
         return await tx.order.update({
           where: { id: order.id },
