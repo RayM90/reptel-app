@@ -51,6 +51,15 @@ export default function InventoryList() {
       </p>
       <p><Link to="/admin">← Volver al Panel de Administrador</Link></p>
 
+      {(() => {
+        const lowStock = products.filter((p) => p.isActive && p.stock <= p.minStock)
+        return lowStock.length > 0 ? (
+          <p className="alert-error">
+            ⚠️ Repostar: {lowStock.map((p) => `${p.name} (${p.stock}/${p.minStock})`).join(', ')}
+          </p>
+        ) : null
+      })()}
+
       {loading && <p>Cargando…</p>}
       {error && <p className="alert-error">No se pudo cargar el inventario</p>}
 
