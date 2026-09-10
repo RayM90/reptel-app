@@ -533,9 +533,12 @@ export const confirmAdvancePaymentInstallment = async (
   }
 
   const order = submission.order
+  // Órdenes de mostrador no tienen deliveryAmount (no hay que ir a buscar el
+  // equipo) — su total es solo la revisión, no revisión+delivery como self-service.
   const total =
-    Number(order.deliveryAmount ?? ADVANCE_DELIVERY_AMOUNT) +
-    Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+    order.deliveryAmount != null
+      ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+      : Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
 
   const updatedOrder = await prisma.$transaction(async (tx) => {
     await tx.advancePaymentSubmission.update({
