@@ -119,12 +119,20 @@ export default function TechnicianDashboard() {
   const [catalogSelection, setCatalogSelection] = useState<Record<string, string>>({})
   const [manualExtraText, setManualExtraText] = useState<Record<string, string>>({})
 
-  // El presupuesto se autollena con catálogo + monto manual, pero sigue
-  // siendo editable a mano por si el técnico necesita ajustarlo directo.
-  const recomputeBudget = (orderId: string, catalogId: string, manualExtra: string) => {
+  const getPartsSubtotal = (orderId: string, partsOverride?: PartUsed[]) =>
+    (partsOverride ?? partsByOrder[orderId] ?? [])
+      .filter((p) => !p.reversedAt)
+      .reduce((sum, p) => sum + p.quantity * Number(p.unitPriceAtUse ?? 0), 0)
+
+  // El presupuesto se autollena con catálogo + monto manual + repuestos ya
+  // usados (que el backend ya sumó a Order.budget al agregarlos — si no lo
+  // reflejamos acá, enviar el diagnóstico lo pisaría con un total menor).
+  // Sigue siendo editable a mano por si el técnico necesita ajustarlo directo.
+  const recomputeBudget = (orderId: string, catalogId: string, manualExtra: string, partsOverride?: PartUsed[]) => {
     const catalogPrice = catalogId ? Number(catalog.find((c) => c.id === catalogId)?.basePrice ?? 0) : 0
     const extra = Number(manualExtra) || 0
-    setBudgetText((prev) => ({ ...prev, [orderId]: (catalogPrice + extra).toFixed(2) }))
+    const partsSubtotal = getPartsSubtotal(orderId, partsOverride)
+    setBudgetText((prev) => ({ ...prev, [orderId]: (catalogPrice + extra + partsSubtotal).toFixed(2) }))
   }
 
   const [commentText, setCommentText] = useState<Record<string, string>>({})
@@ -146,12 +154,14 @@ export default function TechnicianDashboard() {
     return () => clearInterval(interval)
   }, [])
 
-  const fetchParts = async (orderId: string) => {
+  const fetchParts = async (orderId: string): Promise<PartUsed[]> => {
     try {
       const res = await api.get(`/api/orders/${orderId}/parts`)
       setPartsByOrder((prev) => ({ ...prev, [orderId]: res.data.data }))
+      return res.data.data
     } catch {
       // silencioso — no bloquea el resto del detalle de la orden
+      return partsByOrder[orderId] ?? []
     }
   }
 
@@ -167,7 +177,8 @@ export default function TechnicianDashboard() {
       showToast('✅ Repuesto registrado, presupuesto actualizado', 'success')
       setPartsProductId((prev) => ({ ...prev, [orderId]: '' }))
       setPartsQuantity((prev) => ({ ...prev, [orderId]: '' }))
-      fetchParts(orderId)
+      const freshParts = await fetchParts(orderId)
+      recomputeBudget(orderId, catalogSelection[orderId] || '', manualExtraText[orderId] || '', freshParts)
       fetchData(true)
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'Error al registrar el repuesto', 'error')
@@ -178,7 +189,8 @@ export default function TechnicianDashboard() {
     try {
       await api.delete(`/api/orders/${orderId}/parts/${movementId}`)
       showToast('Repuesto revertido — stock y presupuesto restaurados', 'success')
-      fetchParts(orderId)
+      const freshParts = await fetchParts(orderId)
+      recomputeBudget(orderId, catalogSelection[orderId] || '', manualExtraText[orderId] || '', freshParts)
       fetchData(true)
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'Error al revertir el repuesto', 'error')
@@ -223,7 +235,9 @@ export default function TechnicianDashboard() {
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id))
     if (expandedId !== id && !partsByOrder[id]) {
-      fetchParts(id)
+      fetchParts(id).then((freshParts) => {
+        recomputeBudget(id, catalogSelection[id] || '', manualExtraText[id] || '', freshParts)
+      })
     }
     if (newIds.has(id)) {
       setNewIds((prev) => {
@@ -421,7 +435,7 @@ export default function TechnicianDashboard() {
                     )}
 
                     <div className="card">
-                      <h4>Repuestos usados</h4>
+                      <h4>Repuestos</h4>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                         <div className="form-group" style={{ flex: 1, marginBottom: 0, minWidth: 160 }}>
                           <label>Producto</label>
@@ -553,8 +567,28 @@ export default function TechnicianDashboard() {
                               setBudgetText((prev) => ({ ...prev, [order.id]: e.target.value }))
                             }
                           />
-                          <p className="form-hint">Se autollena con catálogo + monto adicional, pero podés editarlo directo.</p>
+                          <p className="form-hint">Se autollena con catálogo + monto adicional + repuestos, pero podés editarlo directo.</p>
                         </div>
+
+                        {(() => {
+                          const catalogItem = catalog.find((c) => c.id === (catalogSelection[order.id] || ''))
+                          const extra = Number(manualExtraText[order.id] || 0)
+                          const activeParts = (partsByOrder[order.id] ?? []).filter((p) => !p.reversedAt)
+                          if (!catalogItem && !extra && activeParts.length === 0) return null
+                          return (
+                            <div className="form-hint" style={{ marginBottom: 12 }}>
+                              <strong>Desglose del presupuesto:</strong>
+                              <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
+                                {catalogItem && <li>{catalogItem.name} — ${Number(catalogItem.basePrice).toFixed(2)}</li>}
+                                {extra > 0 && <li>Monto adicional — ${extra.toFixed(2)}</li>}
+                                {activeParts.map((p) => (
+                                  <li key={p.id}>Repuesto: {p.product.name} (x{p.quantity}) — ${(p.quantity * Number(p.unitPriceAtUse ?? 0)).toFixed(2)}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )
+                        })()}
+
                         <button className="btn btn-primary" disabled={pendingIds.has(`diag:${order.id}`)} onClick={() => handleSubmitDiagnosis(order.id)}>
                           Enviar diagnóstico
                         </button>
