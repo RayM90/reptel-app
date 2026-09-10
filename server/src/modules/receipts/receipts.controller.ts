@@ -1,7 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
 import prisma from '../../lib/prisma'
-import { getOrderById } from '../orders/orders.service'
+import { getOrderById, getPartsUsedInOrder } from '../orders/orders.service'
 import { generateIntakeReceipt, generateFinalReceipt, getIntakeReceiptLabels } from './receipts.service'
 
 // Cliente dueño de la orden, o ADMIN/técnico asignado — nunca otro cliente.
@@ -63,9 +63,14 @@ export const downloadFinalReceipt = async (req: AuthRequest, res: Response): Pro
       return
     }
 
+    const movements = await getPartsUsedInOrder(id)
+    const partsUsed = movements
+      .filter((m) => !m.reversedAt)
+      .map((m) => ({ productName: m.product.name, quantity: m.quantity, unitPriceAtUse: m.unitPriceAtUse }))
+
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="recibo-entrega-${order.orderNumber}.pdf"`)
-    const doc = generateFinalReceipt(order as any)
+    const doc = generateFinalReceipt({ ...order, partsUsed } as any)
     doc.pipe(res)
   } catch (error: any) {
     console.error('ERROR GENERAR RECIBO DE ENTREGA:', error)
