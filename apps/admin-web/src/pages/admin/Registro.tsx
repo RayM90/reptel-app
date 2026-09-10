@@ -84,6 +84,7 @@ export default function Registro() {
   const [searching, setSearching] = useState(false)
   const [searched, setSearched] = useState(false)
   const [clientExists, setClientExists] = useState<boolean | null>(null)
+  const [isEditingClient, setIsEditingClient] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [savingClient, setSavingClient] = useState(false)
   const [clientError, setClientError] = useState('')
@@ -141,6 +142,7 @@ export default function Registro() {
     setIdNumber('')
     setSearched(false)
     setClientExists(null)
+    setIsEditingClient(false)
     setForm(emptyForm)
     setClientError('')
     setActiveClient(null)
@@ -192,7 +194,26 @@ export default function Registro() {
 
   const handleContinue = async () => {
     if (clientExists) {
-      setStep('sale')
+      if (!isEditingClient) {
+        setStep('sale')
+        return
+      }
+      if (!form.name || !form.lastName || !form.phone) {
+        setClientError('Nombre, apellido y teléfono son requeridos')
+        return
+      }
+      setSavingClient(true)
+      setClientError('')
+      try {
+        const response = await api.patch(`/api/clients/${activeClient!.id}`, form)
+        setActiveClient(response.data.data)
+        setIsEditingClient(false)
+        setStep('sale')
+      } catch (err: any) {
+        setClientError(err?.response?.data?.message || 'Error al actualizar el cliente')
+      } finally {
+        setSavingClient(false)
+      }
       return
     }
 
@@ -340,6 +361,7 @@ export default function Registro() {
                   setIdNumber(v)
                   setSearched(false)
                   setClientExists(null)
+    setIsEditingClient(false)
                 }}
               />
               <button className="btn btn-secondary" onClick={handleSearch} disabled={searching || !idNumber.trim()}>
@@ -349,7 +371,14 @@ export default function Registro() {
           </div>
 
           {searched && clientExists && (
-            <p className="alert-success">Cliente encontrado: {form.name} {form.lastName}</p>
+            <p className="alert-success">
+              Cliente encontrado: {form.name} {form.lastName}{' '}
+              {!isEditingClient && (
+                <button className="btn btn-outline" onClick={() => setIsEditingClient(true)}>
+                  Editar
+                </button>
+              )}
+            </p>
           )}
           {searched && clientExists === false && (
             <p className="form-hint">No existe un cliente con esa cédula — completa los datos para registrarlo.</p>
@@ -359,17 +388,17 @@ export default function Registro() {
             <>
               <div className="form-group">
                 <label>Nombre</label>
-                <input type="text" value={form.name} disabled={!!clientExists}
+                <input type="text" value={form.name} disabled={!!clientExists && !isEditingClient}
                   onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div className="form-group">
                 <label>Apellido</label>
-                <input type="text" value={form.lastName} disabled={!!clientExists}
+                <input type="text" value={form.lastName} disabled={!!clientExists && !isEditingClient}
                   onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
               </div>
               <div className="form-group">
                 <label>Teléfono</label>
-                {clientExists ? (
+                {clientExists && !isEditingClient ? (
                   <input type="text" value={form.phone} disabled />
                 ) : (
                   <PhoneInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} required />
@@ -377,39 +406,45 @@ export default function Registro() {
               </div>
               <div className="form-group">
                 <label>Correo (opcional)</label>
-                <input type="email" value={form.email} disabled={!!clientExists}
+                <input type="email" value={form.email} disabled={!!clientExists && !isEditingClient}
                   onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div className="form-group">
                 <label>Estado</label>
-                <input type="text" value={form.addressState} disabled={!!clientExists}
+                <input type="text" value={form.addressState} disabled={!!clientExists && !isEditingClient}
                   onChange={(e) => setForm({ ...form, addressState: e.target.value })} />
               </div>
               <div className="form-group">
                 <label>Municipio</label>
-                <input type="text" value={form.addressCity} disabled={!!clientExists}
+                <input type="text" value={form.addressCity} disabled={!!clientExists && !isEditingClient}
                   onChange={(e) => setForm({ ...form, addressCity: e.target.value })} />
               </div>
               <div className="form-group">
                 <label>Barrio/Urb.</label>
-                <input type="text" value={form.addressNeighborhood} disabled={!!clientExists}
+                <input type="text" value={form.addressNeighborhood} disabled={!!clientExists && !isEditingClient}
                   onChange={(e) => setForm({ ...form, addressNeighborhood: e.target.value })} />
               </div>
               <div className="form-group">
                 <label>Calle</label>
-                <input type="text" value={form.addressStreet} disabled={!!clientExists}
+                <input type="text" value={form.addressStreet} disabled={!!clientExists && !isEditingClient}
                   onChange={(e) => setForm({ ...form, addressStreet: e.target.value })} />
               </div>
               <div className="form-group">
                 <label>Edificio/Casa</label>
-                <input type="text" value={form.addressBuilding} disabled={!!clientExists}
+                <input type="text" value={form.addressBuilding} disabled={!!clientExists && !isEditingClient}
                   onChange={(e) => setForm({ ...form, addressBuilding: e.target.value })} />
               </div>
 
               {clientError && <p className="alert-error">{clientError}</p>}
 
               <button className="btn btn-primary" onClick={handleContinue} disabled={savingClient}>
-                {savingClient ? 'Guardando…' : clientExists ? 'Continuar →' : 'Crear cliente y continuar →'}
+                {savingClient
+                  ? 'Guardando…'
+                  : clientExists
+                  ? isEditingClient
+                    ? 'Guardar cambios y continuar →'
+                    : 'Continuar →'
+                  : 'Crear cliente y continuar →'}
               </button>
             </>
           )}
@@ -592,6 +627,10 @@ export default function Registro() {
           </div>
 
           <h3>Confirmar datos del pago (verificado en persona)</h3>
+          <p className="form-hint">
+            Concepto: <strong>Revisión del equipo — $15.00</strong> (el catálogo elegido arriba es solo
+            referencia del diagnóstico, no cambia este monto)
+          </p>
           {orderForm.advancePaymentMethod === 'BINANCE' ? (
             <>
               <div className="form-group">
