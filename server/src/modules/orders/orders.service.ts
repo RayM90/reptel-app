@@ -1202,17 +1202,15 @@ export const useProductInOrder = async (
     })
 
     const addedCost = Number(product.price) * quantity
-    // No usar `increment`: en MySQL `NULL + x = NULL`, así que si la orden
-    // todavía no tiene presupuesto (antes del diagnóstico), el incremento
-    // atómico de Prisma es un no-op silencioso y el costo del repuesto se
-    // pierde. Se lee el budget actual dentro de la misma transacción y se
-    // escribe el valor explícito.
-    const currentOrder = await tx.order.findUniqueOrThrow({ where: { id: orderId } })
-    const newBudget = (currentOrder.budget !== null ? Number(currentOrder.budget) : 0) + addedCost
-    const updatedOrder = await tx.order.update({
-      where: { id: orderId },
-      data: { budget: newBudget },
-    })
+    // Usar UPDATE atómico en lugar de read-then-write. En MySQL REPEATABLE READ,
+    // dos transacciones concurrentes pueden leer el mismo budget y escribir sobre él,
+    // causando pérdida de actualización. El UPDATE atómico con COALESCE evita esto
+    // mediante row-locking de InnoDB.
+    await tx.$executeRaw`UPDATE \`Order\` SET budget = COALESCE(budget, 0) + ${addedCost} WHERE id = ${orderId}`
+
+    // Leer el order actualizado para retornar el state actual. Esto es seguro porque
+    // estamos leyendo después de la escritura de la misma transacción.
+    const updatedOrder = await tx.order.findUniqueOrThrow({ where: { id: orderId } })
 
     return { movement, order: updatedOrder }
   })
@@ -1244,14 +1242,12 @@ export const revertProductUsage = async (movementId: string, actorEmail: string)
     })
 
     const revertedCost = Number(movement.unitPriceAtUse ?? 0) * movement.quantity
-    // Mismo motivo que en useProductInOrder: leer y escribir explícito en vez
-    // de `decrement`, para que el resultado nunca quede en NULL por accidente.
-    const currentOrder = await tx.order.findUniqueOrThrow({ where: { id: movement.orderId! } })
-    const newBudget = (currentOrder.budget !== null ? Number(currentOrder.budget) : 0) - revertedCost
-    const updatedOrder = await tx.order.update({
-      where: { id: movement.orderId! },
-      data: { budget: newBudget },
-    })
+    // Usar UPDATE atómico en lugar de read-then-write para evitar pérdida de
+    // actualización bajo concurrencia. COALESCE maneja NULL como 0.
+    await tx.$executeRaw`UPDATE \`Order\` SET budget = COALESCE(budget, 0) - ${revertedCost} WHERE id = ${movement.orderId!}`
+
+    // Leer el order actualizado para retornar el state actual, después de la escritura.
+    const updatedOrder = await tx.order.findUniqueOrThrow({ where: { id: movement.orderId! } })
 
     const updatedMovement = await tx.inventoryMovement.update({
       where: { id: movementId },
