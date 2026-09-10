@@ -5,7 +5,7 @@ import { api } from '../../services/api'
 interface Movement {
   id: string
   type: 'IN' | 'OUT'
-  channel: 'MOSTRADOR' | 'SERVICIO_TECNICO'
+  channel: 'MOSTRADOR' | 'SERVICIO_TECNICO' | 'AJUSTE_MANUAL'
   quantity: number
   reason: string
   createdAt: string
@@ -16,6 +16,7 @@ interface Movement {
 const CHANNEL_LABELS: Record<Movement['channel'], string> = {
   MOSTRADOR: 'Mostrador',
   SERVICIO_TECNICO: 'Servicio técnico',
+  AJUSTE_MANUAL: 'Ajuste manual',
 }
 
 function formatDate(dateStr: string) {
@@ -72,6 +73,7 @@ export default function InventoryMovements() {
           <option value="">Todos</option>
           <option value="MOSTRADOR">Mostrador</option>
           <option value="SERVICIO_TECNICO">Servicio técnico</option>
+          <option value="AJUSTE_MANUAL">Ajuste manual</option>
         </select>
       </div>
 
