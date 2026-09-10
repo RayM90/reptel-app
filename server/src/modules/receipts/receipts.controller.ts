@@ -10,7 +10,7 @@ const canAccessOrder = async (
   order: { clientId: string }
 ): Promise<boolean> => {
   const groups = req.user?.groups ?? []
-  if (groups.includes('ADMIN') || groups.includes('TECHNICIAN_DELIVERY')) return true
+  if (groups.includes('ADMIN') || groups.includes('TECHNICIAN_DELIVERY') || groups.includes('TECHNICIAN')) return true
   if (groups.includes('CLIENT') && req.user?.email) {
     const user = await prisma.user.findUnique({ where: { email: req.user.email }, select: { clientId: true } })
     return user?.clientId === order.clientId

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/auth.store'
 import { useToastStore } from '../../store/toast.store'
@@ -278,6 +279,8 @@ export default function TechnicianDashboard() {
           ↻ Actualizar
         </button>
       </div>
+
+      {user?.role === 'TECHNICIAN' && <p><Link to="/registro">🧾 Ir a Registro (mostrador)</Link></p>}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         <button

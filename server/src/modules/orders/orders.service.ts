@@ -30,10 +30,15 @@ const ADVANCE_REVISION_AMOUNT = 15
 // Prioridad 3: null → asignación manual
 // ─────────────────────────────────────────────
 
-const assignTechnician = async (): Promise<string | null> => {
+// includeMostrador: las órdenes de mostrador (equipo ya en el local) también
+// pueden asignarse a un TECHNICIAN — a diferencia de self-service+delivery,
+// que requiere ir a buscar el equipo y sigue siendo solo TECHNICIAN_DELIVERY.
+const assignTechnician = async (includeMostrador = false): Promise<string | null> => {
+  const roles = includeMostrador ? ['TECHNICIAN_DELIVERY', 'TECHNICIAN'] : ['TECHNICIAN_DELIVERY']
+
   const available = await prisma.user.findMany({
     where: {
-      role: 'TECHNICIAN_DELIVERY',
+      role: { in: roles as any },
       isActive: true,
       technicianStatus: 'AVAILABLE',
     },
@@ -49,7 +54,7 @@ const assignTechnician = async (): Promise<string | null> => {
 
   const busy = await prisma.user.findMany({
     where: {
-      role: 'TECHNICIAN_DELIVERY',
+      role: { in: roles as any },
       isActive: true,
       technicianStatus: 'BUSY',
     },
@@ -364,7 +369,7 @@ export const createCounterOrder = async (data: {
   const actor = await prisma.user.findUnique({ where: { email: data.actorEmail } })
 
   const orderNumber = generateOrderNumber()
-  const resolvedTechnicianId = await assignTechnician()
+  const resolvedTechnicianId = await assignTechnician(true)
 
   const order = await prisma.$transaction(async (tx) => {
     const device = await tx.device.create({
@@ -666,7 +671,7 @@ export const updateOrderBudget = async (
 export const getAvailableTechnicians = async () => {
   return await prisma.user.findMany({
     where: {
-      role: 'TECHNICIAN_DELIVERY',
+      role: { in: ['TECHNICIAN_DELIVERY', 'TECHNICIAN'] },
       isActive: true,
       technicianStatus: { in: ['AVAILABLE', 'BUSY'] },
     },

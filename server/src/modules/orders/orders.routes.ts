@@ -41,7 +41,7 @@ router.get('/today', authenticate, authorize('ADMIN'), ordersController.getToday
 router.get('/technicians', authenticate, authorize('ADMIN'), ordersController.getAvailableTechnicians)
 
 // Órdenes asignadas al técnico autenticado (Fase 4 — panel del técnico)
-router.get('/technician/my-orders', authenticate, authorize('TECHNICIAN_DELIVERY'), ordersController.getMyTechnicianOrders)
+router.get('/technician/my-orders', authenticate, authorize('TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.getMyTechnicianOrders)
 
 // ─── Rutas con parámetros dinámicos (personal) ────────────────────
 // Obtener todas las órdenes — ADMIN
@@ -59,11 +59,11 @@ router.get('/:id/receipt/final', authenticate, receiptsController.downloadFinalR
 router.post('/', authenticate, authorize('ADMIN'), ordersController.createOrder)
 
 // Actualizar el estado de una orden (incluye comentarios de progreso del técnico)
-router.patch('/:id/status', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVERY'), ordersController.updateStatus)
+router.patch('/:id/status', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.updateStatus)
 // Actualizar presupuesto de una orden — ADMIN
 router.patch('/:id/budget', authenticate, authorize('ADMIN'), ordersController.updateBudget)
 
-router.patch('/:id/diagnosis', authenticate, authorize('TECHNICIAN_DELIVERY'), ordersController.submitDiagnosis)
+router.patch('/:id/diagnosis', authenticate, authorize('TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.submitDiagnosis)
 
 // Confirmar o rechazar un abono específico del anticipo (pago en partes — ADMIN)
 router.post('/advance-payment-installment/:submissionId/confirm', authenticate, authorize('ADMIN'), ordersController.confirmAdvancePaymentInstallment)
