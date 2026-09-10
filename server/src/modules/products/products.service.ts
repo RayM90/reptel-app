@@ -50,46 +50,6 @@ export const getAllProducts = async () => {
 };
 
 /**
- * Resumen de actividad de la tienda física para el Dashboard — ventas de
- * mostrador de hoy (conteo + monto aproximado, ya que la venta no guarda un
- * monto propio, se calcula con el precio actual del producto) y productos
- * que necesitan reposición (stock <= minStock).
- */
-export const getStoreSummaryToday = async () => {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date();
-  endOfDay.setHours(23, 59, 59, 999);
-
-  const salesToday = await prisma.inventoryMovement.findMany({
-    where: {
-      type: 'OUT',
-      reason: 'Venta mostrador',
-      createdAt: { gte: startOfDay, lte: endOfDay },
-    },
-    include: { product: { select: { price: true } } },
-  });
-
-  const salesCount = salesToday.length;
-  const salesTotal = salesToday.reduce(
-    (sum, m) => sum + m.quantity * Number(m.product.price),
-    0
-  );
-
-  // Prisma no soporta comparar dos columnas de la misma fila en el `where`
-  // (stock <= minStock) — se filtra en memoria, la tabla de productos es chica.
-  const activeProducts = await prisma.product.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true, stock: true, minStock: true },
-  });
-  const lowStockProducts = activeProducts
-    .filter((p) => p.stock <= p.minStock)
-    .sort((a, b) => a.stock - b.stock);
-
-  return { salesCount, salesTotal, lowStockProducts };
-};
-
-/**
  * Historial de movimientos de inventario — hoy solo se escribe, nunca se lee
  * fuera de este reporte. Filtros opcionales por producto, canal y rango de fecha.
  */
@@ -195,39 +155,6 @@ export const updateProduct = async (
         },
       });
     }
-
-    return updated;
-  });
-};
-
-/**
- * Venta de mostrador (tienda física) — descuenta stock y registra el
- * movimiento. Sin monto ni método de pago: el costo se maneja fuera del
- * sistema (caja física), esto solo lleva el inventario al día.
- */
-export const sellProduct = async (id: string, quantity: number, userId?: string) => {
-  return prisma.$transaction(async (tx) => {
-    const product = await tx.product.findUniqueOrThrow({ where: { id } });
-
-    if (product.stock < quantity) {
-      throw new InsufficientStockError();
-    }
-
-    const updated = await tx.product.update({
-      where: { id },
-      data: { stock: { decrement: quantity } },
-    });
-
-    await tx.inventoryMovement.create({
-      data: {
-        productId: id,
-        type: 'OUT',
-        channel: 'MOSTRADOR',
-        quantity,
-        reason: 'Venta mostrador',
-        userId,
-      },
-    });
 
     return updated;
   });
