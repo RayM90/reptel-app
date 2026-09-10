@@ -65,9 +65,11 @@ interface TechOrder {
   revisionAmount: string | null
   technicianCommission: string | null
   finalPaymentConfirmedAt: string | null
+  finalPaymentDetails: Record<string, string> | null
+  finalPaymentConfirmed: boolean
   client: { name: string; lastName: string }
-  device: { type: string; brand: string; model: string; color: string }
-  serviceCatalog: { id: string; name: string } | null
+  device: { type: string; brand: string; model: string; color: string; accessories: string; devicePassword: string | null; serialNumber: string | null }
+  serviceCatalog: { id: string; name: string; basePrice: string } | null
   statusHistory: StatusHistoryEntry[]
 }
 
@@ -115,6 +117,15 @@ export default function TechnicianDashboard() {
   const [diagnosisText, setDiagnosisText] = useState<Record<string, string>>({})
   const [budgetText, setBudgetText] = useState<Record<string, string>>({})
   const [catalogSelection, setCatalogSelection] = useState<Record<string, string>>({})
+  const [manualExtraText, setManualExtraText] = useState<Record<string, string>>({})
+
+  // El presupuesto se autollena con catálogo + monto manual, pero sigue
+  // siendo editable a mano por si el técnico necesita ajustarlo directo.
+  const recomputeBudget = (orderId: string, catalogId: string, manualExtra: string) => {
+    const catalogPrice = catalogId ? Number(catalog.find((c) => c.id === catalogId)?.basePrice ?? 0) : 0
+    const extra = Number(manualExtra) || 0
+    setBudgetText((prev) => ({ ...prev, [orderId]: (catalogPrice + extra).toFixed(2) }))
+  }
 
   const [commentText, setCommentText] = useState<Record<string, string>>({})
   const [statusSelection, setStatusSelection] = useState<Record<string, OrderStatus>>({})
@@ -392,9 +403,22 @@ export default function TechnicianDashboard() {
 
                 {isExpanded && (
                   <div style={{ marginTop: 12, borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
-                    <p><strong>Problema:</strong> {order.problem}</p>
+                    <div className="card">
+                      <h4>Detalle del equipo</h4>
+                      <p><strong>Tipo:</strong> {order.device.type === 'LAPTOP' ? 'Laptop' : 'PC'}</p>
+                      <p><strong>Marca / Modelo:</strong> {order.device.brand} {order.device.model}</p>
+                      <p><strong>Color:</strong> {order.device.color}</p>
+                      <p><strong>Accesorios:</strong> {order.device.accessories || '—'}</p>
+                      {order.device.devicePassword && <p><strong>Contraseña del equipo:</strong> {order.device.devicePassword}</p>}
+                      <p><strong>Problema reportado por el cliente:</strong> {order.problem}</p>
+                    </div>
+
                     {order.diagnosis && <p><strong>Diagnóstico:</strong> {order.diagnosis}</p>}
                     {order.budget && <p><strong>Presupuesto:</strong> ${order.budget}</p>}
+
+                    {order.finalPaymentDetails && !order.finalPaymentConfirmed && (
+                      <p className="alert-success">💰 El cliente ya reportó el pago final — esperando confirmación del administrador.</p>
+                    )}
 
                     <div className="card">
                       <h4>Repuestos usados</h4>
@@ -463,22 +487,14 @@ export default function TechnicianDashboard() {
                       <div className="card">
                         <h4>Registrar diagnóstico</h4>
                         <div className="form-group">
-                          <label>Diagnóstico</label>
-                          <textarea
-                            value={diagnosisText[order.id] || ''}
-                            onChange={(e) =>
-                              setDiagnosisText((prev) => ({ ...prev, [order.id]: e.target.value }))
-                            }
-                            rows={3}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label>Servicio del catálogo (opcional)</label>
+                          <label>Servicio del catálogo (si aplica — autollena el presupuesto)</label>
                           <select
                             value={catalogSelection[order.id] || ''}
-                            onChange={(e) =>
-                              setCatalogSelection((prev) => ({ ...prev, [order.id]: e.target.value }))
-                            }
+                            onChange={(e) => {
+                              const catalogId = e.target.value
+                              setCatalogSelection((prev) => ({ ...prev, [order.id]: catalogId }))
+                              recomputeBudget(order.id, catalogId, manualExtraText[order.id] || '')
+                            }}
                           >
                             <option value="">-- Ninguno / diagnóstico manual --</option>
                             {catalog.map((c) => (
@@ -489,6 +505,30 @@ export default function TechnicianDashboard() {
                           </select>
                         </div>
                         <div className="form-group">
+                          <label>Monto adicional (si el diagnóstico o parte del costo no está en el catálogo)</label>
+                          <input
+                            type="number"
+                            value={manualExtraText[order.id] || ''}
+                            onChange={(e) => {
+                              const extra = e.target.value
+                              setManualExtraText((prev) => ({ ...prev, [order.id]: extra }))
+                              recomputeBudget(order.id, catalogSelection[order.id] || '', extra)
+                            }}
+                          />
+                          <p className="form-hint">Se suma al precio del catálogo elegido arriba para formar el presupuesto total.</p>
+                        </div>
+                        <div className="form-group">
+                          <label>Diagnóstico</label>
+                          <textarea
+                            value={diagnosisText[order.id] || ''}
+                            onChange={(e) =>
+                              setDiagnosisText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                            }
+                            rows={3}
+                            placeholder="Describí el diagnóstico — si no eligió nada del catálogo, escribilo acá completo"
+                          />
+                        </div>
+                        <div className="form-group">
                           <label>Presupuesto ($)</label>
                           <input
                             type="number"
@@ -497,6 +537,7 @@ export default function TechnicianDashboard() {
                               setBudgetText((prev) => ({ ...prev, [order.id]: e.target.value }))
                             }
                           />
+                          <p className="form-hint">Se autollena con catálogo + monto adicional, pero podés editarlo directo.</p>
                         </div>
                         <button className="btn btn-primary" disabled={pendingIds.has(`diag:${order.id}`)} onClick={() => handleSubmitDiagnosis(order.id)}>
                           Enviar diagnóstico
