@@ -393,6 +393,7 @@ export default function Dashboard() {
               <thead>
                 <tr>
                   <th scope="col">Orden</th>
+                  <th scope="col">Origen</th>
                   <th scope="col">Cliente</th>
                   <th scope="col">Problema</th>
                   <th scope="col">Estado</th>
@@ -417,6 +418,7 @@ export default function Dashboard() {
                         <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>
                       )}
                     </td>
+                    <td data-label="Origen">{order.deliveryAmount != null ? '📱 App (self-service)' : '🏪 Tienda (mostrador)'}</td>
                     <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
                     <td data-label="Problema">{order.problem}</td>
                     <td data-label="Estado">
@@ -472,7 +474,7 @@ export default function Dashboard() {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>Total presupuesto</td>
+                  <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700 }}>Total presupuesto</td>
                   <td style={{ fontWeight: 700 }}>${activeBudgetTotal.toFixed(2)}</td>
                   <td colSpan={5}></td>
                 </tr>
