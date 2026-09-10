@@ -8,7 +8,6 @@ import {
   createProduct,
   updateProduct,
   getInventoryMovements,
-  InsufficientStockError,
 } from './products.service';
 
 /**
