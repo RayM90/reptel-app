@@ -67,7 +67,7 @@ interface OrderForReceipt {
   deliveredAt: Date | string | null
   client: { name: string; lastName: string; phone: string }
   technician: { name: string } | null
-  device: { type: string; brand: string; model: string; color: string }
+  device: { type: string; brand: string; model: string; color: string | null }
 }
 
 // Self-service + delivery: RECEIVED se dispara al confirmar el anticipo, no cuando
@@ -95,7 +95,7 @@ export const generateIntakeReceipt = (order: OrderForReceipt): PDFKit.PDFDocumen
 
   addRow(doc, 'Equipo', DEVICE_TYPE_LABELS[order.device.type] ?? order.device.type)
   addRow(doc, 'Marca / Modelo', `${order.device.brand} ${order.device.model}`)
-  addRow(doc, 'Color', order.device.color)
+  addRow(doc, 'Color', order.device.color ?? '—')
   doc.moveDown(0.5)
 
   addRow(doc, 'Falla reportada', order.problem)

@@ -217,8 +217,8 @@ export const createStaff = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    if (role !== 'TECHNICIAN_DELIVERY' && role !== 'DELIVERY' && role !== 'TECHNICIAN') {
-      res.status(403).json({ message: 'Este endpoint solo permite crear TECHNICIAN_DELIVERY, DELIVERY o TECHNICIAN' });
+    if (role !== 'TECHNICIAN_DELIVERY' && role !== 'TECHNICIAN') {
+      res.status(403).json({ message: 'Este endpoint solo permite crear TECHNICIAN_DELIVERY o TECHNICIAN' });
       return;
     }
 
