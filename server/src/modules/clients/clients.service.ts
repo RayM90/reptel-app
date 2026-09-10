@@ -74,11 +74,12 @@ export const updateClient = async (
     // que hacer join en cada lectura — hallazgo de auditoría: sin este sync
     // quedaban desincronizados en cuanto se editaba solo uno de los dos.
     const linkedUser = await tx.user.findUnique({ where: { clientId: id }, select: { id: true } })
-    if (linkedUser && (data.name || data.phone || data.email)) {
+    if (linkedUser && (data.name || data.lastName || data.phone || data.email)) {
       await tx.user.update({
         where: { id: linkedUser.id },
         data: {
           ...(data.name && { name: data.name }),
+          ...(data.lastName && { lastName: data.lastName }),
           ...(data.phone && { phone: data.phone }),
           ...(data.email && { email: data.email }),
         },

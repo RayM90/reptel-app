@@ -72,6 +72,22 @@ describe('Auth — POST /api/auth/staff', () => {
     await prisma.user.delete({ where: { id: existingStaffUserId } }).catch(() => {})
   })
 
+  it('retorna 403 si el rol no es TECHNICIAN_DELIVERY ni TECHNICIAN (ej. un rol inexistente)', async () => {
+    const res = await request(app)
+      .post('/api/auth/staff')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        email: 'rol-invalido@reptel.com',
+        password: 'Passw0rd!',
+        name: 'Test',
+        lastName: 'Rol',
+        idNumber: `V-${String(Date.now()).slice(-7)}`,
+        role: 'DELIVERY',
+      })
+
+    expect(res.status).toBe(403)
+  })
+
   it('retorna 400 si faltan campos (lastName/idNumber)', async () => {
     const res = await request(app)
       .post('/api/auth/staff')

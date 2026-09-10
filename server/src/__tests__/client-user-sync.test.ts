@@ -28,6 +28,13 @@ describe('clients.service — sincronización con User vinculado', () => {
     expect(updatedUser?.phone).toBe('04141111111')
   })
 
+  it('también sincroniza lastName en el User vinculado (hallazgo de auditoría: quedó afuera al agregar el campo)', async () => {
+    await updateClient(client.id, { lastName: 'Apellido Nuevo' })
+
+    const updatedUser = await prisma.user.findUnique({ where: { id: user.id } })
+    expect(updatedUser?.lastName).toBe('Apellido Nuevo')
+  })
+
   it('hace rollback de ambas escrituras si falla el update del User (e.g., email @unique conflict)', async () => {
     // Arrange: crea un User independiente con un email específico
     const suffix = Date.now()

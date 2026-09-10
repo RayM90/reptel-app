@@ -40,6 +40,12 @@ describe('receipts.service — generación de PDF', () => {
     const buffer = await collectPdfBuffer(generateFinalReceipt(fakeOrder as any))
     expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
   })
+
+  it('generateIntakeReceipt no falla si el dispositivo no tiene color (campo opcional en Device)', async () => {
+    const orderWithoutColor = { ...fakeOrder, device: { ...fakeOrder.device, color: null } }
+    const buffer = await collectPdfBuffer(generateIntakeReceipt(orderWithoutColor as any))
+    expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
+  })
 })
 
 describe('getIntakeReceiptLabels — self-service+delivery antes de que el técnico vaya', () => {
