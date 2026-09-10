@@ -132,3 +132,77 @@ describe('Auth — POST /api/auth/staff', () => {
     expect(res.body.message).toMatch(/cédula/i)
   })
 })
+
+describe('Auth — POST /api/auth/register', () => {
+  let clienteConCuentaId: string
+  let clienteConCuentaUserId: string
+  const idNumberConCuenta = `V-${String(Date.now()).slice(-7)}`
+
+  beforeAll(async () => {
+    const cliente = await prisma.client.create({
+      data: {
+        name: 'Cliente', lastName: 'ConCuenta', idNumber: idNumberConCuenta, phone: '04120000001',
+      },
+    })
+    clienteConCuentaId = cliente.id
+
+    const usuario = await prisma.user.create({
+      data: {
+        email: `cliente-con-cuenta-${Date.now()}@test.com`,
+        name: 'Cliente', role: 'CLIENT', password: '', clientId: cliente.id,
+      },
+    })
+    clienteConCuentaUserId = usuario.id
+  }, 20000)
+
+  afterAll(async () => {
+    await prisma.user.delete({ where: { id: clienteConCuentaUserId } }).catch(() => {})
+    await prisma.client.delete({ where: { id: clienteConCuentaId } }).catch(() => {})
+  })
+
+  it('retorna 400 si faltan campos (lastName/idNumber)', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        email: 'nuevo-cliente@test.com', password: 'Passw0rd!', name: 'Nuevo', role: 'CLIENT',
+      })
+
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('message')
+  })
+
+  it('retorna 400 si la cédula no tiene formato V/E-dígitos', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        email: 'nuevo-cliente@test.com', password: 'Passw0rd!', name: 'Nuevo', lastName: 'Cliente',
+        idNumber: '12345678', role: 'CLIENT',
+      })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/cédula/i)
+  })
+
+  it('retorna 400 si la cédula ya tiene una cuenta asociada (sin llegar a Cognito)', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        email: 'otro-correo@test.com', password: 'Passw0rd!', name: 'Otro', lastName: 'Nombre',
+        idNumber: idNumberConCuenta, role: 'CLIENT',
+      })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/cédula/i)
+  })
+
+  it('retorna 403 si el rol no es CLIENT', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        email: 'nuevo-staff@test.com', password: 'Passw0rd!', name: 'Nuevo', lastName: 'Staff',
+        idNumber: `V-${String(Date.now()).slice(-7)}`, role: 'ADMIN',
+      })
+
+    expect(res.status).toBe(403)
+  })
+})

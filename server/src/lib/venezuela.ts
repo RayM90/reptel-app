@@ -1,8 +1,7 @@
 // Validaciones de formato venezolano compartidas por los controllers que
 // reciben teléfono/cédula como campo propio de la persona (Client/User)
 // escrito directamente por un usuario — no se aplica a payloads de pago
-// (paymentDetails es JSON libre) ni al idNumber placeholder que usa el
-// auto-registro de clientes (ver auth.service.ts registerUser).
+// (paymentDetails es JSON libre).
 
 const PHONE_PREFIXES = ['0412', '0414', '0416', '0424', '0426'];
 

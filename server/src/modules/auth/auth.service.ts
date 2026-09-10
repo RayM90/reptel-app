@@ -21,6 +21,8 @@ export const registerUser = async (
   email: string,
   password: string,
   name: string,
+  lastName: string,
+  idNumber: string,
   role: string,
   phone?: string,
   address?: string,
@@ -55,20 +57,28 @@ export const registerUser = async (
     })
   );
 
-  // 4. Si es CLIENT, crear registro en tabla Client primero
+  // 4. Si es CLIENT: reutilizar el Client existente por cédula (lo pudo
+  //    haber creado Recepción antes, sin cuenta todavía) en vez de crear
+  //    una fila duplicada — el controller ya garantizó que si existe, no
+  //    tiene un User vinculado.
   let clientId: string | undefined = undefined;
   if (role === 'CLIENT') {
-    const newClient = await prisma.client.create({
-      data: {
-        name,
-        lastName: '',
-        idNumber: email,
-        phone: phone ?? '',
-        email,
-        addressStreet: address ?? null,
-      },
-    });
-    clientId = newClient.id;
+    const existingClient = await prisma.client.findUnique({ where: { idNumber } });
+    if (existingClient) {
+      clientId = existingClient.id;
+    } else {
+      const newClient = await prisma.client.create({
+        data: {
+          name,
+          lastName,
+          idNumber,
+          phone: phone ?? '',
+          email,
+          addressStreet: address ?? null,
+        },
+      });
+      clientId = newClient.id;
+    }
   }
 
   // 5. Crear User vinculado al Client si aplica
