@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
@@ -125,6 +125,7 @@ export default function Dashboard() {
   const [error, setError] = useState('')
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set())
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const showToast = useToastStore((state) => state.showToast)
   const confirmDialog = useConfirm()
 
@@ -365,92 +366,113 @@ export default function Dashboard() {
                   <th scope="col">Orden</th>
                   <th scope="col">Origen</th>
                   <th scope="col">Cliente</th>
-                  <th scope="col">Problema</th>
+                  <th scope="col">Técnico</th>
                   <th scope="col">Estado</th>
-                  <th scope="col" className="money">Presupuesto</th>
-                  <th scope="col">Técnico asignado</th>
-                  <th scope="col">Pago anticipado</th>
-                  <th scope="col">Pago final</th>
-                  <th scope="col">Recibo</th>
-                  <th scope="col">Acciones</th>
+                  <th scope="col"></th>
                 </tr>
               </thead>
               <tbody>
-                {activeOrders.map((order) => (
-                  <tr
-                    key={order.id}
-                    onClick={() => clearNewOrder(order.id)}
-                    style={newOrderIds.has(order.id) ? NEW_ROW_STYLE : undefined}
-                  >
-                    <td data-label="Orden">
-                      {order.orderNumber}
-                      {newOrderIds.has(order.id) && (
-                        <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>
+                {activeOrders.map((order) => {
+                  const isExpanded = expandedId === order.id
+                  return (
+                    <Fragment key={order.id}>
+                      <tr
+                        key={order.id}
+                        onClick={() => {
+                          setExpandedId((prev) => (prev === order.id ? null : order.id))
+                          clearNewOrder(order.id)
+                        }}
+                        style={newOrderIds.has(order.id) ? NEW_ROW_STYLE : undefined}
+                      >
+                        <td data-label="Orden">
+                          {order.orderNumber}
+                          {newOrderIds.has(order.id) && (
+                            <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>
+                          )}
+                        </td>
+                        <td data-label="Origen">{order.deliveryAmount != null ? '📱 App' : '🏪 Tienda'}</td>
+                        <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
+                        <td data-label="Técnico">{order.technician?.name || 'Sin asignar'}</td>
+                        <td data-label="Estado">
+                          <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
+                            {getStatusBadge('order', order.status).label}
+                          </span>
+                        </td>
+                        <td data-label="">
+                          <button className="btn btn-outline">{isExpanded ? '▲ Cerrar' : '▼ Detalles'}</button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr key={`${order.id}-detail`}>
+                          <td colSpan={6}>
+                            <p><strong>Problema:</strong> {order.problem}</p>
+                            <p><strong>Presupuesto:</strong> {order.budget ? `$${order.budget}` : '—'}</p>
+
+                            <div className="card">
+                              <h4>Pago anticipado</h4>
+                              <PaymentSubmissionsView
+                                submissions={order.advancePaymentSubmissions ?? []}
+                                total={String(
+                                  order.deliveryAmount != null
+                                    ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? 15)
+                                    : Number(order.revisionAmount ?? 15)
+                                )}
+                                onApprove={handleApproveAdvanceInstallment}
+                                onReject={handleRejectAdvanceInstallment}
+                                pendingIds={pendingIds}
+                              />
+                            </div>
+
+                            <div className="card">
+                              <h4>Pago final</h4>
+                              <PaymentDetailsView details={order.finalPaymentDetails} />
+                            </div>
+
+                            <p>
+                              <strong>Recibo:</strong>{' '}
+                              {order.status === 'PENDING_PAYMENT' ? (
+                                '—'
+                              ) : (
+                                <button className="btn btn-outline" onClick={() => downloadReceipt(order, 'intake')}>
+                                  📄 {isIntakePendingPickup(order) ? 'Anticipo' : 'Recepción'}
+                                </button>
+                              )}
+                            </p>
+
+                            <p>
+                              <strong>Acciones:</strong>{' '}
+                              {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') && order.budget != null && Number(order.budget) === 0 ? (
+                                <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => handleCloseZeroBudgetOrder(order)}>
+                                  Marcar como entregada
+                                </button>
+                              ) : order.status === 'READY' ? (
+                                <>
+                                  <button
+                                    className="btn btn-primary"
+                                    onClick={() => handleApproveFinalPayment(order)}
+                                    disabled={!order.finalPaymentDetails || pendingIds.has(order.id)}
+                                  >
+                                    Aprobar pago final
+                                  </button>{' '}
+                                  <button className="btn btn-danger" disabled={pendingIds.has(order.id)} onClick={() => handleRejectFinalPayment(order)}>
+                                    Rechazar
+                                  </button>
+                                </>
+                              ) : (
+                                '—'
+                              )}
+                            </p>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td data-label="Origen">{order.deliveryAmount != null ? '📱 App (self-service)' : '🏪 Tienda (mostrador)'}</td>
-                    <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
-                    <td data-label="Problema">{order.problem}</td>
-                    <td data-label="Estado">
-                      <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
-                        {getStatusBadge('order', order.status).label}
-                      </span>
-                    </td>
-                    <td className="money" data-label="Presupuesto">{order.budget ? `$${order.budget}` : '—'}</td>
-                    <td data-label="Técnico asignado">{order.technician?.name || 'Sin asignar'}</td>
-                    <td data-label="Pago anticipado">
-                      <PaymentSubmissionsView
-                        submissions={order.advancePaymentSubmissions ?? []}
-                        total={String(
-                          order.deliveryAmount != null
-                            ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? 15)
-                            : Number(order.revisionAmount ?? 15)
-                        )}
-                        onApprove={handleApproveAdvanceInstallment}
-                        onReject={handleRejectAdvanceInstallment}
-                        pendingIds={pendingIds}
-                      />
-                    </td>
-                    <td data-label="Pago final"><PaymentDetailsView details={order.finalPaymentDetails} /></td>
-                    <td data-label="Recibo">
-                      {order.status === 'PENDING_PAYMENT' ? (
-                        '—'
-                      ) : (
-                        <button className="btn btn-outline" onClick={() => downloadReceipt(order, 'intake')}>
-                          📄 {isIntakePendingPickup(order) ? 'Anticipo' : 'Recepción'}
-                        </button>
-                      )}
-                    </td>
-                    <td data-label="Acciones">
-                      {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') && order.budget != null && Number(order.budget) === 0 ? (
-                        <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => handleCloseZeroBudgetOrder(order)}>
-                          Marcar como entregada
-                        </button>
-                      ) : order.status === 'READY' ? (
-                        <>
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => handleApproveFinalPayment(order)}
-                            disabled={!order.finalPaymentDetails || pendingIds.has(order.id)}
-                          >
-                            Aprobar pago final
-                          </button>{' '}
-                          <button className="btn btn-danger" disabled={pendingIds.has(order.id)} onClick={() => handleRejectFinalPayment(order)}>
-                            Rechazar
-                          </button>
-                        </>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                    </Fragment>
+                  )
+                })}
               </tbody>
               <tfoot>
                 <tr>
                   <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700 }}>Total presupuesto</td>
                   <td style={{ fontWeight: 700 }}>${activeBudgetTotal.toFixed(2)}</td>
-                  <td colSpan={5}></td>
                 </tr>
               </tfoot>
             </table>
