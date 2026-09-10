@@ -8,9 +8,9 @@ import { isValidVenezuelanPhone, isValidVenezuelanIdNumber } from '../../lib/ven
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, name, role, phone, address } = req.body;
+    const { email, password, name, lastName, idNumber, role, phone, address } = req.body;
 
-    if (!email || !password || !name || !role) {
+    if (!email || !password || !name || !lastName || !idNumber || !role) {
       res.status(400).json({ message: 'Todos los campos son requeridos' });
       return;
     }
@@ -24,12 +24,29 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    if (!isValidVenezuelanIdNumber(idNumber)) {
+      res.status(400).json({ message: 'La cédula debe tener el formato V-12345678 o E-12345678' });
+      return;
+    }
+
     if (phone && !isValidVenezuelanPhone(phone)) {
       res.status(400).json({ message: 'El teléfono debe ser un número venezolano válido (04XX + 7 dígitos)' });
       return;
     }
 
-    const result = await registerUser(email, password, name, role, phone, address);
+    // Si ya existe un Client con esta cédula y ese Client ya tiene una
+    // cuenta (User) vinculada, no se puede volver a registrar — evita
+    // llegar a Cognito para un caso que de todas formas se va a rechazar.
+    // Si existe el Client pero SIN cuenta (lo registró Recepción en
+    // persona antes de que el cliente se descargara la app), registerUser()
+    // reutiliza ese mismo Client en vez de crear uno duplicado.
+    const existingClient = await prisma.client.findUnique({ where: { idNumber }, include: { user: true } });
+    if (existingClient?.user) {
+      res.status(400).json({ message: 'Ya existe una cuenta para esta cédula. Inicia sesión en su lugar.' });
+      return;
+    }
+
+    const result = await registerUser(email, password, name, lastName, idNumber, role, phone, address);
     res.status(201).json(result);
   } catch (error: any) {
     res.status(400).json({ message: translateCognitoError(error) || 'Error al registrar usuario' });
