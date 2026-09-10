@@ -161,6 +161,189 @@ async function main() {
     ],
   })
 
+  console.log('Poblando categorías e inventario de repuestos...')
+
+  const productCategories = [
+    'Pantallas',
+    'Baterías',
+    'Almacenamiento',
+    'Memoria RAM',
+    'Componentes de placa',
+    'Cámaras y micrófonos',
+    'Teclados/touchpads internos',
+  ]
+  await prisma.productCategory.createMany({
+    data: productCategories.map((name) => ({ name })),
+    skipDuplicates: true,
+  })
+  const categories = await prisma.productCategory.findMany({
+    where: { name: { in: productCategories } },
+  })
+  const categoryIdByName = new Map(categories.map((c) => [c.name, c.id]))
+
+  const products: Array<{
+    name: string
+    description: string
+    price: number
+    stock: number
+    minStock: number
+    requiresInstallation: boolean
+    categoryName: string
+  }> = [
+    {
+      name: 'Pantalla LCD 15.6" (laptop)',
+      description:
+        'Panel LCD genérico 15.6 pulgadas, conector 30/40 pines, para reemplazo en laptops',
+      price: 45,
+      stock: 6,
+      minStock: 2,
+      requiresInstallation: true,
+      categoryName: 'Pantallas',
+    },
+    {
+      name: 'Pantalla táctil de celular 5.5"-6.5" (genérica)',
+      description:
+        'Módulo táctil + LCD genérico compatible con gama media, sin marco',
+      price: 28,
+      stock: 5,
+      minStock: 2,
+      requiresInstallation: true,
+      categoryName: 'Pantallas',
+    },
+    {
+      name: 'Batería de laptop (universal)',
+      description: 'Batería genérica multi-modelo para laptop, ión-litio',
+      price: 35,
+      stock: 4,
+      minStock: 3,
+      requiresInstallation: true,
+      categoryName: 'Baterías',
+    },
+    {
+      name: 'Pila CMOS (batería de tarjeta madre)',
+      description:
+        'Pila botón CR2032 para respaldo de BIOS/reloj de la placa madre',
+      price: 3,
+      stock: 20,
+      minStock: 5,
+      requiresInstallation: true,
+      categoryName: 'Baterías',
+    },
+    {
+      name: 'Disco sólido SSD 500GB SATA III',
+      description:
+        'Unidad de estado sólido 2.5 pulgadas, interfaz SATA III, reemplazo de disco mecánico',
+      price: 38,
+      stock: 8,
+      minStock: 3,
+      requiresInstallation: true,
+      categoryName: 'Almacenamiento',
+    },
+    {
+      name: 'Disco duro HDD 1TB SATA',
+      description: 'Disco mecánico 2.5 pulgadas para laptop, 5400rpm',
+      price: 30,
+      stock: 5,
+      minStock: 2,
+      requiresInstallation: true,
+      categoryName: 'Almacenamiento',
+    },
+    {
+      name: 'Memoria RAM DDR4 8GB SODIMM',
+      description:
+        'Módulo de memoria para laptop, DDR4 2666MHz, formato SODIMM',
+      price: 22,
+      stock: 10,
+      minStock: 3,
+      requiresInstallation: true,
+      categoryName: 'Memoria RAM',
+    },
+    {
+      name: 'Memoria RAM DDR4 4GB SODIMM',
+      description:
+        'Módulo de memoria para laptop, DDR4 2666MHz, formato SODIMM',
+      price: 14,
+      stock: 10,
+      minStock: 3,
+      requiresInstallation: true,
+      categoryName: 'Memoria RAM',
+    },
+    {
+      name: 'Conector de carga (jack de alimentación)',
+      description: 'Puerto de carga DC genérico para laptop, requiere soldadura',
+      price: 6,
+      stock: 12,
+      minStock: 4,
+      requiresInstallation: true,
+      categoryName: 'Componentes de placa',
+    },
+    {
+      name: 'Flex de video/pantalla para laptop',
+      description: 'Cable flex que conecta la placa con el panel de pantalla',
+      price: 9,
+      stock: 8,
+      minStock: 3,
+      requiresInstallation: true,
+      categoryName: 'Componentes de placa',
+    },
+    {
+      name: 'Módulo de cámara web integrada',
+      description: 'Cámara interna genérica para laptop, conector estándar',
+      price: 7,
+      stock: 10,
+      minStock: 3,
+      requiresInstallation: true,
+      categoryName: 'Cámaras y micrófonos',
+    },
+    {
+      name: 'Micrófono interno para laptop',
+      description: 'Micrófono integrado genérico, conector estándar',
+      price: 5,
+      stock: 10,
+      minStock: 3,
+      requiresInstallation: true,
+      categoryName: 'Cámaras y micrófonos',
+    },
+    {
+      name: 'Teclado interno de laptop (español)',
+      description:
+        'Teclado de reemplazo genérico, distribución español, sin retroiluminación',
+      price: 18,
+      stock: 8,
+      minStock: 3,
+      requiresInstallation: true,
+      categoryName: 'Teclados/touchpads internos',
+    },
+    {
+      name: 'Touchpad interno de laptop',
+      description: 'Panel táctil genérico de reemplazo para laptop',
+      price: 12,
+      stock: 8,
+      minStock: 3,
+      requiresInstallation: true,
+      categoryName: 'Teclados/touchpads internos',
+    },
+  ]
+
+  for (const p of products) {
+    const categoryId = categoryIdByName.get(p.categoryName)
+    if (!categoryId) throw new Error(`Categoría no encontrada: ${p.categoryName}`)
+    const existing = await prisma.product.findFirst({ where: { name: p.name } })
+    if (existing) continue
+    await prisma.product.create({
+      data: {
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        stock: p.stock,
+        minStock: p.minStock,
+        requiresInstallation: p.requiresInstallation,
+        categoryId,
+      },
+    })
+  }
+
+  console.log('Inventario de repuestos poblado exitosamente.')
   console.log('Catalogo poblado exitosamente.')
 }
 
