@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 import { useToastStore } from '../../store/toast.store'
+import { useAuthStore } from '../../store/auth.store'
 import PhoneInput from '../../components/PhoneInput'
 import SelectWithOther from '../../components/SelectWithOther'
 import { DEVICE_BRANDS, BRAND_MODELS, DEVICE_COLORS } from '../../constants/venezuela'
@@ -67,6 +68,7 @@ const emptyForm = {
 
 export default function Registro() {
   const showToast = useToastStore((state) => state.showToast)
+  const role = useAuthStore((state) => state.user?.role)
 
   const [step, setStep] = useState<'client' | 'sale'>('client')
 
@@ -278,7 +280,8 @@ export default function Registro() {
       <div className="page-header">
         <h1>Registro — Tienda Física</h1>
       </div>
-      <p><Link to="/admin">← Volver al Panel de Administrador</Link></p>
+      {role === 'ADMIN' && <p><Link to="/admin">← Volver al Panel de Administrador</Link></p>}
+      {role === 'TECHNICIAN' && <p><Link to="/technician">🔧 Ver reparaciones asignadas</Link></p>}
 
       {step === 'client' && (
         <div className="card" style={{ maxWidth: 480 }}>
