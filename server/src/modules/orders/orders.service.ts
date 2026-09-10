@@ -563,16 +563,25 @@ export const confirmAdvancePaymentInstallment = async (
       const orderNowComplete = newTotalConfirmed + 0.009 >= total
 
       if (orderNowComplete) {
+        // Pago completo confirmado por el admin → autoriza al técnico a
+        // proceder de inmediato (revisar en mostrador, o ir a buscar el
+        // equipo en delivery — "revisión" incluye ese viaje en ese caso).
         return await tx.order.update({
           where: { id: order.id },
           data: {
-            status: 'RECEIVED',
+            status: 'DIAGNOSING',
             statusHistory: {
-              create: {
-                status: 'RECEIVED',
-                comment: `Anticipo de $${total} completado mediante abonos — confirmado por el administrador`,
-                userId: actor?.id,
-              },
+              create: [
+                {
+                  status: 'RECEIVED',
+                  comment: `Anticipo de $${total} completado mediante abonos — confirmado por el administrador`,
+                  userId: actor?.id,
+                },
+                {
+                  status: 'DIAGNOSING',
+                  comment: 'Pago confirmado — técnico autorizado a proceder con la revisión',
+                },
+              ],
             },
           },
           include: {
@@ -665,14 +674,14 @@ export const updateOrderBudget = async (
     data: {
       budget,
       budgetApproved: approved,
-      status: approved ? 'APPROVED' : 'WAITING_APPROVAL',
+      status: approved ? 'REPAIRING' : 'WAITING_APPROVAL',
       statusHistory: {
-        create: {
-          status: approved ? 'APPROVED' : 'WAITING_APPROVAL',
-          comment: approved
-            ? `Presupuesto de $${budget} aprobado por el cliente`
-            : `Presupuesto de $${budget} enviado al cliente para aprobación`,
-        },
+        create: approved
+          ? [
+              { status: 'APPROVED', comment: `Presupuesto de $${budget} aprobado por el cliente` },
+              { status: 'REPAIRING', comment: 'Presupuesto aprobado — técnico autorizado a iniciar la reparación' },
+            ]
+          : [{ status: 'WAITING_APPROVAL', comment: `Presupuesto de $${budget} enviado al cliente para aprobación` }],
       },
     },
     include: {
@@ -950,13 +959,21 @@ export const approveBudget = async (id: string, email: string) => {
     where: { id },
     data: {
       budgetApproved: true,
-      status: 'APPROVED',
+      // El presupuesto aprobado autoriza al técnico a empezar la reparación
+      // de inmediato — no queda un paso manual extra para "iniciar reparación".
+      status: 'REPAIRING',
       statusHistory: {
-        create: {
-          status: 'APPROVED',
-          comment: `Presupuesto de $${order.budget} aprobado por el cliente en la app`,
-          userId: user.id,
-        },
+        create: [
+          {
+            status: 'APPROVED',
+            comment: `Presupuesto de $${order.budget} aprobado por el cliente en la app`,
+            userId: user.id,
+          },
+          {
+            status: 'REPAIRING',
+            comment: 'Presupuesto aprobado — técnico autorizado a iniciar la reparación',
+          },
+        ],
       },
     },
     include: {
