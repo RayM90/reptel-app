@@ -31,7 +31,12 @@ describe('isValidVenezuelanIdNumber', () => {
     expect(isValidVenezuelanIdNumber('E-12345678')).toBe(true)
   })
 
-  it('rechaza sin prefijo V/E', () => {
+  it('acepta J- y G- (jurídico/gobierno) con 9 dígitos', () => {
+    expect(isValidVenezuelanIdNumber('J-123456789')).toBe(true)
+    expect(isValidVenezuelanIdNumber('G-123456789')).toBe(true)
+  })
+
+  it('rechaza sin prefijo V/E/J/G', () => {
     expect(isValidVenezuelanIdNumber('12345678')).toBe(false)
   })
 
@@ -39,7 +44,7 @@ describe('isValidVenezuelanIdNumber', () => {
     expect(isValidVenezuelanIdNumber('V-123456')).toBe(false)
   })
 
-  it('rechaza más de 8 dígitos', () => {
-    expect(isValidVenezuelanIdNumber('V-123456789')).toBe(false)
+  it('rechaza más de 9 dígitos', () => {
+    expect(isValidVenezuelanIdNumber('V-1234567890')).toBe(false)
   })
 })

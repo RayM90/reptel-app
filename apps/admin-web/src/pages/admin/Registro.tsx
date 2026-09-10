@@ -4,8 +4,9 @@ import { api } from '../../services/api'
 import { useToastStore } from '../../store/toast.store'
 import { useAuthStore } from '../../store/auth.store'
 import PhoneInput from '../../components/PhoneInput'
+import IdNumberInput from '../../components/IdNumberInput'
 import SelectWithOther from '../../components/SelectWithOther'
-import { DEVICE_BRANDS, BRAND_MODELS, DEVICE_COLORS } from '../../constants/venezuela'
+import { DEVICE_BRANDS, BRAND_MODELS, DEVICE_COLORS, VENEZUELAN_BANKS } from '../../constants/venezuela'
 
 interface Client {
   id: string
@@ -93,8 +94,12 @@ export default function Registro() {
   // ── Paso 2: orden de servicio técnico ──
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
   const [orderForm, setOrderForm] = useState(emptyOrderForm)
+  const [noAccessories, setNoAccessories] = useState(false)
+  const [showDevicePassword, setShowDevicePassword] = useState(false)
+  const [paymentDetails, setPaymentDetails] = useState({ banco: '', telefono: '', referencia: '', correo: '', uid: '', nombre: '' })
   const [creatingOrder, setCreatingOrder] = useState(false)
   const [orderError, setOrderError] = useState('')
+  const [lastCreatedTechnician, setLastCreatedTechnician] = useState('')
 
   useEffect(() => {
     if (step === 'sale') {
@@ -137,6 +142,10 @@ export default function Registro() {
     setQuantity('1')
     setOrderForm(emptyOrderForm)
     setOrderError('')
+    setNoAccessories(false)
+    setShowDevicePassword(false)
+    setPaymentDetails({ banco: '', telefono: '', referencia: '', correo: '', uid: '', nombre: '' })
+    setLastCreatedTechnician('')
   }
 
   const handleSearch = async () => {
@@ -249,6 +258,21 @@ export default function Registro() {
       return
     }
 
+    let details: Record<string, string>
+    if (orderForm.advancePaymentMethod === 'BINANCE') {
+      if (!paymentDetails.correo || !paymentDetails.uid || !paymentDetails.nombre) {
+        setOrderError('Correo, UID y nombre de Binance son requeridos para confirmar el pago')
+        return
+      }
+      details = { correo: paymentDetails.correo, uid: paymentDetails.uid, nombre: paymentDetails.nombre }
+    } else {
+      if (!paymentDetails.banco || !paymentDetails.telefono || !paymentDetails.referencia) {
+        setOrderError('Banco, teléfono y referencia son requeridos para confirmar el pago')
+        return
+      }
+      details = { banco: paymentDetails.banco, telefono: paymentDetails.telefono, referencia: paymentDetails.referencia }
+    }
+
     setCreatingOrder(true)
     setOrderError('')
     try {
@@ -264,10 +288,17 @@ export default function Registro() {
         },
         problem: orderForm.problem,
         advancePaymentMethod: orderForm.advancePaymentMethod,
+        paymentDetails: details,
         serviceCatalogId: orderForm.serviceCatalogId || undefined,
       })
-      showToast(`✅ Orden ${response.data.data.orderNumber} creada para ${activeClient.name} ${activeClient.lastName}`, 'success')
+      const technician = response.data.data.technician
+      const technicianName = technician ? `${technician.name} ${technician.lastName ?? ''}`.trim() : 'sin asignar (no hay técnicos disponibles)'
+      setLastCreatedTechnician(technicianName)
+      showToast(`✅ Orden ${response.data.data.orderNumber} creada para ${activeClient.name} ${activeClient.lastName} — técnico asignado: ${technicianName}`, 'success')
       setOrderForm(emptyOrderForm)
+      setNoAccessories(false)
+      setShowDevicePassword(false)
+      setPaymentDetails({ banco: '', telefono: '', referencia: '', correo: '', uid: '', nombre: '' })
     } catch (err: any) {
       setOrderError(err?.response?.data?.message || 'Error al crear la orden')
     } finally {
@@ -288,15 +319,13 @@ export default function Registro() {
           <div className="form-group">
             <label>Cédula</label>
             <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                type="text"
+              <IdNumberInput
                 value={idNumber}
-                onChange={(e) => {
-                  setIdNumber(e.target.value)
+                onChange={(v) => {
+                  setIdNumber(v)
                   setSearched(false)
                   setClientExists(null)
                 }}
-                placeholder="V-12345678"
               />
               <button className="btn btn-secondary" onClick={handleSearch} disabled={searching || !idNumber.trim()}>
                 {searching ? 'Buscando…' : 'Buscar'}
@@ -477,11 +506,38 @@ export default function Registro() {
           </div>
           <div className="form-group">
             <label>Accesorios</label>
-            <input type="text" value={orderForm.accessories} onChange={(e) => setOrderForm({ ...orderForm, accessories: e.target.value })} placeholder="Cargador, mouse, etc." />
+            <input
+              type="text"
+              value={orderForm.accessories}
+              onChange={(e) => setOrderForm({ ...orderForm, accessories: e.target.value })}
+              placeholder="Cargador, mouse, etc."
+              disabled={noAccessories}
+            />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontWeight: 400 }}>
+              <input
+                type="checkbox"
+                checked={noAccessories}
+                onChange={(e) => {
+                  const checked = e.target.checked
+                  setNoAccessories(checked)
+                  setOrderForm({ ...orderForm, accessories: checked ? 'Sin accesorios' : '' })
+                }}
+              />
+              Sin accesorios
+            </label>
           </div>
           <div className="form-group">
             <label>Contraseña del equipo (opcional)</label>
-            <input type="text" value={orderForm.devicePassword} onChange={(e) => setOrderForm({ ...orderForm, devicePassword: e.target.value })} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type={showDevicePassword ? 'text' : 'password'}
+                value={orderForm.devicePassword}
+                onChange={(e) => setOrderForm({ ...orderForm, devicePassword: e.target.value })}
+              />
+              <button type="button" className="btn btn-outline" onClick={() => setShowDevicePassword((prev) => !prev)}>
+                {showDevicePassword ? 'Ocultar' : 'Mostrar'}
+              </button>
+            </div>
           </div>
           <div className="form-group">
             <label>Servicio del catálogo (opcional, solo referencia)</label>
@@ -505,7 +561,47 @@ export default function Registro() {
             </select>
           </div>
 
+          <h3>Confirmar datos del pago (verificado en persona)</h3>
+          {orderForm.advancePaymentMethod === 'BINANCE' ? (
+            <>
+              <div className="form-group">
+                <label>Correo Binance</label>
+                <input type="email" value={paymentDetails.correo} onChange={(e) => setPaymentDetails({ ...paymentDetails, correo: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label>UID Binance</label>
+                <input type="text" value={paymentDetails.uid} onChange={(e) => setPaymentDetails({ ...paymentDetails, uid: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label>Nombre del titular</label>
+                <input type="text" value={paymentDetails.nombre} onChange={(e) => setPaymentDetails({ ...paymentDetails, nombre: e.target.value })} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="form-group">
+                <label>Banco</label>
+                <SelectWithOther
+                  value={paymentDetails.banco}
+                  options={VENEZUELAN_BANKS.map((b) => b.name)}
+                  onChange={(v) => setPaymentDetails({ ...paymentDetails, banco: v })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Teléfono emisor</label>
+                <PhoneInput value={paymentDetails.telefono} onChange={(v) => setPaymentDetails({ ...paymentDetails, telefono: v })} />
+              </div>
+              <div className="form-group">
+                <label>Referencia</label>
+                <input type="text" value={paymentDetails.referencia} onChange={(e) => setPaymentDetails({ ...paymentDetails, referencia: e.target.value })} />
+              </div>
+            </>
+          )}
+
           {orderError && <p className="alert-error">{orderError}</p>}
+          {lastCreatedTechnician && (
+            <p className="alert-success">Última orden registrada — técnico asignado: <strong>{lastCreatedTechnician}</strong></p>
+          )}
 
           <button className="btn btn-primary" onClick={handleCreateOrder} disabled={creatingOrder}>
             {creatingOrder ? 'Creando…' : 'Registrar orden'}
