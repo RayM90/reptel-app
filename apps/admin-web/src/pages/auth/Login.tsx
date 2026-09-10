@@ -65,10 +65,8 @@ export default function Login() {
 
       if (user.role === 'ADMIN') {
         navigate('/admin')
-      } else if (user.role === 'TECHNICIAN_DELIVERY') {
+      } else if (user.role === 'TECHNICIAN_DELIVERY' || user.role === 'TECHNICIAN') {
         navigate('/technician')
-      } else if (user.role === 'TECHNICIAN') {
-        navigate('/registro')
       }
     } catch (err: any) {
       if (err?.response) {
@@ -113,10 +111,8 @@ export default function Login() {
 
       if (user.role === 'ADMIN') {
         navigate('/admin')
-      } else if (user.role === 'TECHNICIAN_DELIVERY') {
+      } else if (user.role === 'TECHNICIAN_DELIVERY' || user.role === 'TECHNICIAN') {
         navigate('/technician')
-      } else if (user.role === 'TECHNICIAN') {
-        navigate('/registro')
       }
     } catch (err: any) {
       if (err?.response) {
