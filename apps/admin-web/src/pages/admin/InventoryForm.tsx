@@ -187,7 +187,7 @@ export default function InventoryForm() {
             <div className="form-group">
               <label>
                 <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />{' '}
-                Activo (visible en la tienda)
+                Activo (disponible en inventario)
               </label>
             </div>
           )}
