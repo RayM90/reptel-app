@@ -10,7 +10,10 @@ import {
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useRouter } from 'expo-router'
 import { useState, useEffect, useCallback } from 'react'
-import { ordersAPI } from '../../src/services/api'
+import { File, Paths } from 'expo-file-system'
+import * as Sharing from 'expo-sharing'
+import { ordersAPI, API_URL } from '../../src/services/api'
+import { useAuthStore } from '../../src/store/auth.store'
 import { useToastStore } from '../../src/store/toast.store'
 import { useConfirm } from '../../src/hooks/useConfirm'
 
@@ -133,6 +136,8 @@ export default function MyTechnicalOrdersScreen() {
   const [rejectReasonOther, setRejectReasonOther] = useState<Record<string, string>>({})
   const [disputeNote, setDisputeNote] = useState<Record<string, string>>({})
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({})
+  const [downloadingReceipt, setDownloadingReceipt] = useState<string | null>(null)
+  const token = useAuthStore((state) => state.token)
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -156,6 +161,33 @@ export default function MyTechnicalOrdersScreen() {
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id))
+  }
+
+  const handleDownloadReceipt = async (order: TechOrder, type: 'intake' | 'final') => {
+    const key = `${order.id}-${type}`
+    setDownloadingReceipt(key)
+    try {
+      const pendingPickup = type === 'intake' && order.deliveryAmount != null && !order.diagnosis
+      const filename = `recibo-${type === 'final' ? 'entrega' : pendingPickup ? 'anticipo' : 'recepcion'}-${order.orderNumber}.pdf`
+      const destination = new File(Paths.cache, filename)
+      if (destination.exists) destination.delete()
+
+      const file = await File.downloadFileAsync(
+        `${API_URL}/api/orders/${order.id}/receipt/${type}`,
+        destination,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf' })
+      } else {
+        showToast('Recibo descargado, pero no se puede compartir en este dispositivo', 'info')
+      }
+    } catch (error: any) {
+      showToast(error?.message || 'No se pudo descargar el recibo', 'error')
+    } finally {
+      setDownloadingReceipt(null)
+    }
   }
 
   const formatDate = (dateStr: string) => {
@@ -576,14 +608,7 @@ export default function MyTechnicalOrdersScreen() {
                           style={styles.linkedProductBtn}
                           onPress={(e) => {
                             e.stopPropagation()
-                            router.push({
-                              pathname: '/(client)/select-linked-products',
-                              params: {
-                                orderId: order.id,
-                                orderNumber: order.orderNumber,
-                                budget: String(order.budget),
-                              },
-                            })
+                            showToast('Esta función estará disponible pronto.', 'info')
                           }}
                         >
                           <Text style={styles.linkedProductBtnText}>🔧 Comprar repuesto para esta orden</Text>
@@ -622,6 +647,35 @@ export default function MyTechnicalOrdersScreen() {
                               ? '💰 Reenviar datos de pago final'
                               : '💰 Pagar saldo final'}
                           </Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Recibos descargables — disponible desde que el anticipo está
+                          confirmado; entrega solo si ya se entregó. En self-service con
+                          delivery, RECEIVED solo significa "pago confirmado", no que el
+                          técnico ya fue a buscar el equipo — hasta que haya diagnóstico
+                          se etiqueta como "recibo del anticipo" en vez de "recepción". */}
+                      {status !== 'PENDING_PAYMENT' && (() => {
+                        const pendingPickup = order.deliveryAmount != null && !order.diagnosis
+                        return (
+                          <TouchableOpacity
+                            style={styles.linkedProductBtn}
+                            onPress={(e) => { e.stopPropagation(); handleDownloadReceipt(order, 'intake') }}
+                            disabled={downloadingReceipt === `${order.id}-intake`}
+                          >
+                            <Text style={styles.linkedProductBtnText}>
+                              📄 Descargar {pendingPickup ? 'recibo del anticipo' : 'recibo de recepción'}
+                            </Text>
+                          </TouchableOpacity>
+                        )
+                      })()}
+                      {status === 'DELIVERED' && (
+                        <TouchableOpacity
+                          style={styles.linkedProductBtn}
+                          onPress={(e) => { e.stopPropagation(); handleDownloadReceipt(order, 'final') }}
+                          disabled={downloadingReceipt === `${order.id}-final`}
+                        >
+                          <Text style={styles.linkedProductBtnText}>📄 Descargar recibo de entrega</Text>
                         </TouchableOpacity>
                       )}
 

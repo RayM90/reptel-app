@@ -7,6 +7,8 @@ import { useRouter } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Feather } from '@expo/vector-icons'
 import { useToastStore } from '../../src/store/toast.store'
+import SelectField from '../../src/components/SelectField'
+import { DEVICE_BRANDS, BRAND_MODELS, DEVICE_COLORS } from '../../src/constants/venezuela'
 
 // ── Tipos ────────────────────────────────────────────────────────
 interface FaultItem {
@@ -288,17 +290,30 @@ export default function TechnicalServiceScreen() {
               ))}
             </View>
 
-            <Text style={styles.label}>Marca *</Text>
-            <TextInput style={styles.input} placeholder="Ej: HP, Dell, Lenovo"
-              value={brand} onChangeText={setBrand} />
+            <SelectField
+              label="Marca *"
+              value={brand}
+              options={[...DEVICE_BRANDS]}
+              onChange={(v) => { setBrand(v); setModel('') }}
+              allowOther
+            />
 
-            <Text style={styles.label}>Modelo *</Text>
-            <TextInput style={styles.input} placeholder="Ej: Pavilion 15, Inspiron 3501"
-              value={model} onChangeText={setModel} />
+            <SelectField
+              label="Modelo *"
+              value={model}
+              options={brand in BRAND_MODELS ? BRAND_MODELS[brand as keyof typeof BRAND_MODELS] : []}
+              onChange={setModel}
+              allowOther
+              placeholder={brand ? 'Seleccionar…' : 'Elige primero la marca'}
+            />
 
-            <Text style={styles.label}>Color *</Text>
-            <TextInput style={styles.input} placeholder="Ej: Negro, Plateado, Azul"
-              value={color} onChangeText={setColor} />
+            <SelectField
+              label="Color *"
+              value={color}
+              options={DEVICE_COLORS}
+              onChange={setColor}
+              allowOther
+            />
 
             <Text style={styles.label}>Número de serie</Text>
             <TextInput style={styles.input} placeholder="Opcional — visible en etiqueta del equipo"

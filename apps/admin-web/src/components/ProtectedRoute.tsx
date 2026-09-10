@@ -2,7 +2,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth.store'
 import Header from './Header'
 
-type Role = 'ADMIN' | 'TECHNICIAN_DELIVERY' | 'DELIVERY'
+type Role = 'ADMIN' | 'TECHNICIAN_DELIVERY' | 'TECHNICIAN'
 
 interface ProtectedRouteProps {
   children: React.ReactNode

@@ -42,7 +42,11 @@ export const createClient = async (data: {
   idNumber: string
   phone: string
   email?: string
-  address?: string
+  addressState?: string
+  addressCity?: string
+  addressNeighborhood?: string
+  addressStreet?: string
+  addressBuilding?: string
 }) => {
   return await prisma.client.create({ data })
 }
@@ -54,13 +58,38 @@ export const updateClient = async (
     lastName?: string
     phone?: string
     email?: string
-    address?: string
+    addressState?: string
+    addressCity?: string
+    addressNeighborhood?: string
+    addressStreet?: string
+    addressBuilding?: string
   }
 ) => {
-  return await prisma.client.update({
-    where: { id },
-    data,
+  // Envuelve Client.update y User.update en una transacción para evitar
+  // desincronización si una de las escrituras falla (e.g., constraint violation).
+  const updated = await prisma.$transaction(async (tx) => {
+    const clientUpdated = await tx.client.update({ where: { id }, data })
+
+    // El User vinculado (si existe) duplica name/phone/email para no tener
+    // que hacer join en cada lectura — hallazgo de auditoría: sin este sync
+    // quedaban desincronizados en cuanto se editaba solo uno de los dos.
+    const linkedUser = await tx.user.findUnique({ where: { clientId: id }, select: { id: true } })
+    if (linkedUser && (data.name || data.lastName || data.phone || data.email)) {
+      await tx.user.update({
+        where: { id: linkedUser.id },
+        data: {
+          ...(data.name && { name: data.name }),
+          ...(data.lastName && { lastName: data.lastName }),
+          ...(data.phone && { phone: data.phone }),
+          ...(data.email && { email: data.email }),
+        },
+      })
+    }
+
+    return clientUpdated
   })
+
+  return updated
 }
 
 export const searchClients = async (query: string) => {

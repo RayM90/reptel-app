@@ -1,0 +1,184 @@
+import request from 'supertest'
+import app from '../app'
+import prisma from '../lib/prisma'
+import { decrementTechnicianLoad } from '../modules/orders/orders.service'
+
+let authToken: string
+let client: { id: string }
+let createdOrderId: string
+
+beforeAll(async () => {
+  const res = await request(app)
+    .post('/api/auth/login')
+    .send({ email: 'admin@reptel.com', password: 'RepTel2024*' })
+  authToken = res.body.data.token
+
+  client = await prisma.client.create({
+    data: {
+      name: 'Cliente',
+      lastName: 'Prueba Mostrador',
+      idNumber: `TEST-COUNTER-${Date.now()}`,
+      phone: '04120000000',
+    },
+  })
+}, 20000)
+
+afterAll(async () => {
+  if (createdOrderId) {
+    const order = await prisma.order.findUnique({
+      where: { id: createdOrderId },
+      select: { technicianId: true, deviceId: true },
+    })
+    await prisma.orderStatusHistory.deleteMany({ where: { orderId: createdOrderId } })
+    await prisma.advancePaymentSubmission.deleteMany({ where: { orderId: createdOrderId } })
+    await prisma.order.delete({ where: { id: createdOrderId } }).catch(() => {})
+    if (order?.technicianId) {
+      await decrementTechnicianLoad(order.technicianId)
+    }
+    if (order?.deviceId) {
+      await prisma.device.delete({ where: { id: order.deviceId } }).catch(() => {})
+    }
+  }
+  await prisma.client.delete({ where: { id: client.id } }).catch(() => {})
+})
+
+describe('Orders — POST /api/orders/counter', () => {
+  it('crea la orden directo en RECEIVED, con AdvancePaymentSubmission PENDING (pendiente de confirmar por el admin)', async () => {
+    const res = await request(app)
+      .post('/api/orders/counter')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        clientId: client.id,
+        device: {
+          type: 'LAPTOP',
+          brand: 'TestBrand',
+          model: 'Mostrador X1',
+          color: 'Negro',
+          accessories: 'Cargador',
+        },
+        problem: 'Pantalla rota — orden de mostrador (test)',
+        advancePaymentMethod: 'PAGO_MOVIL',
+        paymentDetails: { banco: 'Banesco', telefono: '04121234567', referencia: '1234' },
+      })
+
+    expect(res.status).toBe(201)
+    expect(res.body.success).toBe(true)
+    expect(res.body.data.status).toBe('RECEIVED')
+    expect(Number(res.body.data.revisionAmount)).toBe(15)
+    expect(res.body.data.deliveryAmount).toBeNull()
+    expect(res.body.data.technician).toHaveProperty('name')
+    createdOrderId = res.body.data.id
+
+    const submissions = await prisma.advancePaymentSubmission.findMany({ where: { orderId: createdOrderId } })
+    expect(submissions).toHaveLength(1)
+    expect(submissions[0].status).toBe('PENDING')
+    expect(submissions[0].confirmedByUserId).toBeNull()
+    expect((submissions[0].paymentDetails as any).banco).toBe('Banesco')
+
+    const history = await prisma.orderStatusHistory.findFirst({ where: { orderId: createdOrderId } })
+    expect(history?.comment).toMatch(/recepción/i)
+    expect(history?.userId).toBeTruthy()
+  }, 15000)
+
+  it('retorna 400 si falta paymentDetails', async () => {
+    const res = await request(app)
+      .post('/api/orders/counter')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        clientId: client.id,
+        device: { type: 'LAPTOP', brand: 'TestBrand', model: 'X', color: 'Negro', accessories: 'Ninguno' },
+        problem: 'Test sin paymentDetails',
+        advancePaymentMethod: 'PAGO_MOVIL',
+      })
+
+    expect(res.status).toBe(400)
+    expect(res.body.success).toBe(false)
+  })
+
+  it('retorna 400 si faltan campos requeridos', async () => {
+    const res = await request(app)
+      .post('/api/orders/counter')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ clientId: client.id })
+
+    expect(res.status).toBe(400)
+    expect(res.body.success).toBe(false)
+  })
+
+  it('el ADMIN puede confirmar el pago pendiente de una orden de mostrador (mismo endpoint que self-service)', async () => {
+    const submission = await prisma.advancePaymentSubmission.findFirstOrThrow({ where: { orderId: createdOrderId } })
+
+    const res = await request(app)
+      .post(`/api/orders/advance-payment-installment/${submission.id}/confirm`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ approved: true })
+
+    expect(res.status).toBe(200)
+
+    const updated = await prisma.advancePaymentSubmission.findUniqueOrThrow({ where: { id: submission.id } })
+    expect(updated.status).toBe('CONFIRMED')
+    expect(updated.confirmedByUserId).toBeTruthy()
+
+    const order = await prisma.order.findUniqueOrThrow({ where: { id: createdOrderId } })
+    expect(order.status).toBe('DIAGNOSING') // pago completo confirmado → autoriza al técnico a proceder
+  })
+})
+
+describe('Orders — pago por partes (abonos) en mostrador', () => {
+  let partialOrderId: string
+  let partialDeviceId: string
+  let partialTechnicianId: string | null
+
+  afterAll(async () => {
+    if (partialOrderId) {
+      await prisma.advancePaymentSubmission.deleteMany({ where: { orderId: partialOrderId } })
+      await prisma.orderStatusHistory.deleteMany({ where: { orderId: partialOrderId } })
+      await prisma.order.delete({ where: { id: partialOrderId } }).catch(() => {})
+    }
+    if (partialTechnicianId) await decrementTechnicianLoad(partialTechnicianId)
+    if (partialDeviceId) await prisma.device.delete({ where: { id: partialDeviceId } }).catch(() => {})
+  })
+
+  it('crea la orden con un abono parcial ($10 de $15) y permite completar el resto con un segundo abono', async () => {
+    const createRes = await request(app)
+      .post('/api/orders/counter')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        clientId: client.id,
+        device: { type: 'LAPTOP', brand: 'TestBrand', model: 'Abono X1', color: 'Negro', accessories: 'Ninguno' },
+        problem: 'Test abono parcial',
+        advancePaymentMethod: 'PAGO_MOVIL',
+        paymentDetails: { banco: 'Banesco', telefono: '04121234567', referencia: '1111' },
+        amount: 10,
+      })
+
+    expect(createRes.status).toBe(201)
+    partialOrderId = createRes.body.data.id
+    partialDeviceId = createRes.body.data.deviceId
+    partialTechnicianId = createRes.body.data.technicianId
+
+    const firstSubmission = await prisma.advancePaymentSubmission.findFirstOrThrow({ where: { orderId: partialOrderId } })
+    expect(Number(firstSubmission.amount)).toBe(10)
+
+    const secondRes = await request(app)
+      .post(`/api/orders/${partialOrderId}/counter-payment-installment`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ paymentDetails: { banco: 'Banesco', telefono: '04121234567', referencia: '2222' }, amount: 5 })
+
+    expect(secondRes.status).toBe(201)
+
+    const submissions = await prisma.advancePaymentSubmission.findMany({ where: { orderId: partialOrderId } })
+    expect(submissions).toHaveLength(2)
+    expect(submissions.reduce((sum, s) => sum + Number(s.amount), 0)).toBe(15)
+  })
+
+  it('rechaza un abono que exceda lo que falta por pagar', async () => {
+    const res = await request(app)
+      .post(`/api/orders/${partialOrderId}/counter-payment-installment`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ paymentDetails: { banco: 'Banesco', telefono: '04121234567', referencia: '3333' }, amount: 1 })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/excede/i)
+  })
+})

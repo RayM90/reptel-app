@@ -4,11 +4,12 @@ import ProtectedRoute from './components/ProtectedRoute'
 import RoleHome from './components/RoleHome'
 import Dashboard from './pages/admin/Dashboard'
 import TechnicianDashboard from './pages/technician/Dashboard'
-import DeliveryDashboard from './pages/delivery/Dashboard'
 import CreateStaff from './pages/admin/CreateStaff'
 import InventoryList from './pages/admin/InventoryList'
 import InventoryForm from './pages/admin/InventoryForm'
+import InventoryMovements from './pages/admin/InventoryMovements'
 import Reports from './pages/admin/Reports'
+import Registro from './pages/admin/Registro'
 import Toast from './components/Toast'
 import ConfirmDialog from './components/ConfirmDialog'
 
@@ -65,6 +66,15 @@ function App() {
         />
 
         <Route
+          path="/admin/inventory/movements"
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <InventoryMovements />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/admin/reportes"
           element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
@@ -76,20 +86,21 @@ function App() {
         <Route
           path="/technician"
           element={
-            <ProtectedRoute allowedRoles={['TECHNICIAN_DELIVERY']}>
+            <ProtectedRoute allowedRoles={['TECHNICIAN_DELIVERY', 'TECHNICIAN']}>
               <TechnicianDashboard />
             </ProtectedRoute>
           }
         />
 
         <Route
-          path="/delivery"
+          path="/registro"
           element={
-            <ProtectedRoute allowedRoles={['DELIVERY']}>
-              <DeliveryDashboard />
+            <ProtectedRoute allowedRoles={['ADMIN', 'TECHNICIAN']}>
+              <Registro />
             </ProtectedRoute>
           }
         />
+
         <Route path="*" element={<RoleHome />} />
       </Routes>
 

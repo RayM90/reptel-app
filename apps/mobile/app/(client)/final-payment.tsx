@@ -15,6 +15,10 @@ import { useState } from 'react'
 import { ordersAPI } from '../../src/services/api'
 import { useToastStore } from '../../src/store/toast.store'
 import { usePaymentDraft } from '../../src/hooks/usePaymentDraft'
+import { usePaymentInfo, formatPaymentInfo } from '../../src/hooks/usePaymentInfo'
+import PhoneInput from '../../src/components/PhoneInput'
+import SelectField from '../../src/components/SelectField'
+import { VENEZUELAN_BANKS } from '../../src/constants/venezuela'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -34,12 +38,6 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   BINANCE: '₿ Binance',
 }
 
-const PAYMENT_INFO: Record<PaymentMethod, string> = {
-  PAGO_MOVIL: 'Banco: Banesco • Teléfono: 0414-1234567 • CI: V-12345678',
-  TRANSFERENCIA: 'Banco: Banesco • Cuenta: 0134-0000-00-0000000000 • RIF: J-12345678-9',
-  BINANCE: 'ID Binance: reptel@correo.com • Red: BEP20 (USDT)',
-}
-
 export default function FinalPaymentScreen() {
   const router = useRouter()
   const { orderId, orderNumber, budget, revisionAmount } = useLocalSearchParams<{
@@ -54,6 +52,7 @@ export default function FinalPaymentScreen() {
   const totalNumber = Math.max(budgetNumber - revisionNumber, 0)
 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
+  const { data: paymentSettings } = usePaymentInfo()
 
   const [banco, setBanco] = useState('')
   const [telefono, setTelefono] = useState('')
@@ -195,8 +194,8 @@ export default function FinalPaymentScreen() {
                   <Text style={styles.paymentLabel}>{PAYMENT_LABELS[method]}</Text>
                   <View style={[styles.radio, selectedMethod === method && styles.radioActive]} />
                 </View>
-                {selectedMethod === method && (
-                  <Text style={styles.paymentInfo}>{PAYMENT_INFO[method]}</Text>
+                {selectedMethod === method && paymentSettings && (
+                  <Text style={styles.paymentInfo}>{formatPaymentInfo(paymentSettings, method)}</Text>
                 )}
               </TouchableOpacity>
             ))}
@@ -208,15 +207,18 @@ export default function FinalPaymentScreen() {
 
               {selectedMethod === 'PAGO_MOVIL' && (
                 <>
-                  <Field label="Banco" value={banco} onChangeText={setBanco} placeholder="Ej. Banesco" />
-                  <Field label="Teléfono emisor" value={telefono} onChangeText={(text) => setTelefono(onlyDigits(text))} placeholder="Ej. 0414-1234567" keyboardType="phone-pad" />
+                  <SelectField label="Banco" value={banco} options={VENEZUELAN_BANKS.map((b) => b.name)} onChange={setBanco} allowOther />
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Teléfono emisor</Text>
+                    <PhoneInput value={telefono} onChange={setTelefono} />
+                  </View>
                   <Field label="Últimos 4 dígitos de la referencia" value={referencia} onChangeText={(text) => setReferencia(onlyDigits(text))} placeholder="Ej. 1234" keyboardType="number-pad" maxLength={4} />
                 </>
               )}
 
               {selectedMethod === 'TRANSFERENCIA' && (
                 <>
-                  <Field label="Banco" value={banco} onChangeText={setBanco} placeholder="Ej. Banesco" />
+                  <SelectField label="Banco" value={banco} options={VENEZUELAN_BANKS.map((b) => b.name)} onChange={setBanco} allowOther />
                   <Field label="Nombre del titular" value={titular} onChangeText={setTitular} placeholder="Nombre completo" />
                   <View style={styles.fieldGroup}>
                     <Text style={styles.fieldLabel}>Cédula</Text>

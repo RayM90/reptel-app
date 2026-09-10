@@ -1,7 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
 import * as ordersService from './orders.service'
-import { mapPaymentMethod } from '../product-orders/product-orders.service'
+import { mapPaymentMethod } from '../../lib/paymentMethod'
 import { broadcastOrderUpdate } from '../../websocket'
 import prisma from '../../lib/prisma'
 
@@ -81,7 +81,7 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
 // para que un cliente no pueda crear órdenes a nombre de otro.
 //
 // PAGO ANTICIPADO: ahora requiere advancePaymentMethod en el body
-// (mismos códigos que la tienda: PAGO_MOVIL, TRANSFERENCIA, BINANCE).
+// (mismos códigos que en recepción: PAGO_MOVIL, TRANSFERENCIA, BINANCE).
 // La orden nace en PENDING_PAYMENT con los montos fijos de delivery
 // y revisión ya asignados por el service.
 // ─────────────────────────────────────────────
@@ -147,39 +147,91 @@ export const createMyOrder = async (req: AuthRequest, res: Response): Promise<vo
 }
 
 // ─────────────────────────────────────────────
-// CLIENTE — Subir comprobante de pago anticipado
-// Mismo patrón que product-orders: recibe receiptUrl ya resuelto
-// (simulado, sin S3 real por ahora) y lo guarda en la orden.
+// CREAR ORDEN EN RECEPCIÓN (personal TECHNICIAN/ADMIN)
+// El pago de la revisión ($15) ya fue verificado en persona por quien
+// registra, por eso no requiere advancePaymentMethod pendiente de
+// confirmación — la orden nace directo en RECEIVED.
 // ─────────────────────────────────────────────
 
-export const submitAdvancePayment = async (req: AuthRequest, res: Response): Promise<void> => {
+export const createCounterOrder = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const email = req.user?.email
-    if (!email) {
+    const actorEmail = req.user?.email
+    if (!actorEmail) {
       res.status(401).json({ success: false, message: 'Usuario no autenticado' })
       return
     }
 
-    const id = String(req.params.id)
-    const { paymentDetails } = req.body
+    const { clientId, device, problem, advancePaymentMethod, paymentDetails, amount, serviceCatalogId } = req.body
 
-    if (!paymentDetails || typeof paymentDetails !== 'object') {
-      res.status(400).json({ success: false, message: 'paymentDetails es requerido' })
+    if (!clientId) {
+      res.status(400).json({ success: false, message: 'El cliente es requerido' })
       return
     }
 
-    const order = await ordersService.submitAdvancePayment(id, email, paymentDetails)
-    res.json({ success: true, data: order })
+    if (!device || !device.type || !device.brand || !device.model || !device.color || !device.accessories) {
+      res.status(400).json({
+        success: false,
+        message: 'Datos del equipo incompletos (type, brand, model, color y accessories son requeridos)',
+      })
+      return
+    }
+
+    if (!problem) {
+      res.status(400).json({ success: false, message: 'La falla o servicio reportado es requerido' })
+      return
+    }
+
+    if (!advancePaymentMethod) {
+      res.status(400).json({ success: false, message: 'El método de pago de la revisión es requerido' })
+      return
+    }
+
+    const mappedMethod = mapPaymentMethod(advancePaymentMethod)
+    if (!mappedMethod) {
+      res.status(400).json({
+        success: false,
+        message: `Método de pago no soportado: ${advancePaymentMethod}`,
+      })
+      return
+    }
+
+    if (!paymentDetails || typeof paymentDetails !== 'object') {
+      res.status(400).json({ success: false, message: 'Los datos del pago (paymentDetails) son requeridos' })
+      return
+    }
+
+    if (amount !== undefined && (Number.isNaN(Number(amount)) || Number(amount) <= 0 || Number(amount) > 15)) {
+      res.status(400).json({ success: false, message: 'El monto abonado debe ser mayor a 0 y no exceder $15' })
+      return
+    }
+
+    const order = await ordersService.createCounterOrder({
+      actorEmail,
+      clientId,
+      device,
+      problem,
+      advancePaymentMethod: mappedMethod,
+      paymentDetails,
+      amount: amount !== undefined ? Number(amount) : undefined,
+      serviceCatalogId,
+    })
+
+    broadcastOrderUpdate({
+      type: 'ORDER_CREATED',
+      data: order,
+    })
+
+    res.status(201).json({ success: true, data: order })
   } catch (error: any) {
-    console.error('ERROR REGISTRAR DATOS DE PAGO ANTICIPADO:', error)
-    res.status(400).json({ success: false, message: error.message || 'Error al registrar los datos de pago' })
+    console.error('ERROR CREAR ORDEN (RECEPCIÓN):', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al crear la orden' })
   }
 }
 
 // ─────────────────────────────────────────────
 // CLIENTE — Enviar un abono del anticipo (pago en partes)
 // El cliente decide libremente cuántos abonos hace y de qué monto, hasta
-// completar el total. Reemplaza a submitAdvancePayment para el flujo nuevo.
+// completar el total.
 // ─────────────────────────────────────────────
 
 export const submitAdvancePaymentInstallment = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -241,7 +293,8 @@ export const confirmAdvancePaymentInstallment = async (req: AuthRequest, res: Re
     const order = await ordersService.confirmAdvancePaymentInstallment(
       submissionId,
       Boolean(approved),
-      rejectionReason
+      rejectionReason,
+      req.user?.email
     )
 
     broadcastOrderUpdate({
@@ -289,12 +342,12 @@ export const getMyTechOrders = async (req: AuthRequest, res: Response): Promise<
 export const updateStatus = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const id = String(req.params.id)
-    const { status, comment, technicianId } = req.body
+    const { status, comment, technicianId, expectedVersion } = req.body
     if (!status) {
       res.status(400).json({ success: false, message: 'El status es requerido' })
       return
     }
-    const order = await ordersService.updateOrderStatus(id, status, comment, technicianId)
+    const order = await ordersService.updateOrderStatus(id, status, comment, technicianId, req.user?.email, expectedVersion)
 
     broadcastOrderUpdate({
       type: 'ORDER_STATUS_UPDATED',
@@ -392,42 +445,6 @@ export const submitDiagnosis = async (req: AuthRequest, res: Response): Promise<
   } catch (error: any) {
     console.error('ERROR SUBMIT DIAGNOSIS:', error)
     res.status(400).json({ success: false, message: error.message || 'Error al registrar el diagnóstico' })
-  }
-}
-
-// ─────────────────────────────────────────────
-// ADMIN — Confirmar o rechazar el pago anticipado (Fase 4)
-// ─────────────────────────────────────────────
-
-export const confirmAdvancePayment = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const id = String(req.params.id)
-    const { approved, rejectionReason } = req.body
-
-    if (approved === undefined) {
-      res.status(400).json({ success: false, message: 'approved es requerido (true o false)' })
-      return
-    }
-
-    if (approved === false && !rejectionReason) {
-      res.status(400).json({
-        success: false,
-        message: 'rejectionReason es requerido cuando se rechaza el pago',
-      })
-      return
-    }
-
-    const order = await ordersService.confirmAdvancePayment(id, Boolean(approved), rejectionReason)
-
-    broadcastOrderUpdate({
-      type: 'ORDER_STATUS_UPDATED',
-      data: order,
-    })
-
-    res.json({ success: true, data: order })
-  } catch (error: any) {
-    console.error('ERROR CONFIRM ADVANCE PAYMENT:', error)
-    res.status(400).json({ success: false, message: error.message || 'Error al confirmar el pago anticipado' })
   }
 }
 
@@ -631,5 +648,103 @@ export const getMyTechnicianOrders = async (req: AuthRequest, res: Response): Pr
   } catch (error) {
     console.error('ERROR GET MY TECHNICIAN ORDERS:', error)
     res.status(500).json({ success: false, message: 'Error al obtener tus órdenes', error: String(error) })
+  }
+}
+// ─────────────────────────────────────────────
+// REPUESTOS DE INVENTARIO USADOS EN LA ORDEN — solo el técnico asignado
+// ─────────────────────────────────────────────
+
+export const useProductInOrderHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const orderId = String(req.params.id)
+    const { productId, quantity } = req.body
+
+    if (!productId || !Number.isInteger(quantity) || quantity <= 0) {
+      res.status(400).json({ success: false, message: 'productId y quantity (entero > 0) son requeridos' })
+      return
+    }
+
+    const result = await ordersService.useProductInOrder(orderId, productId, quantity, email)
+    res.status(201).json({ success: true, data: result })
+  } catch (error: any) {
+    if (error.message?.includes('Solo el técnico asignado')) {
+      res.status(403).json({ success: false, message: error.message })
+      return
+    }
+    if (error.constructor?.name === 'InsufficientStockError') {
+      res.status(400).json({ success: false, message: 'Stock insuficiente para este repuesto' })
+      return
+    }
+    console.error('ERROR USAR REPUESTO EN ORDEN:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al registrar el repuesto' })
+  }
+}
+
+export const revertProductUsageHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const movementId = String(req.params.movementId)
+    const result = await ordersService.revertProductUsage(movementId, email)
+    res.status(200).json({ success: true, data: result })
+  } catch (error: any) {
+    if (error.message?.includes('Solo el técnico asignado')) {
+      res.status(403).json({ success: false, message: error.message })
+      return
+    }
+    console.error('ERROR REVERTIR REPUESTO:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al revertir el repuesto' })
+  }
+}
+
+export const getPartsUsedInOrderHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const orderId = String(req.params.id)
+    const parts = await ordersService.getPartsUsedInOrder(orderId)
+    res.status(200).json({ success: true, data: parts })
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Error al obtener los repuestos usados' })
+  }
+}
+
+// ─────────────────────────────────────────────
+// ABONO ADICIONAL EN ORDEN DE RECEPCIÓN — staff (ADMIN/TECHNICIAN)
+// ─────────────────────────────────────────────
+
+export const submitCounterAdvanceInstallmentHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const actorEmail = req.user?.email
+    if (!actorEmail) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const orderId = String(req.params.id)
+    const { paymentDetails, amount } = req.body
+
+    if (!paymentDetails || typeof paymentDetails !== 'object') {
+      res.status(400).json({ success: false, message: 'paymentDetails es requerido' })
+      return
+    }
+    if (amount === undefined || amount === null || Number.isNaN(Number(amount))) {
+      res.status(400).json({ success: false, message: 'amount es requerido y debe ser numérico' })
+      return
+    }
+
+    const submission = await ordersService.submitCounterAdvanceInstallment(orderId, actorEmail, paymentDetails, Number(amount))
+    res.status(201).json({ success: true, data: submission })
+  } catch (error: any) {
+    console.error('ERROR ABONO RECEPCIÓN:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al registrar el abono' })
   }
 }

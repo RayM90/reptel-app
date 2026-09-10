@@ -55,7 +55,7 @@ export default function Login() {
       }
 
       const { user, token } = data
-      if (user.role !== 'ADMIN' && user.role !== 'TECHNICIAN_DELIVERY' && user.role !== 'DELIVERY') {
+      if (user.role !== 'ADMIN' && user.role !== 'TECHNICIAN_DELIVERY' && user.role !== 'TECHNICIAN') {
         setError('Este panel es solo para personal autorizado')
         setLoading(false)
         return
@@ -65,10 +65,8 @@ export default function Login() {
 
       if (user.role === 'ADMIN') {
         navigate('/admin')
-      } else if (user.role === 'TECHNICIAN_DELIVERY') {
+      } else if (user.role === 'TECHNICIAN_DELIVERY' || user.role === 'TECHNICIAN') {
         navigate('/technician')
-      } else if (user.role === 'DELIVERY') {
-        navigate('/delivery')
       }
     } catch (err: any) {
       if (err?.response) {
@@ -103,7 +101,7 @@ export default function Login() {
       })
       const { user, token } = response.data.data
 
-      if (user.role !== 'ADMIN' && user.role !== 'TECHNICIAN_DELIVERY' && user.role !== 'DELIVERY') {
+      if (user.role !== 'ADMIN' && user.role !== 'TECHNICIAN_DELIVERY' && user.role !== 'TECHNICIAN') {
         setError('Este panel es solo para personal autorizado')
         setLoading(false)
         return
@@ -113,10 +111,8 @@ export default function Login() {
 
       if (user.role === 'ADMIN') {
         navigate('/admin')
-      } else if (user.role === 'TECHNICIAN_DELIVERY') {
+      } else if (user.role === 'TECHNICIAN_DELIVERY' || user.role === 'TECHNICIAN') {
         navigate('/technician')
-      } else if (user.role === 'DELIVERY') {
-        navigate('/delivery')
       }
     } catch (err: any) {
       if (err?.response) {

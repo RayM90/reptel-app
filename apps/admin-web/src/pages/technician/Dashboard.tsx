@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/auth.store'
 import { useToastStore } from '../../store/toast.store'
@@ -43,6 +44,16 @@ interface CatalogItem {
   basePrice: string
 }
 
+interface PartUsed {
+  id: string
+  quantity: number
+  unitPriceAtUse: string | null
+  createdAt: string
+  reversedAt: string | null
+  product: { id: string; name: string }
+  user: { id: string; name: string; lastName: string | null } | null
+}
+
 interface TechOrder {
   id: string
   orderNumber: string
@@ -54,9 +65,11 @@ interface TechOrder {
   revisionAmount: string | null
   technicianCommission: string | null
   finalPaymentConfirmedAt: string | null
+  finalPaymentDetails: Record<string, string> | null
+  finalPaymentConfirmed: boolean
   client: { name: string; lastName: string }
-  device: { type: string; brand: string; model: string; color: string }
-  serviceCatalog: { id: string; name: string } | null
+  device: { type: string; brand: string; model: string; color: string; accessories: string; devicePassword: string | null; serialNumber: string | null }
+  serviceCatalog: { id: string; name: string; basePrice: string } | null
   statusHistory: StatusHistoryEntry[]
 }
 
@@ -104,18 +117,85 @@ export default function TechnicianDashboard() {
   const [diagnosisText, setDiagnosisText] = useState<Record<string, string>>({})
   const [budgetText, setBudgetText] = useState<Record<string, string>>({})
   const [catalogSelection, setCatalogSelection] = useState<Record<string, string>>({})
+  const [manualExtraText, setManualExtraText] = useState<Record<string, string>>({})
+
+  const getPartsSubtotal = (orderId: string, partsOverride?: PartUsed[]) =>
+    (partsOverride ?? partsByOrder[orderId] ?? [])
+      .filter((p) => !p.reversedAt)
+      .reduce((sum, p) => sum + p.quantity * Number(p.unitPriceAtUse ?? 0), 0)
+
+  // El presupuesto se autollena con catálogo + monto manual + repuestos ya
+  // usados (que el backend ya sumó a Order.budget al agregarlos — si no lo
+  // reflejamos acá, enviar el diagnóstico lo pisaría con un total menor).
+  // Sigue siendo editable a mano por si el técnico necesita ajustarlo directo.
+  const recomputeBudget = (orderId: string, catalogId: string, manualExtra: string, partsOverride?: PartUsed[]) => {
+    const catalogPrice = catalogId ? Number(catalog.find((c) => c.id === catalogId)?.basePrice ?? 0) : 0
+    const extra = Number(manualExtra) || 0
+    const partsSubtotal = getPartsSubtotal(orderId, partsOverride)
+    setBudgetText((prev) => ({ ...prev, [orderId]: (catalogPrice + extra + partsSubtotal).toFixed(2) }))
+  }
 
   const [commentText, setCommentText] = useState<Record<string, string>>({})
   const [statusSelection, setStatusSelection] = useState<Record<string, OrderStatus>>({})
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
 
+  // ── Repuestos de inventario usados en la orden ──
+  const [products, setProducts] = useState<{ id: string; name: string; stock: number; price: string }[]>([])
+  const [partsByOrder, setPartsByOrder] = useState<Record<string, PartUsed[]>>({})
+  const [partsProductId, setPartsProductId] = useState<Record<string, string>>({})
+  const [partsQuantity, setPartsQuantity] = useState<Record<string, string>>({})
+
   useEffect(() => {
     fetchData()
+    api.get('/api/products').then((res) => setProducts(res.data.data))
     // Polling automático — mismo intervalo que Admin y Motorizado, para que los
     // 3 paneles internos se mantengan coordinados entre sí.
     const interval = setInterval(() => fetchData(true), POLL_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [])
+
+  const fetchParts = async (orderId: string): Promise<PartUsed[]> => {
+    try {
+      const res = await api.get(`/api/orders/${orderId}/parts`)
+      setPartsByOrder((prev) => ({ ...prev, [orderId]: res.data.data }))
+      return res.data.data
+    } catch {
+      // silencioso — no bloquea el resto del detalle de la orden
+      return partsByOrder[orderId] ?? []
+    }
+  }
+
+  const handleAddPart = async (orderId: string) => {
+    const productId = partsProductId[orderId]
+    const quantity = Number(partsQuantity[orderId])
+    if (!productId || !Number.isInteger(quantity) || quantity <= 0) {
+      showToast('Elegí un producto y una cantidad válida', 'error')
+      return
+    }
+    try {
+      await api.post(`/api/orders/${orderId}/parts`, { productId, quantity })
+      showToast('✅ Repuesto registrado, presupuesto actualizado', 'success')
+      setPartsProductId((prev) => ({ ...prev, [orderId]: '' }))
+      setPartsQuantity((prev) => ({ ...prev, [orderId]: '' }))
+      const freshParts = await fetchParts(orderId)
+      recomputeBudget(orderId, catalogSelection[orderId] || '', manualExtraText[orderId] || '', freshParts)
+      fetchData(true)
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al registrar el repuesto', 'error')
+    }
+  }
+
+  const handleRevertPart = async (orderId: string, movementId: string) => {
+    try {
+      await api.delete(`/api/orders/${orderId}/parts/${movementId}`)
+      showToast('Repuesto revertido — stock y presupuesto restaurados', 'success')
+      const freshParts = await fetchParts(orderId)
+      recomputeBudget(orderId, catalogSelection[orderId] || '', manualExtraText[orderId] || '', freshParts)
+      fetchData(true)
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al revertir el repuesto', 'error')
+    }
+  }
 
   const fetchData = async (isPoll = false) => {
     if (!isPoll) {
@@ -154,6 +234,11 @@ export default function TechnicianDashboard() {
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id))
+    if (expandedId !== id && !partsByOrder[id]) {
+      fetchParts(id).then((freshParts) => {
+        recomputeBudget(id, catalogSelection[id] || '', manualExtraText[id] || '', freshParts)
+      })
+    }
     if (newIds.has(id)) {
       setNewIds((prev) => {
         const next = new Set(prev)
@@ -272,12 +357,14 @@ export default function TechnicianDashboard() {
       <div className="page-header">
         <div>
           <h1>Panel del Técnico</h1>
-          <p>Hola, {user?.name}</p>
+          <p>Hola, {user?.lastName ? `${user.name} ${user.lastName}` : user?.name}</p>
         </div>
         <button className="btn btn-secondary" onClick={() => fetchData()}>
           ↻ Actualizar
         </button>
       </div>
+
+      {user?.role === 'TECHNICIAN' && <p><Link to="/registro">🧾 Ir a Registro (Recepción)</Link></p>}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         <button
@@ -330,30 +417,114 @@ export default function TechnicianDashboard() {
 
                 {isExpanded && (
                   <div style={{ marginTop: 12, borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
-                    <p><strong>Problema:</strong> {order.problem}</p>
+                    <div className="card">
+                      <h4>Detalle del equipo</h4>
+                      <p><strong>Tipo:</strong> {order.device.type === 'LAPTOP' ? 'Laptop' : 'PC'}</p>
+                      <p><strong>Marca / Modelo:</strong> {order.device.brand} {order.device.model}</p>
+                      <p><strong>Color:</strong> {order.device.color}</p>
+                      <p><strong>Accesorios:</strong> {order.device.accessories || '—'}</p>
+                      {order.device.devicePassword && <p><strong>Contraseña del equipo:</strong> {order.device.devicePassword}</p>}
+                      <p><strong>Problema reportado por el cliente:</strong> {order.problem}</p>
+                    </div>
+
                     {order.diagnosis && <p><strong>Diagnóstico:</strong> {order.diagnosis}</p>}
                     {order.budget && <p><strong>Presupuesto:</strong> ${order.budget}</p>}
+
+                    {order.finalPaymentDetails && !order.finalPaymentConfirmed && (
+                      <p className="alert-success">💰 El cliente ya reportó el pago final — esperando confirmación del administrador.</p>
+                    )}
+
+                    <div className="card">
+                      <h4>Repuestos</h4>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                        <div className="form-group" style={{ flex: 1, marginBottom: 0, minWidth: 160 }}>
+                          <label>Producto</label>
+                          <select
+                            value={partsProductId[order.id] || ''}
+                            onChange={(e) => setPartsProductId((prev) => ({ ...prev, [order.id]: e.target.value }))}
+                          >
+                            <option value="">— Seleccionar —</option>
+                            {products.map((p) => (
+                              <option key={p.id} value={p.id} disabled={p.stock <= 0}>
+                                {p.name} — ${Number(p.price).toFixed(2)} (stock: {p.stock})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group" style={{ width: 90, marginBottom: 0 }}>
+                          <label>Cantidad</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={partsQuantity[order.id] || ''}
+                            onChange={(e) => setPartsQuantity((prev) => ({ ...prev, [order.id]: e.target.value }))}
+                          />
+                        </div>
+                        <button className="btn btn-secondary" onClick={() => handleAddPart(order.id)}>
+                          Usar repuesto
+                        </button>
+                      </div>
+
+                      {(() => {
+                        const activeParts = (partsByOrder[order.id] ?? []).filter((p) => !p.reversedAt)
+                        if (activeParts.length === 0) return null
+                        const partsSubtotal = activeParts.reduce((sum, p) => sum + p.quantity * Number(p.unitPriceAtUse ?? 0), 0)
+                        return (
+                          <div className="table-wrapper" style={{ marginTop: 10 }}>
+                            <table className="styled-table">
+                              <thead>
+                                <tr>
+                                  <th scope="col">Producto</th>
+                                  <th scope="col">Cantidad</th>
+                                  <th scope="col" className="money">Costo unitario</th>
+                                  <th scope="col" className="money">Subtotal</th>
+                                  <th scope="col">Quién</th>
+                                  <th scope="col">Fecha</th>
+                                  <th scope="col">Acciones</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {activeParts.map((p) => (
+                                  <tr key={p.id}>
+                                    <td data-label="Producto">{p.product.name}</td>
+                                    <td data-label="Cantidad">{p.quantity}</td>
+                                    <td className="money" data-label="Costo unitario">${Number(p.unitPriceAtUse ?? 0).toFixed(2)}</td>
+                                    <td className="money" data-label="Subtotal">${(p.quantity * Number(p.unitPriceAtUse ?? 0)).toFixed(2)}</td>
+                                    <td data-label="Quién">{p.user ? `${p.user.name} ${p.user.lastName ?? ''}`.trim() : '—'}</td>
+                                    <td data-label="Fecha">{new Date(p.createdAt).toLocaleString('es-VE')}</td>
+                                    <td data-label="Acciones">
+                                      <button className="btn btn-danger" onClick={() => handleRevertPart(order.id, p.id)}>
+                                        Revertir
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr>
+                                  <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Total repuestos</td>
+                                  <td className="money" style={{ fontWeight: 700 }}>${partsSubtotal.toFixed(2)}</td>
+                                  <td colSpan={3}></td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        )
+                      })()}
+                    </div>
 
                     {needsDiagnosis && (
                       <div className="card">
                         <h4>Registrar diagnóstico</h4>
                         <div className="form-group">
-                          <label>Diagnóstico</label>
-                          <textarea
-                            value={diagnosisText[order.id] || ''}
-                            onChange={(e) =>
-                              setDiagnosisText((prev) => ({ ...prev, [order.id]: e.target.value }))
-                            }
-                            rows={3}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label>Servicio del catálogo (opcional)</label>
+                          <label>Servicio del catálogo (si aplica — autollena el presupuesto)</label>
                           <select
                             value={catalogSelection[order.id] || ''}
-                            onChange={(e) =>
-                              setCatalogSelection((prev) => ({ ...prev, [order.id]: e.target.value }))
-                            }
+                            onChange={(e) => {
+                              const catalogId = e.target.value
+                              setCatalogSelection((prev) => ({ ...prev, [order.id]: catalogId }))
+                              recomputeBudget(order.id, catalogId, manualExtraText[order.id] || '')
+                            }}
                           >
                             <option value="">-- Ninguno / diagnóstico manual --</option>
                             {catalog.map((c) => (
@@ -364,6 +535,30 @@ export default function TechnicianDashboard() {
                           </select>
                         </div>
                         <div className="form-group">
+                          <label>Monto adicional (si el diagnóstico o parte del costo no está en el catálogo)</label>
+                          <input
+                            type="number"
+                            value={manualExtraText[order.id] || ''}
+                            onChange={(e) => {
+                              const extra = e.target.value
+                              setManualExtraText((prev) => ({ ...prev, [order.id]: extra }))
+                              recomputeBudget(order.id, catalogSelection[order.id] || '', extra)
+                            }}
+                          />
+                          <p className="form-hint">Se suma al precio del catálogo elegido arriba para formar el presupuesto total.</p>
+                        </div>
+                        <div className="form-group">
+                          <label>Diagnóstico</label>
+                          <textarea
+                            value={diagnosisText[order.id] || ''}
+                            onChange={(e) =>
+                              setDiagnosisText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                            }
+                            rows={3}
+                            placeholder="Describí el diagnóstico — si no eligió nada del catálogo, escribilo acá completo"
+                          />
+                        </div>
+                        <div className="form-group">
                           <label>Presupuesto ($)</label>
                           <input
                             type="number"
@@ -372,7 +567,28 @@ export default function TechnicianDashboard() {
                               setBudgetText((prev) => ({ ...prev, [order.id]: e.target.value }))
                             }
                           />
+                          <p className="form-hint">Se autollena con catálogo + monto adicional + repuestos, pero podés editarlo directo.</p>
                         </div>
+
+                        {(() => {
+                          const catalogItem = catalog.find((c) => c.id === (catalogSelection[order.id] || ''))
+                          const extra = Number(manualExtraText[order.id] || 0)
+                          const activeParts = (partsByOrder[order.id] ?? []).filter((p) => !p.reversedAt)
+                          if (!catalogItem && !extra && activeParts.length === 0) return null
+                          return (
+                            <div className="form-hint" style={{ marginBottom: 12 }}>
+                              <strong>Desglose del presupuesto:</strong>
+                              <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
+                                {catalogItem && <li>{catalogItem.name} — ${Number(catalogItem.basePrice).toFixed(2)}</li>}
+                                {extra > 0 && <li>Monto adicional — ${extra.toFixed(2)}</li>}
+                                {activeParts.map((p) => (
+                                  <li key={p.id}>Repuesto: {p.product.name} (x{p.quantity}) — ${(p.quantity * Number(p.unitPriceAtUse ?? 0)).toFixed(2)}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )
+                        })()}
+
                         <button className="btn btn-primary" disabled={pendingIds.has(`diag:${order.id}`)} onClick={() => handleSubmitDiagnosis(order.id)}>
                           Enviar diagnóstico
                         </button>

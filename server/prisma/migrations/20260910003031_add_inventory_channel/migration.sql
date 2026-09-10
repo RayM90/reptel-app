@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `inventorymovement` ADD COLUMN `channel` ENUM('MOSTRADOR', 'SERVICIO_TECNICO') NOT NULL DEFAULT 'MOSTRADOR';

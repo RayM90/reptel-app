@@ -15,7 +15,6 @@ beforeAll(async () => {
       idNumber: `TEST-DEVICE-A-${suffix}`,
       phone: '0000000000',
       email: `cliente-a-${suffix}@test.com`,
-      password: '',
     },
   })
 
@@ -26,7 +25,6 @@ beforeAll(async () => {
       idNumber: `TEST-DEVICE-B-${suffix}`,
       phone: '0000000000',
       email: `cliente-b-${suffix}@test.com`,
-      password: '',
     },
   })
 

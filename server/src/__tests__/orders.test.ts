@@ -104,7 +104,6 @@ describe('Orders — GET /api/orders/track/:orderNumber — no debe exponer PII'
         idNumber: `TEST-TRACK-${suffix}`,
         phone: '04120000000',
         email: `cliente-track-${suffix}@test.com`,
-        password: '',
       },
     })
 

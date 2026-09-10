@@ -65,8 +65,7 @@ export const registerUser = async (
         idNumber: email,
         phone: phone ?? '',
         email,
-        address: address ?? null,
-        password: '',
+        addressStreet: address ?? null,
       },
     });
     clientId = newClient.id;
@@ -180,7 +179,9 @@ export const createStaffUser = async (
   name: string,
   tempPassword: string,
   role: string,
-  phone?: string,
+  phone: string | undefined,
+  lastName: string,
+  idNumber: string,
 ) => {
   await client.send(
     new AdminCreateUserCommand({
@@ -191,7 +192,9 @@ export const createStaffUser = async (
       UserAttributes: [
         { Name: 'email', Value: email },
         { Name: 'email_verified', Value: 'true' },
-        { Name: 'name', Value: name },
+        { Name: 'name', Value: `${name} ${lastName}` },
+        { Name: 'given_name', Value: name },
+        { Name: 'family_name', Value: lastName },
       ],
     })
   );
@@ -208,6 +211,8 @@ export const createStaffUser = async (
     data: {
       email,
       name,
+      lastName,
+      idNumber,
       role: role as any,
       phone: phone ?? null,
       password: 'no-usado-cognito',
