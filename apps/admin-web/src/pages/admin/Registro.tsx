@@ -71,6 +71,12 @@ export default function Registro() {
   const showToast = useToastStore((state) => state.showToast)
   const role = useAuthStore((state) => state.user?.role)
 
+  const [todaySales, setTodaySales] = useState<{ salesCount: number; salesTotal: number } | null>(null)
+
+  useEffect(() => {
+    api.get('/api/products/summary/today').then((res) => setTodaySales(res.data.data)).catch(() => {})
+  }, [])
+
   const [step, setStep] = useState<'client' | 'sale'>('client')
 
   // ── Paso 1: identificar/crear cliente ──
@@ -239,6 +245,7 @@ export default function Registro() {
       }
       showToast(`✅ Venta registrada para ${activeClient?.name} ${activeClient?.lastName}`, 'success')
       resetAll()
+      api.get('/api/products/summary/today').then((res) => setTodaySales(res.data.data)).catch(() => {})
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'Error al registrar la venta', 'error')
       fetchProducts() // refrescar stock por si algún ítem sí se descontó antes del error
@@ -311,6 +318,11 @@ export default function Registro() {
       <div className="page-header">
         <h1>Registro — Tienda Física</h1>
       </div>
+      {todaySales && (
+        <p className="form-hint">
+          Ventas de mostrador hoy: <strong>{todaySales.salesCount}</strong> — monto aproximado: <strong>${todaySales.salesTotal.toFixed(2)}</strong>
+        </p>
+      )}
       {role === 'ADMIN' && <p><Link to="/admin">← Volver al Panel de Administrador</Link></p>}
       {role === 'TECHNICIAN' && <p><Link to="/technician">🔧 Ver reparaciones asignadas</Link></p>}
 
@@ -592,8 +604,15 @@ export default function Registro() {
                 <PhoneInput value={paymentDetails.telefono} onChange={(v) => setPaymentDetails({ ...paymentDetails, telefono: v })} />
               </div>
               <div className="form-group">
-                <label>Referencia</label>
-                <input type="text" value={paymentDetails.referencia} onChange={(e) => setPaymentDetails({ ...paymentDetails, referencia: e.target.value })} />
+                <label>Últimos 4 dígitos de la referencia</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="1234"
+                  value={paymentDetails.referencia}
+                  onChange={(e) => setPaymentDetails({ ...paymentDetails, referencia: e.target.value.replace(/\D/g, '').slice(0, 4) })}
+                />
               </div>
             </>
           )}
