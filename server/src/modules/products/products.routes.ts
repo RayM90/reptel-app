@@ -8,12 +8,14 @@ import {
   createProductHandler,
   updateProductHandler,
   sellProductHandler,
+  getStoreSummaryTodayHandler,
 } from './products.controller';
 
 const router = Router();
 
 router.get('/categories', getProductsByCategory);
 router.get('/admin', authenticate, authorize('ADMIN'), getAdminProducts);
+router.get('/summary/today', authenticate, authorize('ADMIN'), getStoreSummaryTodayHandler);
 router.get('/', getProducts);
 router.post('/', authenticate, authorize('ADMIN'), createProductHandler);
 router.post('/:id/sell', authenticate, authorize('ADMIN', 'TECHNICIAN'), sellProductHandler);

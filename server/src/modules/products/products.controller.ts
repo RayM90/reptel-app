@@ -9,6 +9,7 @@ import {
   createProduct,
   updateProduct,
   sellProduct,
+  getStoreSummaryToday,
   InsufficientStockError,
 } from './products.service';
 
@@ -32,6 +33,20 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
     res.status(200).json({ success: true, data: categories });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Error al obtener categorías' });
+  }
+};
+
+/**
+ * GET /api/products/summary/today
+ * Resumen de tienda física para el Dashboard — ventas de mostrador de hoy +
+ * productos que necesitan reposición.
+ */
+export const getStoreSummaryTodayHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const summary = await getStoreSummaryToday();
+    res.status(200).json({ success: true, data: summary });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Error al obtener el resumen de tienda' });
   }
 };
 

@@ -119,8 +119,15 @@ const NEW_BADGE_STYLE: CSSProperties = {
   marginLeft: 8,
 }
 
+interface StoreSummary {
+  salesCount: number
+  salesTotal: number
+  lowStockProducts: { id: string; name: string; stock: number; minStock: number }[]
+}
+
 export default function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([])
+  const [storeSummary, setStoreSummary] = useState<StoreSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set())
@@ -151,8 +158,12 @@ export default function Dashboard() {
       setError('')
     }
     try {
-      const ordersRes = await api.get('/api/orders')
+      const [ordersRes, storeSummaryRes] = await Promise.all([
+        api.get('/api/orders'),
+        api.get('/api/products/summary/today'),
+      ])
       const freshOrders: Order[] = ordersRes.data.data
+      setStoreSummary(storeSummaryRes.data.data)
 
       if (isPoll) {
         setOrders((prev) => {
@@ -352,6 +363,25 @@ export default function Dashboard() {
         <Link to="/registro" className="btn btn-secondary">🧾 Registro (tienda física)</Link>{' '}
         <Link to="/admin/reportes" className="btn btn-secondary">📊 Reportes</Link>
       </p>
+
+      {storeSummary && (
+        <section className="card">
+          <h2>🏪 Tienda física — hoy</h2>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: storeSummary.lowStockProducts.length > 0 ? 12 : 0 }}>
+            <div>
+              <strong>Ventas de mostrador:</strong> {storeSummary.salesCount}
+            </div>
+            <div>
+              <strong>Monto aproximado:</strong> ${storeSummary.salesTotal.toFixed(2)}
+            </div>
+          </div>
+          {storeSummary.lowStockProducts.length > 0 && (
+            <p className="alert-error" style={{ margin: 0 }}>
+              ⚠️ Repostar: {storeSummary.lowStockProducts.map((p) => `${p.name} (${p.stock}/${p.minStock})`).join(', ')}
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="card">
         <h2>Servicios Técnicos Activos ({activeOrders.length})</h2>

@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma'
-import { createProduct, updateProduct, sellProduct, InsufficientStockError } from '../modules/products/products.service'
+import { createProduct, updateProduct, sellProduct, getStoreSummaryToday, InsufficientStockError } from '../modules/products/products.service'
 
 let category: { id: string }
 
@@ -65,6 +65,44 @@ describe('InventoryMovement', () => {
 
     const unchanged = await prisma.product.findUniqueOrThrow({ where: { id: product.id } })
     expect(unchanged.stock).toBe(2)
+
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await prisma.product.delete({ where: { id: product.id } })
+  })
+})
+
+describe('getStoreSummaryToday', () => {
+  it('cuenta y suma las ventas de mostrador de hoy (monto = cantidad × precio actual)', async () => {
+    const product = await createProduct({ name: 'Producto Resumen', price: 10, stock: 10, categoryId: category.id })
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+
+    await sellProduct(product.id, 3)
+
+    const summary = await getStoreSummaryToday()
+    expect(summary.salesCount).toBeGreaterThanOrEqual(1)
+    expect(summary.salesTotal).toBeGreaterThanOrEqual(30)
+
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await prisma.product.delete({ where: { id: product.id } })
+  })
+
+  it('incluye productos con stock <= minStock en lowStockProducts', async () => {
+    const product = await createProduct({ name: 'Producto Bajo Stock', price: 10, stock: 2, minStock: 5, categoryId: category.id })
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+
+    const summary = await getStoreSummaryToday()
+    expect(summary.lowStockProducts.some((p) => p.id === product.id)).toBe(true)
+
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await prisma.product.delete({ where: { id: product.id } })
+  })
+
+  it('no incluye productos con stock > minStock en lowStockProducts', async () => {
+    const product = await createProduct({ name: 'Producto Stock OK', price: 10, stock: 50, minStock: 5, categoryId: category.id })
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+
+    const summary = await getStoreSummaryToday()
+    expect(summary.lowStockProducts.some((p) => p.id === product.id)).toBe(false)
 
     await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
     await prisma.product.delete({ where: { id: product.id } })
