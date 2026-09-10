@@ -1,6 +1,7 @@
 import request from 'supertest'
 import app from '../app'
 import prisma from '../lib/prisma'
+import { authorize } from '../middleware/auth.middleware'
 
 let adminToken: string
 let productId: string
@@ -20,6 +21,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (createdProductId) {
+    await prisma.inventoryMovement.deleteMany({ where: { productId: createdProductId } }).catch(() => {})
     await prisma.product.delete({ where: { id: createdProductId } }).catch(() => {})
   }
 })
@@ -153,4 +155,23 @@ describe('Products — PUT /:id editar producto (admin)', () => {
     const found = res.body.data.find((p: any) => p.id === createdProductId)
     expect(found).toBeDefined()
   }, 10000)
+})
+
+describe('Products — authorize() rechaza rol CLIENT (unitario, sin credenciales sembradas de CLIENT/TECHNICIAN)', () => {
+  // No existe en este proyecto un usuario TECHNICIAN o CLIENT con credenciales
+  // reales de Cognito para hacer login vía supertest (solo admin@reptel.com las
+  // tiene) — el mismo patrón se usa en catalog.test.ts y clients.test.ts para
+  // probar el rechazo de rol sin depender de un login real.
+  it('retorna 403 cuando el usuario autenticado tiene rol CLIENT en GET /api/products y GET /api/products/categories', () => {
+    const middleware = authorize('ADMIN', 'TECHNICIAN', 'TECHNICIAN_DELIVERY')
+    const req: any = { user: { sub: 'x', email: 'cliente@x.com', groups: ['CLIENT'] } }
+    const json = jest.fn()
+    const res: any = { status: jest.fn(() => ({ json })) }
+    const next = jest.fn()
+
+    middleware(req, res, next)
+
+    expect(res.status).toHaveBeenCalledWith(403)
+    expect(next).not.toHaveBeenCalled()
+  })
 })
