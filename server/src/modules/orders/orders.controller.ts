@@ -161,7 +161,7 @@ export const createCounterOrder = async (req: AuthRequest, res: Response): Promi
       return
     }
 
-    const { clientId, device, problem, advancePaymentMethod, serviceCatalogId } = req.body
+    const { clientId, device, problem, advancePaymentMethod, paymentDetails, serviceCatalogId } = req.body
 
     if (!clientId) {
       res.status(400).json({ success: false, message: 'El cliente es requerido' })
@@ -195,12 +195,18 @@ export const createCounterOrder = async (req: AuthRequest, res: Response): Promi
       return
     }
 
+    if (!paymentDetails || typeof paymentDetails !== 'object') {
+      res.status(400).json({ success: false, message: 'Los datos del pago (paymentDetails) son requeridos' })
+      return
+    }
+
     const order = await ordersService.createCounterOrder({
       actorEmail,
       clientId,
       device,
       problem,
       advancePaymentMethod: mappedMethod,
+      paymentDetails,
       serviceCatalogId,
     })
 

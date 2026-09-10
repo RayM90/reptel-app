@@ -364,6 +364,7 @@ export const createCounterOrder = async (data: {
   }
   problem: string
   advancePaymentMethod: string // ya mapeado al enum PaymentMethod de Prisma
+  paymentDetails: Record<string, string>
   serviceCatalogId?: string
 }) => {
   const actor = await prisma.user.findUnique({ where: { email: data.actorEmail } })
@@ -402,12 +403,24 @@ export const createCounterOrder = async (data: {
             userId: actor?.id,
           },
         },
+        // Verificado en persona por el staff — nace ya CONFIRMED, a diferencia
+        // del self-service donde el cliente sube el comprobante y un ADMIN lo aprueba.
+        advancePaymentSubmissions: {
+          create: {
+            amount: ADVANCE_REVISION_AMOUNT,
+            paymentDetails: data.paymentDetails,
+            status: 'CONFIRMED',
+            confirmedAt: new Date(),
+            confirmedByUserId: actor?.id,
+          },
+        },
       },
       include: {
         client: true,
         device: true,
-        technician: { select: { id: true, name: true } },
+        technician: { select: { id: true, name: true, lastName: true } },
         statusHistory: true,
+        advancePaymentSubmissions: true,
       },
     })
   })

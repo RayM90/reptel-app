@@ -11,7 +11,9 @@ export const isValidVenezuelanPhone = (phone: string): boolean => {
   return PHONE_PREFIXES.includes(phone.slice(0, 4));
 };
 
-// V o E + 7 u 8 dígitos.
+// V/E (persona natural) o J/G (jurídico/gobierno) + 7 a 9 dígitos.
+export const ID_NUMBER_PREFIXES = ['V', 'E', 'J', 'G'];
+
 export const isValidVenezuelanIdNumber = (idNumber: string): boolean => {
-  return /^[VE]-\d{7,8}$/.test(idNumber);
+  return /^[VEJG]-\d{7,9}$/.test(idNumber);
 };
