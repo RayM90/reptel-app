@@ -101,6 +101,7 @@ export default function Registro() {
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
   const [orderForm, setOrderForm] = useState(emptyOrderForm)
   const [noAccessories, setNoAccessories] = useState(false)
+  const [noDevicePassword, setNoDevicePassword] = useState(false)
   const [showDevicePassword, setShowDevicePassword] = useState(false)
   const [paymentDetails, setPaymentDetails] = useState({ banco: '', telefono: '', referencia: '', correo: '', uid: '', nombre: '' })
   const [creatingOrder, setCreatingOrder] = useState(false)
@@ -149,6 +150,7 @@ export default function Registro() {
     setOrderForm(emptyOrderForm)
     setOrderError('')
     setNoAccessories(false)
+    setNoDevicePassword(false)
     setShowDevicePassword(false)
     setPaymentDetails({ banco: '', telefono: '', referencia: '', correo: '', uid: '', nombre: '' })
     setLastCreatedTechnician('')
@@ -304,6 +306,7 @@ export default function Registro() {
       showToast(`✅ Orden ${response.data.data.orderNumber} creada para ${activeClient.name} ${activeClient.lastName} — técnico asignado: ${technicianName}`, 'success')
       setOrderForm(emptyOrderForm)
       setNoAccessories(false)
+    setNoDevicePassword(false)
       setShowDevicePassword(false)
       setPaymentDetails({ banco: '', telefono: '', referencia: '', correo: '', uid: '', nombre: '' })
     } catch (err: any) {
@@ -545,11 +548,26 @@ export default function Registro() {
                 type={showDevicePassword ? 'text' : 'password'}
                 value={orderForm.devicePassword}
                 onChange={(e) => setOrderForm({ ...orderForm, devicePassword: e.target.value })}
+                disabled={noDevicePassword}
+                autoComplete="new-password"
+                name="device-password-not-login"
               />
               <button type="button" className="btn btn-outline" onClick={() => setShowDevicePassword((prev) => !prev)}>
                 {showDevicePassword ? 'Ocultar' : 'Mostrar'}
               </button>
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontWeight: 400 }}>
+              <input
+                type="checkbox"
+                checked={noDevicePassword}
+                onChange={(e) => {
+                  const checked = e.target.checked
+                  setNoDevicePassword(checked)
+                  setOrderForm({ ...orderForm, devicePassword: '' })
+                }}
+              />
+              Sin contraseña
+            </label>
           </div>
           <div className="form-group">
             <label>Servicio del catálogo (opcional, solo referencia)</label>

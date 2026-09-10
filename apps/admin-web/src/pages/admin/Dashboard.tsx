@@ -401,7 +401,11 @@ export default function Dashboard() {
                     <td data-label="Pago anticipado">
                       <PaymentSubmissionsView
                         submissions={order.advancePaymentSubmissions ?? []}
-                        total={String(Number(order.deliveryAmount ?? 10) + Number(order.revisionAmount ?? 15))}
+                        total={String(
+                          order.deliveryAmount != null
+                            ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? 15)
+                            : Number(order.revisionAmount ?? 15)
+                        )}
                         onApprove={handleApproveAdvanceInstallment}
                         onReject={handleRejectAdvanceInstallment}
                         pendingIds={pendingIds}
