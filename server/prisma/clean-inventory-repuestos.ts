@@ -17,7 +17,6 @@ const OLD_STORE_PRODUCT_NAMES = [
   'Funda protectora universal',
   'Teclado inalambrico',
 ]
-const OLD_CATEGORY_NAMES = ['Cargadores', 'Accesorios', 'Repuestos']
 
 const NEW_CATEGORIES = [
   'Pantallas',
@@ -252,13 +251,7 @@ async function main() {
   }
   console.log(`  -> ${newProducts.length} productos nuevos creados`)
 
-  console.log('Borrando categorías viejas (ya vacías)...')
-  const deletedCategories = await prisma.productCategory.deleteMany({
-    where: { name: { in: OLD_CATEGORY_NAMES } },
-  })
-  console.log(`  -> ${deletedCategories.count} categorías viejas borradas`)
-
-  // Extra cleanup: delete any ProductCategory that is NOT one of the 7 approved
+  // Cleanup: delete any ProductCategory that is NOT one of the 7 approved
   console.log('Limpiando categorías no autorizadas (con sus productos e inventario)...')
   const allCategories = await prisma.productCategory.findMany({
     select: { id: true, name: true },
