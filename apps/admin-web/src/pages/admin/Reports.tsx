@@ -23,6 +23,7 @@ interface ClientSearchResult {
 }
 
 interface ServicioOrderRow {
+  orderId: string
   orderNumber: string
   clientName: string
   technicianName: string
@@ -182,6 +183,22 @@ export default function Reports() {
 
   const handleFilter = () => fetchReport(from, to, technicianId, clientId)
 
+  const downloadReceipt = async (order: ServicioOrderRow, type: 'intake' | 'final') => {
+    try {
+      const response = await api.get(`/api/orders/${order.orderId}/receipt/${type}`, { responseType: 'blob' })
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `recibo-${type === 'intake' ? 'recepcion' : 'entrega'}-${order.orderNumber}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch {
+      setError('Error al descargar el recibo')
+    }
+  }
+
   return (
     <div className="page-container">
       <div className="no-print page-header">
@@ -325,6 +342,7 @@ export default function Reports() {
                     <tr>
                       <th scope="col">Orden</th><th scope="col">Cliente</th><th scope="col">Técnico</th>
                       <th scope="col" className="money">Presupuesto</th><th scope="col" className="money">Comisión</th><th scope="col">Entregado</th>
+                      <th scope="col" className="no-print">Recibos</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -336,6 +354,10 @@ export default function Reports() {
                         <td className="money" data-label="Presupuesto">${o.budget.toFixed(2)}</td>
                         <td className="money" data-label="Comisión">${o.technicianCommission.toFixed(2)}</td>
                         <td data-label="Entregado">{formatDate(o.deliveredAt)}</td>
+                        <td data-label="Recibos" className="no-print">
+                          <button className="btn btn-outline" onClick={() => downloadReceipt(o, 'intake')}>📄 Recepción</button>{' '}
+                          <button className="btn btn-outline" onClick={() => downloadReceipt(o, 'final')}>📄 Entrega</button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

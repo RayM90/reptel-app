@@ -171,6 +171,12 @@ describe('reports.service — getReportSummary', () => {
     expect(result.servicio.byClient).toHaveLength(1)
   })
 
+  it('cada orden del detalle incluye orderId (necesario para descargar recibos)', async () => {
+    const result = await getReportSummary({ from: RANGE_FROM, to: RANGE_TO, clientId: clientB.id })
+
+    expect(result.servicio.orders[0].orderId).toBeTruthy()
+  })
+
   it('retorna todo en cero cuando no hay datos en el rango', async () => {
     const result = await getReportSummary({
       from: new Date('2020-01-01'),
