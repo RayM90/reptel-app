@@ -49,6 +49,46 @@ export const getAllProducts = async () => {
   return products;
 };
 
+/**
+ * Resumen de actividad de la tienda física para el Dashboard — ventas de
+ * mostrador de hoy (conteo + monto aproximado, ya que la venta no guarda un
+ * monto propio, se calcula con el precio actual del producto) y productos
+ * que necesitan reposición (stock <= minStock).
+ */
+export const getStoreSummaryToday = async () => {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const salesToday = await prisma.inventoryMovement.findMany({
+    where: {
+      type: 'OUT',
+      reason: 'Venta mostrador',
+      createdAt: { gte: startOfDay, lte: endOfDay },
+    },
+    include: { product: { select: { price: true } } },
+  });
+
+  const salesCount = salesToday.length;
+  const salesTotal = salesToday.reduce(
+    (sum, m) => sum + m.quantity * Number(m.product.price),
+    0
+  );
+
+  // Prisma no soporta comparar dos columnas de la misma fila en el `where`
+  // (stock <= minStock) — se filtra en memoria, la tabla de productos es chica.
+  const activeProducts = await prisma.product.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true, stock: true, minStock: true },
+  });
+  const lowStockProducts = activeProducts
+    .filter((p) => p.stock <= p.minStock)
+    .sort((a, b) => a.stock - b.stock);
+
+  return { salesCount, salesTotal, lowStockProducts };
+};
+
 export const getAllProductsForAdmin = async () => {
   return prisma.product.findMany({
     include: {
