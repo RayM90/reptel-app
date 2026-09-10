@@ -399,19 +399,18 @@ export const createCounterOrder = async (data: {
         statusHistory: {
           create: {
             status: 'RECEIVED',
-            comment: `Orden creada en mostrador por ${actor ? `${actor.name} ${actor.lastName ?? ''}`.trim() : 'personal de mostrador'} — pago de revisión ($${ADVANCE_REVISION_AMOUNT}) verificado en persona`,
+            comment: `Orden creada en mostrador por ${actor ? `${actor.name} ${actor.lastName ?? ''}`.trim() : 'personal de mostrador'} — pago de revisión ($${ADVANCE_REVISION_AMOUNT}) reportado, pendiente de confirmar por el administrador`,
             userId: actor?.id,
           },
         },
-        // Verificado en persona por el staff — nace ya CONFIRMED, a diferencia
-        // del self-service donde el cliente sube el comprobante y un ADMIN lo aprueba.
+        // Mismo flujo que el self-service: el staff de mostrador reporta los
+        // datos del pago, pero queda PENDING hasta que un ADMIN lo confirme
+        // desde el Dashboard (PaymentSubmissionsView) — no se auto-confirma.
         advancePaymentSubmissions: {
           create: {
             amount: ADVANCE_REVISION_AMOUNT,
             paymentDetails: data.paymentDetails,
-            status: 'CONFIRMED',
-            confirmedAt: new Date(),
-            confirmedByUserId: actor?.id,
+            status: 'PENDING',
           },
         },
       },

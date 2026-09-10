@@ -43,7 +43,7 @@ afterAll(async () => {
 })
 
 describe('Orders — POST /api/orders/counter', () => {
-  it('crea la orden directo en RECEIVED, con AdvancePaymentSubmission ya CONFIRMED (verificado en persona)', async () => {
+  it('crea la orden directo en RECEIVED, con AdvancePaymentSubmission PENDING (pendiente de confirmar por el admin)', async () => {
     const res = await request(app)
       .post('/api/orders/counter')
       .set('Authorization', `Bearer ${authToken}`)
@@ -71,8 +71,8 @@ describe('Orders — POST /api/orders/counter', () => {
 
     const submissions = await prisma.advancePaymentSubmission.findMany({ where: { orderId: createdOrderId } })
     expect(submissions).toHaveLength(1)
-    expect(submissions[0].status).toBe('CONFIRMED')
-    expect(submissions[0].confirmedByUserId).toBeTruthy()
+    expect(submissions[0].status).toBe('PENDING')
+    expect(submissions[0].confirmedByUserId).toBeNull()
     expect((submissions[0].paymentDetails as any).banco).toBe('Banesco')
 
     const history = await prisma.orderStatusHistory.findFirst({ where: { orderId: createdOrderId } })
@@ -103,5 +103,23 @@ describe('Orders — POST /api/orders/counter', () => {
 
     expect(res.status).toBe(400)
     expect(res.body.success).toBe(false)
+  })
+
+  it('el ADMIN puede confirmar el pago pendiente de una orden de mostrador (mismo endpoint que self-service)', async () => {
+    const submission = await prisma.advancePaymentSubmission.findFirstOrThrow({ where: { orderId: createdOrderId } })
+
+    const res = await request(app)
+      .post(`/api/orders/advance-payment-installment/${submission.id}/confirm`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ approved: true })
+
+    expect(res.status).toBe(200)
+
+    const updated = await prisma.advancePaymentSubmission.findUniqueOrThrow({ where: { id: submission.id } })
+    expect(updated.status).toBe('CONFIRMED')
+    expect(updated.confirmedByUserId).toBeTruthy()
+
+    const order = await prisma.order.findUniqueOrThrow({ where: { id: createdOrderId } })
+    expect(order.status).toBe('RECEIVED') // ya estaba RECEIVED — confirmar el pago no lo cambia
   })
 })
