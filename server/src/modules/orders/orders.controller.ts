@@ -81,7 +81,7 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
 // para que un cliente no pueda crear órdenes a nombre de otro.
 //
 // PAGO ANTICIPADO: ahora requiere advancePaymentMethod en el body
-// (mismos códigos que la tienda: PAGO_MOVIL, TRANSFERENCIA, BINANCE).
+// (mismos códigos que en recepción: PAGO_MOVIL, TRANSFERENCIA, BINANCE).
 // La orden nace en PENDING_PAYMENT con los montos fijos de delivery
 // y revisión ya asignados por el service.
 // ─────────────────────────────────────────────
@@ -147,7 +147,7 @@ export const createMyOrder = async (req: AuthRequest, res: Response): Promise<vo
 }
 
 // ─────────────────────────────────────────────
-// CREAR ORDEN EN MOSTRADOR (tienda física — personal TECHNICIAN/ADMIN)
+// CREAR ORDEN EN RECEPCIÓN (personal TECHNICIAN/ADMIN)
 // El pago de la revisión ($15) ya fue verificado en persona por quien
 // registra, por eso no requiere advancePaymentMethod pendiente de
 // confirmación — la orden nace directo en RECEIVED.
@@ -223,7 +223,7 @@ export const createCounterOrder = async (req: AuthRequest, res: Response): Promi
 
     res.status(201).json({ success: true, data: order })
   } catch (error: any) {
-    console.error('ERROR CREAR ORDEN (MOSTRADOR):', error)
+    console.error('ERROR CREAR ORDEN (RECEPCIÓN):', error)
     res.status(400).json({ success: false, message: error.message || 'Error al crear la orden' })
   }
 }
@@ -718,7 +718,7 @@ export const getPartsUsedInOrderHandler = async (req: AuthRequest, res: Response
 }
 
 // ─────────────────────────────────────────────
-// ABONO ADICIONAL EN ORDEN DE MOSTRADOR — staff (ADMIN/TECHNICIAN)
+// ABONO ADICIONAL EN ORDEN DE RECEPCIÓN — staff (ADMIN/TECHNICIAN)
 // ─────────────────────────────────────────────
 
 export const submitCounterAdvanceInstallmentHandler = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -744,7 +744,7 @@ export const submitCounterAdvanceInstallmentHandler = async (req: AuthRequest, r
     const submission = await ordersService.submitCounterAdvanceInstallment(orderId, actorEmail, paymentDetails, Number(amount))
     res.status(201).json({ success: true, data: submission })
   } catch (error: any) {
-    console.error('ERROR ABONO MOSTRADOR:', error)
+    console.error('ERROR ABONO RECEPCIÓN:', error)
     res.status(400).json({ success: false, message: error.message || 'Error al registrar el abono' })
   }
 }
