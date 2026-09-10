@@ -12,7 +12,9 @@ beforeAll(async () => {
     .send({ email: 'admin@reptel.com', password: 'RepTel2024*' })
   adminToken = loginRes.body.data.token
 
-  const listRes = await request(app).get('/api/products')
+  const listRes = await request(app)
+    .get('/api/products')
+    .set('Authorization', `Bearer ${adminToken}`)
   productId = listRes.body.data?.[0]?.id
 }, 20000)
 
@@ -20,6 +22,34 @@ afterAll(async () => {
   if (createdProductId) {
     await prisma.product.delete({ where: { id: createdProductId } }).catch(() => {})
   }
+})
+
+describe('Products — GET / y GET /categories protegidos por rol', () => {
+  it('GET /api/products sin token debe retornar 401', async () => {
+    const res = await request(app).get('/api/products')
+    expect(res.status).toBe(401)
+  })
+
+  it('GET /api/products con token ADMIN debe retornar 200 y un arreglo', async () => {
+    const res = await request(app)
+      .get('/api/products')
+      .set('Authorization', `Bearer ${adminToken}`)
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.data)).toBe(true)
+  }, 10000)
+
+  it('GET /api/products/categories sin token debe retornar 401', async () => {
+    const res = await request(app).get('/api/products/categories')
+    expect(res.status).toBe(401)
+  })
+
+  it('GET /api/products/categories con token ADMIN debe retornar 200 y un arreglo', async () => {
+    const res = await request(app)
+      .get('/api/products/categories')
+      .set('Authorization', `Bearer ${adminToken}`)
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.data)).toBe(true)
+  }, 10000)
 })
 
 describe('Products — GET /admin protegido por rol', () => {
@@ -61,7 +91,9 @@ describe('Products — POST / crear producto (admin)', () => {
   })
 
   it('POST con precio negativo debe retornar 400', async () => {
-    const categoriesRes = await request(app).get('/api/products/categories')
+    const categoriesRes = await request(app)
+      .get('/api/products/categories')
+      .set('Authorization', `Bearer ${adminToken}`)
     const categoryId = categoriesRes.body.data?.[0]?.id
     if (!categoryId) return
     const res = await request(app)
@@ -72,7 +104,9 @@ describe('Products — POST / crear producto (admin)', () => {
   }, 10000)
 
   it('POST con datos validos debe crear el producto (201)', async () => {
-    const categoriesRes = await request(app).get('/api/products/categories')
+    const categoriesRes = await request(app)
+      .get('/api/products/categories')
+      .set('Authorization', `Bearer ${adminToken}`)
     const categoryId = categoriesRes.body.data?.[0]?.id
     if (!categoryId) return
     const res = await request(app)
@@ -102,9 +136,11 @@ describe('Products — PUT /:id editar producto (admin)', () => {
     expect(res.body.data.isActive).toBe(false)
   }, 10000)
 
-  it('el producto desactivado no debe aparecer en GET /api/products (publico)', async () => {
+  it('el producto desactivado no debe aparecer en GET /api/products (staff)', async () => {
     if (!createdProductId) return
-    const res = await request(app).get('/api/products')
+    const res = await request(app)
+      .get('/api/products')
+      .set('Authorization', `Bearer ${adminToken}`)
     const found = res.body.data.find((p: any) => p.id === createdProductId)
     expect(found).toBeUndefined()
   })
