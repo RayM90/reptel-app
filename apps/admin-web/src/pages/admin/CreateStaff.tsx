@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
+import PhoneInput from '../../components/PhoneInput'
 
 type StaffRole = 'TECHNICIAN_DELIVERY' | 'TECHNICIAN'
 
@@ -83,11 +84,7 @@ export default function CreateStaff() {
           </div>
           <div className="form-group">
             <label>Teléfono (opcional)</label>
-            <input
-              type="text"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
+            <PhoneInput value={phone} onChange={setPhone} />
           </div>
           <div className="form-group">
             <label>Rol</label>

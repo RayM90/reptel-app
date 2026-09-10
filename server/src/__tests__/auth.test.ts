@@ -47,7 +47,7 @@ describe('Auth — POST /api/auth/login', () => {
 describe('Auth — POST /api/auth/staff', () => {
   let authToken: string
   let existingStaffUserId: string
-  const existingIdNumber = `TEST-STAFF-${Date.now()}`
+  const existingIdNumber = `V-${String(Date.now()).slice(-7)}`
 
   beforeAll(async () => {
     const res = await request(app)
@@ -80,6 +80,23 @@ describe('Auth — POST /api/auth/staff', () => {
 
     expect(res.status).toBe(400)
     expect(res.body).toHaveProperty('message')
+  })
+
+  it('retorna 400 si la cédula no tiene formato V/E-dígitos', async () => {
+    const res = await request(app)
+      .post('/api/auth/staff')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        email: 'formato-invalido@reptel.com',
+        password: 'Passw0rd!',
+        name: 'Test',
+        lastName: 'Formato',
+        idNumber: '12345678',
+        role: 'TECHNICIAN',
+      })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/cédula/i)
   })
 
   it('retorna 400 si la cédula ya pertenece a otro empleado (sin llegar a Cognito)', async () => {
