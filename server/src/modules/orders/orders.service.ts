@@ -31,11 +31,11 @@ const ADVANCE_REVISION_AMOUNT = 15
 // Prioridad 3: null → asignación manual
 // ─────────────────────────────────────────────
 
-// includeMostrador: las órdenes de mostrador (equipo ya en el local) también
+// includeReception: las órdenes de recepción (equipo ya en el local) también
 // pueden asignarse a un TECHNICIAN — a diferencia de self-service+delivery,
 // que requiere ir a buscar el equipo y sigue siendo solo TECHNICIAN_DELIVERY.
-const assignTechnician = async (includeMostrador = false): Promise<string | null> => {
-  const roles = includeMostrador ? ['TECHNICIAN_DELIVERY', 'TECHNICIAN'] : ['TECHNICIAN_DELIVERY']
+const assignTechnician = async (includeReception = false): Promise<string | null> => {
+  const roles = includeReception ? ['TECHNICIAN_DELIVERY', 'TECHNICIAN'] : ['TECHNICIAN_DELIVERY']
 
   const available = await prisma.user.findMany({
     where: {
@@ -344,7 +344,7 @@ export const createSelfServiceOrder = async (data: {
 }
 
 // ─────────────────────────────────────────────
-// ÓRDENES — CREACIÓN EN MOSTRADOR (tienda física)
+// ÓRDENES — CREACIÓN EN RECEPCIÓN
 // El cliente está presente y ya pagó los $15 de revisión en persona
 // (verificado por el staff), por eso la orden nace directo en RECEIVED
 // — sin AdvancePaymentSubmission ni paso de confirmación posterior. No
@@ -1263,10 +1263,10 @@ export const getPartsUsedInOrder = async (orderId: string) => {
 }
 
 // ─────────────────────────────────────────────
-// ABONO ADICIONAL EN ORDEN DE MOSTRADOR — staff (ADMIN/TECHNICIAN), no el
+// ABONO ADICIONAL EN ORDEN DE RECEPCIÓN — staff (ADMIN/TECHNICIAN), no el
 // cliente. A diferencia de submitAdvancePaymentInstallment (self-service,
 // requiere que el actor SEA el Client dueño de la orden), aquí el actor es
-// personal de mostrador que reporta lo que el cliente pagó en persona.
+// personal de recepción que reporta lo que el cliente pagó en persona.
 // ─────────────────────────────────────────────
 
 export const submitCounterAdvanceInstallment = async (

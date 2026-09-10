@@ -18,7 +18,7 @@ router.post('/self-service', authenticate, authorize('CLIENT'), ordersController
 // Historial de órdenes propias del cliente
 router.get('/my-orders', authenticate, authorize('CLIENT'), ordersController.getMyTechOrders)
 
-// ─── Mostrador (tienda física) — ADMIN o TECHNICIAN ───────────────
+// ─── Recepción — ADMIN o TECHNICIAN ───────────────
 // Crea device + order en transacción, ya en RECEIVED (pago verificado en persona)
 router.post('/counter', authenticate, authorize('ADMIN', 'TECHNICIAN'), ordersController.createCounterOrder)
 
