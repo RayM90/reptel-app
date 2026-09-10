@@ -41,6 +41,18 @@ describe('receipts.service — generación de PDF', () => {
     expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
   })
 
+  it('generateFinalReceipt no falla con repuestos usados en el detalle', async () => {
+    const orderWithParts = {
+      ...fakeOrder,
+      partsUsed: [
+        { productName: 'Pantalla LCD', quantity: 1, unitPriceAtUse: 45 },
+        { productName: 'Cargador USB-C', quantity: 2, unitPriceAtUse: 15 },
+      ],
+    }
+    const buffer = await collectPdfBuffer(generateFinalReceipt(orderWithParts as any))
+    expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
+  })
+
   it('generateIntakeReceipt no falla si el dispositivo no tiene color (campo opcional en Device)', async () => {
     const orderWithoutColor = { ...fakeOrder, device: { ...fakeOrder.device, color: null } }
     const buffer = await collectPdfBuffer(generateIntakeReceipt(orderWithoutColor as any))

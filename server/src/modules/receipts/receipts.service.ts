@@ -68,6 +68,7 @@ interface OrderForReceipt {
   client: { name: string; lastName: string; phone: string }
   technician: { name: string } | null
   device: { type: string; brand: string; model: string; color: string | null }
+  partsUsed?: { productName: string; quantity: number; unitPriceAtUse: unknown }[]
 }
 
 // Self-service + delivery: RECEIVED se dispara al confirmar el anticipo, no cuando
@@ -126,10 +127,23 @@ export const generateFinalReceipt = (order: OrderForReceipt): PDFKit.PDFDocument
   addRow(doc, 'Diagnóstico', order.diagnosis ?? '—')
   doc.moveDown(0.5)
 
+  // Detalle tipo factura simple — igual que el presupuesto se arma sumando
+  // catálogo + monto manual + repuestos, el recibo desglosa esas mismas partes.
+  doc.font('Helvetica-Bold').fontSize(12).text('Detalle de cobro', { underline: false })
+  doc.moveDown(0.3)
   addRow(doc, 'Subtotal (revisión)', formatMoney(order.revisionAmount))
   if (order.deliveryAmount !== null && order.deliveryAmount !== undefined) {
     addRow(doc, 'Subtotal (delivery)', formatMoney(order.deliveryAmount))
   }
+  if (order.partsUsed && order.partsUsed.length > 0) {
+    doc.moveDown(0.2)
+    doc.font('Helvetica-Bold').fontSize(11).text('Repuestos usados:')
+    for (const part of order.partsUsed) {
+      const lineTotal = part.quantity * Number(part.unitPriceAtUse ?? 0)
+      addRow(doc, `  ${part.productName} (x${part.quantity})`, `$${lineTotal.toFixed(2)}`)
+    }
+  }
+  doc.moveDown(0.2)
   addRow(doc, 'Total presupuesto', formatMoney(order.budget))
   if (order.finalPaymentDetails) {
     const methodEntries = Object.entries(order.finalPaymentDetails)

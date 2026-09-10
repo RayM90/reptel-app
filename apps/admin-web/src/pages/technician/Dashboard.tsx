@@ -132,7 +132,7 @@ export default function TechnicianDashboard() {
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
 
   // ── Repuestos de inventario usados en la orden ──
-  const [products, setProducts] = useState<{ id: string; name: string; stock: number }[]>([])
+  const [products, setProducts] = useState<{ id: string; name: string; stock: number; price: string }[]>([])
   const [partsByOrder, setPartsByOrder] = useState<Record<string, PartUsed[]>>({})
   const [partsProductId, setPartsProductId] = useState<Record<string, string>>({})
   const [partsQuantity, setPartsQuantity] = useState<Record<string, string>>({})
@@ -432,7 +432,7 @@ export default function TechnicianDashboard() {
                             <option value="">— Seleccionar —</option>
                             {products.map((p) => (
                               <option key={p.id} value={p.id} disabled={p.stock <= 0}>
-                                {p.name} (stock: {p.stock})
+                                {p.name} — ${Number(p.price).toFixed(2)} (stock: {p.stock})
                               </option>
                             ))}
                           </select>
@@ -451,36 +451,52 @@ export default function TechnicianDashboard() {
                         </button>
                       </div>
 
-                      {(partsByOrder[order.id] ?? []).filter((p) => !p.reversedAt).length > 0 && (
-                        <div className="table-wrapper" style={{ marginTop: 10 }}>
-                          <table className="styled-table">
-                            <thead>
-                              <tr>
-                                <th scope="col">Producto</th>
-                                <th scope="col">Cantidad</th>
-                                <th scope="col">Quién</th>
-                                <th scope="col">Fecha</th>
-                                <th scope="col">Acciones</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(partsByOrder[order.id] ?? []).filter((p) => !p.reversedAt).map((p) => (
-                                <tr key={p.id}>
-                                  <td data-label="Producto">{p.product.name}</td>
-                                  <td data-label="Cantidad">{p.quantity}</td>
-                                  <td data-label="Quién">{p.user ? `${p.user.name} ${p.user.lastName ?? ''}`.trim() : '—'}</td>
-                                  <td data-label="Fecha">{new Date(p.createdAt).toLocaleString('es-VE')}</td>
-                                  <td data-label="Acciones">
-                                    <button className="btn btn-danger" onClick={() => handleRevertPart(order.id, p.id)}>
-                                      Revertir
-                                    </button>
-                                  </td>
+                      {(() => {
+                        const activeParts = (partsByOrder[order.id] ?? []).filter((p) => !p.reversedAt)
+                        if (activeParts.length === 0) return null
+                        const partsSubtotal = activeParts.reduce((sum, p) => sum + p.quantity * Number(p.unitPriceAtUse ?? 0), 0)
+                        return (
+                          <div className="table-wrapper" style={{ marginTop: 10 }}>
+                            <table className="styled-table">
+                              <thead>
+                                <tr>
+                                  <th scope="col">Producto</th>
+                                  <th scope="col">Cantidad</th>
+                                  <th scope="col" className="money">Costo unitario</th>
+                                  <th scope="col" className="money">Subtotal</th>
+                                  <th scope="col">Quién</th>
+                                  <th scope="col">Fecha</th>
+                                  <th scope="col">Acciones</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
+                              </thead>
+                              <tbody>
+                                {activeParts.map((p) => (
+                                  <tr key={p.id}>
+                                    <td data-label="Producto">{p.product.name}</td>
+                                    <td data-label="Cantidad">{p.quantity}</td>
+                                    <td className="money" data-label="Costo unitario">${Number(p.unitPriceAtUse ?? 0).toFixed(2)}</td>
+                                    <td className="money" data-label="Subtotal">${(p.quantity * Number(p.unitPriceAtUse ?? 0)).toFixed(2)}</td>
+                                    <td data-label="Quién">{p.user ? `${p.user.name} ${p.user.lastName ?? ''}`.trim() : '—'}</td>
+                                    <td data-label="Fecha">{new Date(p.createdAt).toLocaleString('es-VE')}</td>
+                                    <td data-label="Acciones">
+                                      <button className="btn btn-danger" onClick={() => handleRevertPart(order.id, p.id)}>
+                                        Revertir
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr>
+                                  <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Total repuestos</td>
+                                  <td className="money" style={{ fontWeight: 700 }}>${partsSubtotal.toFixed(2)}</td>
+                                  <td colSpan={3}></td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        )
+                      })()}
                     </div>
 
                     {needsDiagnosis && (
