@@ -350,7 +350,7 @@ export default function Dashboard() {
       <p>
         <Link to="/admin/create-staff" className="btn btn-accent">➕ Crear usuario de personal</Link>{' '}
         <Link to="/admin/inventory" className="btn btn-secondary">📦 Inventario</Link>{' '}
-        <Link to="/registro" className="btn btn-secondary">🧾 Registro (tienda física)</Link>{' '}
+        <Link to="/registro" className="btn btn-secondary">🧾 Registro (Recepción)</Link>{' '}
         <Link to="/admin/reportes" className="btn btn-secondary">📊 Reportes</Link>
       </p>
 
@@ -390,7 +390,7 @@ export default function Dashboard() {
                             <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>
                           )}
                         </td>
-                        <td data-label="Origen">{order.deliveryAmount != null ? '📱 App' : '🏪 Tienda'}</td>
+                        <td data-label="Origen">{order.deliveryAmount != null ? '📱 App' : '🏢 Recepción'}</td>
                         <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
                         <td data-label="Técnico">{order.technician?.name || 'Sin asignar'}</td>
                         <td data-label="Estado">

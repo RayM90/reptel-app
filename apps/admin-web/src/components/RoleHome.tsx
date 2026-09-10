@@ -5,7 +5,7 @@ const ROLE_HOME: Record<string, string> = {
   ADMIN: '/admin',
   TECHNICIAN_DELIVERY: '/technician',
   // Mismo panel que el técnico delivery — ve/documenta reparaciones asignadas.
-  // El acceso a Registro (mostrador) sigue disponible desde un link ahí dentro.
+  // El acceso a Registro (Recepción) sigue disponible desde un link ahí dentro.
   TECHNICIAN: '/technician',
 }
 
