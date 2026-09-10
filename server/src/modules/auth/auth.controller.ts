@@ -4,6 +4,7 @@ import { translateCognitoError } from './auth.errors';
 import prisma from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { formatClientAddress } from '../../lib/clientAddress';
+import { isValidVenezuelanPhone, isValidVenezuelanIdNumber } from '../../lib/venezuela';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -20,6 +21,11 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     // POST /staff (pendiente de construir), nunca este.
     if (role !== 'CLIENT') {
       res.status(403).json({ message: 'Este endpoint solo permite el registro de clientes' });
+      return;
+    }
+
+    if (phone && !isValidVenezuelanPhone(phone)) {
+      res.status(400).json({ message: 'El teléfono debe ser un número venezolano válido (04XX + 7 dígitos)' });
       return;
     }
 
@@ -218,6 +224,16 @@ export const createStaff = async (req: Request, res: Response): Promise<void> =>
 
     if (password.length < 8) {
       res.status(400).json({ message: 'La contraseña temporal debe tener al menos 8 caracteres' });
+      return;
+    }
+
+    if (!isValidVenezuelanIdNumber(idNumber)) {
+      res.status(400).json({ message: 'La cédula debe tener el formato V-12345678 o E-12345678' });
+      return;
+    }
+
+    if (phone && !isValidVenezuelanPhone(phone)) {
+      res.status(400).json({ message: 'El teléfono debe ser un número venezolano válido (04XX + 7 dígitos)' });
       return;
     }
 

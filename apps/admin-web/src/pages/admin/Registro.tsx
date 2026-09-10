@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 import { useToastStore } from '../../store/toast.store'
+import PhoneInput from '../../components/PhoneInput'
+import SelectWithOther from '../../components/SelectWithOther'
+import { DEVICE_BRANDS, BRAND_MODELS, DEVICE_COLORS } from '../../constants/venezuela'
 
 interface Client {
   id: string
@@ -319,8 +322,11 @@ export default function Registro() {
               </div>
               <div className="form-group">
                 <label>Teléfono</label>
-                <input type="text" value={form.phone} disabled={!!clientExists}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                {clientExists ? (
+                  <input type="text" value={form.phone} disabled />
+                ) : (
+                  <PhoneInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} required />
+                )}
               </div>
               <div className="form-group">
                 <label>Correo (opcional)</label>
@@ -443,15 +449,28 @@ export default function Registro() {
           </div>
           <div className="form-group">
             <label>Marca</label>
-            <input type="text" value={orderForm.brand} onChange={(e) => setOrderForm({ ...orderForm, brand: e.target.value })} />
+            <SelectWithOther
+              value={orderForm.brand}
+              options={[...DEVICE_BRANDS]}
+              onChange={(v) => setOrderForm({ ...orderForm, brand: v, model: '' })}
+            />
           </div>
           <div className="form-group">
             <label>Modelo</label>
-            <input type="text" value={orderForm.model} onChange={(e) => setOrderForm({ ...orderForm, model: e.target.value })} />
+            <SelectWithOther
+              value={orderForm.model}
+              options={orderForm.brand in BRAND_MODELS ? BRAND_MODELS[orderForm.brand as keyof typeof BRAND_MODELS] : []}
+              onChange={(v) => setOrderForm({ ...orderForm, model: v })}
+              disabledPlaceholder={!orderForm.brand ? 'Elige primero la marca' : undefined}
+            />
           </div>
           <div className="form-group">
             <label>Color</label>
-            <input type="text" value={orderForm.color} onChange={(e) => setOrderForm({ ...orderForm, color: e.target.value })} />
+            <SelectWithOther
+              value={orderForm.color}
+              options={DEVICE_COLORS}
+              onChange={(v) => setOrderForm({ ...orderForm, color: v })}
+            />
           </div>
           <div className="form-group">
             <label>Accesorios</label>

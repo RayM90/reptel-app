@@ -19,6 +19,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useToastStore } from "../../src/store/toast.store";
 import { api } from "../../src/services/api";
+import PhoneInput from "../../src/components/PhoneInput";
 
 const { width } = Dimensions.get("window");
 
@@ -152,15 +153,7 @@ export default function RegisterScreen() {
               />
 
               <Text style={styles.label}>Teléfono</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0414-0000000"
-                placeholderTextColor="#9ca3af"
-                value={telefono}
-                onChangeText={setTelefono}
-                keyboardType="phone-pad"
-                returnKeyType="next"
-              />
+              <PhoneInput value={telefono} onChange={setTelefono} />
 
               <Text style={styles.label}>Dirección completa</Text>
               <TextInput

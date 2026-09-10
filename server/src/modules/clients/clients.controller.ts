@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import * as clientsService from './clients.service'
+import { isValidVenezuelanPhone, isValidVenezuelanIdNumber } from '../../lib/venezuela'
 
 export const getClients = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -51,6 +52,20 @@ export const createClient = async (req: Request, res: Response): Promise<void> =
       })
       return
     }
+    if (!isValidVenezuelanIdNumber(idNumber)) {
+      res.status(400).json({
+        success: false,
+        message: 'La cédula debe tener el formato V-12345678 o E-12345678',
+      })
+      return
+    }
+    if (!isValidVenezuelanPhone(phone)) {
+      res.status(400).json({
+        success: false,
+        message: 'El teléfono debe ser un número venezolano válido (04XX + 7 dígitos)',
+      })
+      return
+    }
     const existing = await clientsService.getClientByIdNumber(idNumber)
     if (existing) {
       res.status(400).json({
@@ -82,6 +97,13 @@ export const updateClient = async (req: Request, res: Response): Promise<void> =
   try {
     const id = String(req.params.id)
     const { name, lastName, phone, email, addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding } = req.body
+    if (phone && !isValidVenezuelanPhone(phone)) {
+      res.status(400).json({
+        success: false,
+        message: 'El teléfono debe ser un número venezolano válido (04XX + 7 dígitos)',
+      })
+      return
+    }
     const client = await clientsService.updateClient(id, {
       name,
       lastName,
