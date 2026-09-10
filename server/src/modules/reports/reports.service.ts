@@ -78,50 +78,5 @@ export const getReportSummary = async ({ from, to, technicianId, clientId }: Rep
     })),
   }
 
-  // Tienda física (mostrador) — la venta no tiene clientId ni monto propio
-  // (decisión del sub-proyecto 3): se aproxima con cantidad × precio actual
-  // del producto, y clientId no aplica como filtro (no hay ese vínculo).
-  const sales = await prisma.inventoryMovement.findMany({
-    where: {
-      type: 'OUT',
-      channel: 'MOSTRADOR',
-      reason: 'Venta mostrador',
-      createdAt: { gte: from, lte: to },
-    },
-    include: { product: { select: { id: true, name: true, price: true } } },
-    orderBy: { createdAt: 'desc' },
-  })
-
-  const totalSalesAmount = sales.reduce((sum, m) => sum + m.quantity * Number(m.product.price), 0)
-
-  const byProductMap = new Map<
-    string,
-    { productId: string; productName: string; quantitySold: number; totalAmount: number }
-  >()
-  for (const m of sales) {
-    const entry = byProductMap.get(m.product.id) ?? {
-      productId: m.product.id,
-      productName: m.product.name,
-      quantitySold: 0,
-      totalAmount: 0,
-    }
-    entry.quantitySold += m.quantity
-    entry.totalAmount += m.quantity * Number(m.product.price)
-    byProductMap.set(m.product.id, entry)
-  }
-
-  const tienda = {
-    totalSalesAmount,
-    salesCount: sales.length,
-    byProduct: Array.from(byProductMap.values()),
-    sales: sales.map((m) => ({
-      id: m.id,
-      productName: m.product.name,
-      quantity: m.quantity,
-      amount: m.quantity * Number(m.product.price),
-      createdAt: m.createdAt,
-    })),
-  }
-
-  return { range: { from, to }, servicio, tienda }
+  return { range: { from, to }, servicio }
 }
