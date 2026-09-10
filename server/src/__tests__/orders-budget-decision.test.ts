@@ -83,10 +83,10 @@ afterAll(async () => {
 })
 
 describe('orders.service — approveBudget', () => {
-  it('aprueba una orden en WAITING_APPROVAL', async () => {
+  it('aprueba una orden en WAITING_APPROVAL y autoriza a reparar de inmediato', async () => {
     const order = await makeOrder()
     const result = await approveBudget(order.id, userA.email)
-    expect(result.status).toBe('APPROVED')
+    expect(result.status).toBe('REPAIRING')
     expect(result.budgetApproved).toBe(true)
   })
 

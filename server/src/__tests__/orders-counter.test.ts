@@ -120,7 +120,7 @@ describe('Orders — POST /api/orders/counter', () => {
     expect(updated.confirmedByUserId).toBeTruthy()
 
     const order = await prisma.order.findUniqueOrThrow({ where: { id: createdOrderId } })
-    expect(order.status).toBe('RECEIVED') // ya estaba RECEIVED — confirmar el pago no lo cambia
+    expect(order.status).toBe('DIAGNOSING') // pago completo confirmado → autoriza al técnico a proceder
   })
 })
 
