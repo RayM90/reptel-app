@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma'
-import { createProduct, updateProduct, sellProduct, getStoreSummaryToday, InsufficientStockError } from '../modules/products/products.service'
+import { createProduct, updateProduct, sellProduct, getStoreSummaryToday, getInventoryMovements, InsufficientStockError } from '../modules/products/products.service'
 
 let category: { id: string }
 
@@ -39,7 +39,7 @@ describe('InventoryMovement', () => {
     await prisma.product.delete({ where: { id: product.id } })
   })
 
-  it('sellProduct con stock suficiente descuenta stock y registra un movimiento OUT', async () => {
+  it('sellProduct con stock suficiente descuenta stock y registra un movimiento OUT con channel MOSTRADOR', async () => {
     const product = await createProduct({ name: 'Producto Venta', price: 10, stock: 10, categoryId: category.id })
     await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } }) // limpiar el IN inicial
 
@@ -52,6 +52,7 @@ describe('InventoryMovement', () => {
     expect(movement?.type).toBe('OUT')
     expect(movement?.quantity).toBe(4)
     expect(movement?.reason).toBe('Venta mostrador')
+    expect(movement?.channel).toBe('MOSTRADOR')
 
     await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
     await prisma.product.delete({ where: { id: product.id } })
@@ -103,6 +104,36 @@ describe('getStoreSummaryToday', () => {
 
     const summary = await getStoreSummaryToday()
     expect(summary.lowStockProducts.some((p) => p.id === product.id)).toBe(false)
+
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await prisma.product.delete({ where: { id: product.id } })
+  })
+})
+
+describe('getInventoryMovements', () => {
+  it('filtra por productId e incluye product.name y channel', async () => {
+    const product = await createProduct({ name: 'Producto Historial', price: 10, stock: 10, categoryId: category.id })
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await sellProduct(product.id, 2)
+
+    const movements = await getInventoryMovements({ productId: product.id })
+    expect(movements).toHaveLength(1)
+    expect(movements[0].product.name).toBe('Producto Historial')
+    expect(movements[0].channel).toBe('MOSTRADOR')
+
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await prisma.product.delete({ where: { id: product.id } })
+  })
+
+  it('filtra por channel', async () => {
+    const product = await createProduct({ name: 'Producto Historial 2', price: 10, stock: 10, categoryId: category.id })
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await sellProduct(product.id, 1)
+
+    const withChannel = await getInventoryMovements({ productId: product.id, channel: 'MOSTRADOR' })
+    const withOtherChannel = await getInventoryMovements({ productId: product.id, channel: 'SERVICIO_TECNICO' })
+    expect(withChannel).toHaveLength(1)
+    expect(withOtherChannel).toHaveLength(0)
 
     await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
     await prisma.product.delete({ where: { id: product.id } })

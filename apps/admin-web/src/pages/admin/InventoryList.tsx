@@ -45,7 +45,10 @@ export default function InventoryList() {
           ↻ Actualizar
         </button>
       </div>
-      <p><Link to="/admin/inventory/new" className="btn btn-accent">➕ Agregar producto</Link></p>
+      <p>
+        <Link to="/admin/inventory/new" className="btn btn-accent">➕ Agregar producto</Link>{' '}
+        <Link to="/admin/inventory/movements" className="btn btn-secondary">📋 Historial de movimientos</Link>
+      </p>
       <p><Link to="/admin">← Volver al Panel de Administrador</Link></p>
 
       {loading && <p>Cargando…</p>}

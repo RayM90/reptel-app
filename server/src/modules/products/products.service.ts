@@ -89,6 +89,37 @@ export const getStoreSummaryToday = async () => {
   return { salesCount, salesTotal, lowStockProducts };
 };
 
+/**
+ * Historial de movimientos de inventario — hoy solo se escribe, nunca se lee
+ * fuera de este reporte. Filtros opcionales por producto, canal y rango de fecha.
+ */
+export const getInventoryMovements = async (filters: {
+  productId?: string;
+  channel?: string;
+  from?: Date;
+  to?: Date;
+}) => {
+  return prisma.inventoryMovement.findMany({
+    where: {
+      ...(filters.productId ? { productId: filters.productId } : {}),
+      ...(filters.channel ? { channel: filters.channel as any } : {}),
+      ...(filters.from || filters.to
+        ? {
+            createdAt: {
+              ...(filters.from ? { gte: filters.from } : {}),
+              ...(filters.to ? { lte: filters.to } : {}),
+            },
+          }
+        : {}),
+    },
+    include: {
+      product: { select: { id: true, name: true } },
+      user: { select: { id: true, name: true, lastName: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+};
+
 export const getAllProductsForAdmin = async () => {
   return prisma.product.findMany({
     include: {
@@ -191,6 +222,7 @@ export const sellProduct = async (id: string, quantity: number, userId?: string)
       data: {
         productId: id,
         type: 'OUT',
+        channel: 'MOSTRADOR',
         quantity,
         reason: 'Venta mostrador',
         userId,
