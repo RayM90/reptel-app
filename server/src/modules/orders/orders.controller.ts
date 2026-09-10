@@ -161,7 +161,7 @@ export const createCounterOrder = async (req: AuthRequest, res: Response): Promi
       return
     }
 
-    const { clientId, device, problem, advancePaymentMethod, paymentDetails, serviceCatalogId } = req.body
+    const { clientId, device, problem, advancePaymentMethod, paymentDetails, amount, serviceCatalogId } = req.body
 
     if (!clientId) {
       res.status(400).json({ success: false, message: 'El cliente es requerido' })
@@ -200,6 +200,11 @@ export const createCounterOrder = async (req: AuthRequest, res: Response): Promi
       return
     }
 
+    if (amount !== undefined && (Number.isNaN(Number(amount)) || Number(amount) <= 0 || Number(amount) > 15)) {
+      res.status(400).json({ success: false, message: 'El monto abonado debe ser mayor a 0 y no exceder $15' })
+      return
+    }
+
     const order = await ordersService.createCounterOrder({
       actorEmail,
       clientId,
@@ -207,6 +212,7 @@ export const createCounterOrder = async (req: AuthRequest, res: Response): Promi
       problem,
       advancePaymentMethod: mappedMethod,
       paymentDetails,
+      amount: amount !== undefined ? Number(amount) : undefined,
       serviceCatalogId,
     })
 
@@ -708,5 +714,37 @@ export const getPartsUsedInOrderHandler = async (req: AuthRequest, res: Response
     res.status(200).json({ success: true, data: parts })
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Error al obtener los repuestos usados' })
+  }
+}
+
+// ─────────────────────────────────────────────
+// ABONO ADICIONAL EN ORDEN DE MOSTRADOR — staff (ADMIN/TECHNICIAN)
+// ─────────────────────────────────────────────
+
+export const submitCounterAdvanceInstallmentHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const actorEmail = req.user?.email
+    if (!actorEmail) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const orderId = String(req.params.id)
+    const { paymentDetails, amount } = req.body
+
+    if (!paymentDetails || typeof paymentDetails !== 'object') {
+      res.status(400).json({ success: false, message: 'paymentDetails es requerido' })
+      return
+    }
+    if (amount === undefined || amount === null || Number.isNaN(Number(amount))) {
+      res.status(400).json({ success: false, message: 'amount es requerido y debe ser numérico' })
+      return
+    }
+
+    const submission = await ordersService.submitCounterAdvanceInstallment(orderId, actorEmail, paymentDetails, Number(amount))
+    res.status(201).json({ success: true, data: submission })
+  } catch (error: any) {
+    console.error('ERROR ABONO MOSTRADOR:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al registrar el abono' })
   }
 }

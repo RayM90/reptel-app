@@ -105,6 +105,10 @@ export default function Registro() {
   const [noDevicePassword, setNoDevicePassword] = useState(false)
   const [showDevicePassword, setShowDevicePassword] = useState(false)
   const [paymentDetails, setPaymentDetails] = useState({ banco: '', telefono: '', referencia: '', correo: '', uid: '', nombre: '' })
+  const [paymentAmount, setPaymentAmount] = useState('15')
+  const [pendingAbono, setPendingAbono] = useState<{ orderId: string; orderNumber: string; remaining: number } | null>(null)
+  const [abonoAmount, setAbonoAmount] = useState('')
+  const [submittingAbono, setSubmittingAbono] = useState(false)
   const [creatingOrder, setCreatingOrder] = useState(false)
   const [orderError, setOrderError] = useState('')
   const [lastCreatedTechnician, setLastCreatedTechnician] = useState('')
@@ -156,6 +160,9 @@ export default function Registro() {
     setShowDevicePassword(false)
     setPaymentDetails({ banco: '', telefono: '', referencia: '', correo: '', uid: '', nombre: '' })
     setLastCreatedTechnician('')
+    setPaymentAmount('15')
+    setPendingAbono(null)
+    setAbonoAmount('')
   }
 
   const handleSearch = async () => {
@@ -303,6 +310,12 @@ export default function Registro() {
       details = { banco: paymentDetails.banco, telefono: paymentDetails.telefono, referencia: paymentDetails.referencia }
     }
 
+    const amountNumber = Number(paymentAmount)
+    if (!amountNumber || amountNumber <= 0 || amountNumber > 15) {
+      setOrderError('El monto a abonar debe ser mayor a 0 y no exceder $15')
+      return
+    }
+
     setCreatingOrder(true)
     setOrderError('')
     try {
@@ -319,21 +332,76 @@ export default function Registro() {
         problem: orderForm.problem,
         advancePaymentMethod: orderForm.advancePaymentMethod,
         paymentDetails: details,
+        amount: amountNumber,
         serviceCatalogId: orderForm.serviceCatalogId || undefined,
       })
       const technician = response.data.data.technician
       const technicianName = technician ? `${technician.name} ${technician.lastName ?? ''}`.trim() : 'sin asignar (no hay técnicos disponibles)'
       setLastCreatedTechnician(technicianName)
-      showToast(`✅ Orden ${response.data.data.orderNumber} creada para ${activeClient.name} ${activeClient.lastName} — técnico asignado: ${technicianName}`, 'success')
+      const remaining = 15 - amountNumber
+      if (remaining > 0.009) {
+        setPendingAbono({ orderId: response.data.data.id, orderNumber: response.data.data.orderNumber, remaining })
+        setAbonoAmount(remaining.toFixed(2))
+        showToast(`✅ Orden ${response.data.data.orderNumber} creada — abono de $${amountNumber} registrado, falta $${remaining.toFixed(2)}`, 'success')
+      } else {
+        setPendingAbono(null)
+        showToast(`✅ Orden ${response.data.data.orderNumber} creada para ${activeClient.name} ${activeClient.lastName} — técnico asignado: ${technicianName}`, 'success')
+      }
       setOrderForm(emptyOrderForm)
       setNoAccessories(false)
-    setNoDevicePassword(false)
+      setNoDevicePassword(false)
       setShowDevicePassword(false)
       setPaymentDetails({ banco: '', telefono: '', referencia: '', correo: '', uid: '', nombre: '' })
+      setPaymentAmount('15')
     } catch (err: any) {
       setOrderError(err?.response?.data?.message || 'Error al crear la orden')
     } finally {
       setCreatingOrder(false)
+    }
+  }
+
+  const handleSubmitAbono = async () => {
+    if (!pendingAbono) return
+    const amountNumber = Number(abonoAmount)
+    if (!amountNumber || amountNumber <= 0) {
+      showToast('El monto del abono debe ser mayor a 0', 'error')
+      return
+    }
+    let details: Record<string, string>
+    if (orderForm.advancePaymentMethod === 'BINANCE') {
+      if (!paymentDetails.correo || !paymentDetails.uid || !paymentDetails.nombre) {
+        showToast('Correo, UID y nombre de Binance son requeridos', 'error')
+        return
+      }
+      details = { correo: paymentDetails.correo, uid: paymentDetails.uid, nombre: paymentDetails.nombre }
+    } else {
+      if (!paymentDetails.banco || !paymentDetails.telefono || !paymentDetails.referencia) {
+        showToast('Banco, teléfono y referencia son requeridos', 'error')
+        return
+      }
+      details = { banco: paymentDetails.banco, telefono: paymentDetails.telefono, referencia: paymentDetails.referencia }
+    }
+
+    setSubmittingAbono(true)
+    try {
+      await api.post(`/api/orders/${pendingAbono.orderId}/counter-payment-installment`, {
+        paymentDetails: details,
+        amount: amountNumber,
+      })
+      const remaining = pendingAbono.remaining - amountNumber
+      if (remaining > 0.009) {
+        setPendingAbono({ ...pendingAbono, remaining })
+        setAbonoAmount(remaining.toFixed(2))
+        showToast(`✅ Abono registrado — falta $${remaining.toFixed(2)}`, 'success')
+      } else {
+        showToast('✅ Pago completado — pendiente de confirmación del administrador', 'success')
+        setPendingAbono(null)
+      }
+      setPaymentDetails({ banco: '', telefono: '', referencia: '', correo: '', uid: '', nombre: '' })
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al registrar el abono', 'error')
+    } finally {
+      setSubmittingAbono(false)
     }
   }
 
@@ -631,6 +699,18 @@ export default function Registro() {
             Concepto: <strong>Revisión del equipo — $15.00</strong> (el catálogo elegido arriba es solo
             referencia del diagnóstico, no cambia este monto)
           </p>
+          <div className="form-group">
+            <label>Monto a abonar ahora ($)</label>
+            <input
+              type="number"
+              min="0.01"
+              max="15"
+              step="0.01"
+              value={paymentAmount}
+              onChange={(e) => setPaymentAmount(e.target.value)}
+            />
+            <p className="form-hint">Si el cliente paga en partes, poné acá solo lo que está pagando ahora — después se registra el resto.</p>
+          </div>
           {orderForm.advancePaymentMethod === 'BINANCE' ? (
             <>
               <div className="form-group">
@@ -679,9 +759,61 @@ export default function Registro() {
             <p className="alert-success">Última orden registrada — técnico asignado: <strong>{lastCreatedTechnician}</strong></p>
           )}
 
-          <button className="btn btn-primary" onClick={handleCreateOrder} disabled={creatingOrder}>
+          <button className="btn btn-primary" onClick={handleCreateOrder} disabled={creatingOrder || !!pendingAbono}>
             {creatingOrder ? 'Creando…' : 'Registrar orden'}
           </button>
+
+          {pendingAbono && (
+            <div className="card" style={{ marginTop: 16 }}>
+              <h4>Abonar el resto — orden {pendingAbono.orderNumber}</h4>
+              <p className="form-hint">Falta ${pendingAbono.remaining.toFixed(2)} por pagar.</p>
+              <div className="form-group">
+                <label>Monto de este abono ($)</label>
+                <input type="number" min="0.01" step="0.01" value={abonoAmount} onChange={(e) => setAbonoAmount(e.target.value)} />
+              </div>
+              {orderForm.advancePaymentMethod === 'BINANCE' ? (
+                <>
+                  <div className="form-group">
+                    <label>Correo Binance</label>
+                    <input type="email" value={paymentDetails.correo} onChange={(e) => setPaymentDetails({ ...paymentDetails, correo: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label>UID Binance</label>
+                    <input type="text" value={paymentDetails.uid} onChange={(e) => setPaymentDetails({ ...paymentDetails, uid: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label>Nombre del titular</label>
+                    <input type="text" value={paymentDetails.nombre} onChange={(e) => setPaymentDetails({ ...paymentDetails, nombre: e.target.value })} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="form-group">
+                    <label>Banco</label>
+                    <SelectWithOther value={paymentDetails.banco} options={VENEZUELAN_BANKS.map((b) => b.name)} onChange={(v) => setPaymentDetails({ ...paymentDetails, banco: v })} />
+                  </div>
+                  <div className="form-group">
+                    <label>Teléfono emisor</label>
+                    <PhoneInput value={paymentDetails.telefono} onChange={(v) => setPaymentDetails({ ...paymentDetails, telefono: v })} />
+                  </div>
+                  <div className="form-group">
+                    <label>Últimos 4 dígitos de la referencia</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={4}
+                      placeholder="1234"
+                      value={paymentDetails.referencia}
+                      onChange={(e) => setPaymentDetails({ ...paymentDetails, referencia: e.target.value.replace(/\D/g, '').slice(0, 4) })}
+                    />
+                  </div>
+                </>
+              )}
+              <button className="btn btn-primary" onClick={handleSubmitAbono} disabled={submittingAbono}>
+                {submittingAbono ? 'Registrando…' : 'Registrar abono'}
+              </button>
+            </div>
+          )}
 
           <p style={{ marginTop: 16 }}>
             <button className="btn btn-outline" onClick={resetAll}>

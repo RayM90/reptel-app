@@ -366,6 +366,7 @@ export const createCounterOrder = async (data: {
   problem: string
   advancePaymentMethod: string // ya mapeado al enum PaymentMethod de Prisma
   paymentDetails: Record<string, string>
+  amount?: number // permite abonar por partes — default: el total de la revisión
   serviceCatalogId?: string
 }) => {
   const actor = await prisma.user.findUnique({ where: { email: data.actorEmail } })
@@ -400,16 +401,18 @@ export const createCounterOrder = async (data: {
         statusHistory: {
           create: {
             status: 'RECEIVED',
-            comment: `Orden creada en mostrador por ${actor ? `${actor.name} ${actor.lastName ?? ''}`.trim() : 'personal de mostrador'} — pago de revisión ($${ADVANCE_REVISION_AMOUNT}) reportado, pendiente de confirmar por el administrador`,
+            comment: `Orden creada en mostrador por ${actor ? `${actor.name} ${actor.lastName ?? ''}`.trim() : 'personal de mostrador'} — abono de $${data.amount ?? ADVANCE_REVISION_AMOUNT} reportado, pendiente de confirmar por el administrador`,
             userId: actor?.id,
           },
         },
         // Mismo flujo que el self-service: el staff de mostrador reporta los
         // datos del pago, pero queda PENDING hasta que un ADMIN lo confirme
         // desde el Dashboard (PaymentSubmissionsView) — no se auto-confirma.
+        // `amount` puede ser menor al total: el resto se abona después con
+        // submitCounterAdvanceInstallment (pago por partes, igual que self-service).
         advancePaymentSubmissions: {
           create: {
-            amount: ADVANCE_REVISION_AMOUNT,
+            amount: data.amount ?? ADVANCE_REVISION_AMOUNT,
             paymentDetails: data.paymentDetails,
             status: 'PENDING',
           },
@@ -1239,5 +1242,54 @@ export const getPartsUsedInOrder = async (orderId: string) => {
       user: { select: { id: true, name: true, lastName: true } },
     },
     orderBy: { createdAt: 'desc' },
+  })
+}
+
+// ─────────────────────────────────────────────
+// ABONO ADICIONAL EN ORDEN DE MOSTRADOR — staff (ADMIN/TECHNICIAN), no el
+// cliente. A diferencia de submitAdvancePaymentInstallment (self-service,
+// requiere que el actor SEA el Client dueño de la orden), aquí el actor es
+// personal de mostrador que reporta lo que el cliente pagó en persona.
+// ─────────────────────────────────────────────
+
+export const submitCounterAdvanceInstallment = async (
+  orderId: string,
+  actorEmail: string,
+  paymentDetails: Record<string, string>,
+  amount: number
+) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      advancePaymentSubmissions: { where: { status: { in: ['CONFIRMED', 'PENDING'] } } },
+    },
+  })
+  if (!order) throw new Error('Orden no encontrada')
+
+  if (amount == null || amount <= 0) {
+    throw new Error('El monto del pago debe ser mayor a cero')
+  }
+
+  const total =
+    order.deliveryAmount != null
+      ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+      : Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+  const alreadyAccounted = order.advancePaymentSubmissions.reduce((sum, s) => sum + Number(s.amount), 0)
+  const remaining = total - alreadyAccounted
+
+  if (amount > remaining + 0.009) {
+    throw new Error(`El monto excede lo que falta por pagar ($${remaining.toFixed(2)})`)
+  }
+
+  return await prisma.advancePaymentSubmission.create({
+    data: {
+      orderId,
+      amount,
+      paymentDetails,
+      status: 'PENDING',
+    },
   })
 }
