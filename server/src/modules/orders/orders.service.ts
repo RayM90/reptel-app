@@ -1202,9 +1202,16 @@ export const useProductInOrder = async (
     })
 
     const addedCost = Number(product.price) * quantity
+    // No usar `increment`: en MySQL `NULL + x = NULL`, así que si la orden
+    // todavía no tiene presupuesto (antes del diagnóstico), el incremento
+    // atómico de Prisma es un no-op silencioso y el costo del repuesto se
+    // pierde. Se lee el budget actual dentro de la misma transacción y se
+    // escribe el valor explícito.
+    const currentOrder = await tx.order.findUniqueOrThrow({ where: { id: orderId } })
+    const newBudget = (currentOrder.budget !== null ? Number(currentOrder.budget) : 0) + addedCost
     const updatedOrder = await tx.order.update({
       where: { id: orderId },
-      data: { budget: { increment: addedCost } },
+      data: { budget: newBudget },
     })
 
     return { movement, order: updatedOrder }
@@ -1237,9 +1244,13 @@ export const revertProductUsage = async (movementId: string, actorEmail: string)
     })
 
     const revertedCost = Number(movement.unitPriceAtUse ?? 0) * movement.quantity
+    // Mismo motivo que en useProductInOrder: leer y escribir explícito en vez
+    // de `decrement`, para que el resultado nunca quede en NULL por accidente.
+    const currentOrder = await tx.order.findUniqueOrThrow({ where: { id: movement.orderId! } })
+    const newBudget = (currentOrder.budget !== null ? Number(currentOrder.budget) : 0) - revertedCost
     const updatedOrder = await tx.order.update({
       where: { id: movement.orderId! },
-      data: { budget: { decrement: revertedCost } },
+      data: { budget: newBudget },
     })
 
     const updatedMovement = await tx.inventoryMovement.update({
