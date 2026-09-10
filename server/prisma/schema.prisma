@@ -183,6 +183,7 @@ model Order {
   serviceCatalog   ServiceCatalog? @relation(fields: [serviceCatalogId], references: [id])
 
   statusHistory    OrderStatusHistory[]
+  inventoryMovements InventoryMovement[]
 
   @@index([status, deliveredAt])
   @@index([receivedAt])
@@ -274,6 +275,16 @@ model InventoryMovement {
 
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
+
+  // Repuesto usado en una orden de servicio técnico (channel SERVICIO_TECNICO) —
+  // null para movimientos de mostrador/ajustes. unitPriceAtUse guarda el precio
+  // del producto al momento del uso, para poder revertir el presupuesto
+  // exactamente aunque el precio del producto haya cambiado después.
+  orderId       String?
+  order         Order?   @relation(fields: [orderId], references: [id])
+  unitPriceAtUse Decimal? @db.Decimal(10, 2)
+  reversedAt    DateTime?
+  reversedByUserId String?
 
   @@map("inventorymovement")
 }
