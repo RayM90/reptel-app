@@ -68,6 +68,7 @@ export const getReportSummary = async ({ from, to, technicianId, clientId }: Rep
     byTechnician: Array.from(byTechnicianMap.values()),
     byClient: Array.from(servicioByClientMap.values()),
     orders: orders.map((o) => ({
+      orderId: o.id,
       orderNumber: o.orderNumber,
       clientName: `${o.client.name} ${o.client.lastName}`,
       technicianName: o.technician?.name ?? 'Sin asignar',

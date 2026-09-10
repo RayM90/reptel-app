@@ -124,7 +124,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set())
-  const [view, setView] = useState<'activos' | 'entregados'>('activos')
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
   const showToast = useToastStore((state) => state.showToast)
   const confirmDialog = useConfirm()
@@ -336,23 +335,6 @@ export default function Dashboard() {
     0
   )
 
-  // Historial — pedidos ya entregados o cancelados, para auditoría de quién
-  // atendió cada uno (técnico o motorizado) y cuánto ganó de comisión.
-  const completedOrders = orders.filter(
-    (o) => o.status === 'DELIVERED' || o.status === 'CANCELLED'
-  )
-
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleDateString('es-VE', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
-
   if (loading) return <div className="page-container"><p>Cargando…</p></div>
   if (error) return <div className="page-container"><p className="alert-error">{error}</p></div>
 
@@ -371,23 +353,6 @@ export default function Dashboard() {
         <Link to="/admin/reportes" className="btn btn-secondary">📊 Reportes</Link>
       </p>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-        <button
-          className={view === 'activos' ? 'btn btn-primary' : 'btn btn-outline'}
-          onClick={() => setView('activos')}
-        >
-          Activos
-        </button>
-        <button
-          className={view === 'entregados' ? 'btn btn-primary' : 'btn btn-outline'}
-          onClick={() => setView('entregados')}
-        >
-          📦 Pedidos Entregados
-        </button>
-      </div>
-
-      {view === 'activos' ? (
-        <>
       <section className="card">
         <h2>Servicios Técnicos Activos ({activeOrders.length})</h2>
         {activeOrders.length === 0 ? (
@@ -486,60 +451,6 @@ export default function Dashboard() {
           </div>
         )}
       </section>
-        </>
-      ) : (
-        <>
-      <section className="card">
-        <h2>Servicios Técnicos — Historial ({completedOrders.length})</h2>
-        <p><Link to="/admin/reportes">Ver reporte completo por técnico y período →</Link></p>
-        <div className="table-wrapper">
-          <table className="styled-table">
-            <thead>
-              <tr>
-                <th scope="col">Orden</th>
-                <th scope="col">Cliente</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Técnico</th>
-                <th scope="col" className="money">Presupuesto</th>
-                <th scope="col" className="money">Comisión técnico</th>
-                <th scope="col">Fecha entrega</th>
-                <th scope="col">Recibos</th>
-              </tr>
-            </thead>
-            <tbody>
-              {completedOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={8}>Aún no hay servicios entregados o cancelados</td>
-                </tr>
-              ) : (
-                completedOrders.map((order) => (
-                  <tr key={order.id}>
-                    <td data-label="Orden">{order.orderNumber}</td>
-                    <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
-                    <td data-label="Estado">
-                      <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
-                        {getStatusBadge('order', order.status).label}
-                      </span>
-                    </td>
-                    <td data-label="Técnico">{order.technician?.name || 'Sin asignar'}</td>
-                    <td className="money" data-label="Presupuesto">{order.budget ? `$${order.budget}` : '—'}</td>
-                    <td className="money" data-label="Comisión técnico">{order.technicianCommission ? `$${order.technicianCommission}` : '—'}</td>
-                    <td data-label="Fecha entrega">{formatDate(order.deliveredAt)}</td>
-                    <td data-label="Recibos">
-                      <button className="btn btn-outline" onClick={() => downloadReceipt(order, 'intake')}>📄 {isIntakePendingPickup(order) ? 'Anticipo' : 'Recepción'}</button>{' '}
-                      {order.status === 'DELIVERED' && (
-                        <button className="btn btn-outline" onClick={() => downloadReceipt(order, 'final')}>📄 Entrega</button>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-        </>
-      )}
     </div>
   )
 }
