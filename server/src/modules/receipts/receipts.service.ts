@@ -70,10 +70,24 @@ interface OrderForReceipt {
   device: { type: string; brand: string; model: string; color: string }
 }
 
+// Self-service + delivery: RECEIVED se dispara al confirmar el anticipo, no cuando
+// el técnico va a buscar el equipo — hasta que haya diagnóstico, el equipo todavía
+// no está físicamente en el taller. Las órdenes de mostrador (deliveryAmount ==
+// null) sí tienen el equipo en mano desde el primer momento.
+export const getIntakeReceiptLabels = (order: Pick<OrderForReceipt, 'deliveryAmount' | 'diagnosis'>) => {
+  const pendingPickup = order.deliveryAmount != null && order.diagnosis == null
+  return {
+    pendingPickup,
+    title: pendingPickup ? 'Recibo de Anticipo' : 'Recibo de Recepción',
+    dateLabel: pendingPickup ? 'Fecha de la orden' : 'Fecha de recepción',
+  }
+}
+
 export const generateIntakeReceipt = (order: OrderForReceipt): PDFKit.PDFDocument => {
   const doc = new PDFDocument({ margin: 50 })
+  const { title, dateLabel } = getIntakeReceiptLabels(order)
 
-  addHeader(doc, 'Recibo de Recepción', order.orderNumber)
+  addHeader(doc, title, order.orderNumber)
 
   addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
   addRow(doc, 'Teléfono', order.client.phone)
@@ -93,7 +107,7 @@ export const generateIntakeReceipt = (order: OrderForReceipt): PDFKit.PDFDocumen
   }
   doc.moveDown(0.5)
 
-  addRow(doc, 'Fecha de recepción', formatDate(order.receivedAt))
+  addRow(doc, dateLabel, formatDate(order.receivedAt))
 
   doc.end()
   return doc

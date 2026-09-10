@@ -1,7 +1,7 @@
 import request from 'supertest'
 import app from '../app'
 import prisma from '../lib/prisma'
-import { generateIntakeReceipt, generateFinalReceipt } from '../modules/receipts/receipts.service'
+import { generateIntakeReceipt, generateFinalReceipt, getIntakeReceiptLabels } from '../modules/receipts/receipts.service'
 import { decrementTechnicianLoad } from '../modules/orders/orders.service'
 
 const fakeOrder = {
@@ -39,6 +39,27 @@ describe('receipts.service — generación de PDF', () => {
   it('generateFinalReceipt produce un PDF válido', async () => {
     const buffer = await collectPdfBuffer(generateFinalReceipt(fakeOrder as any))
     expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
+  })
+})
+
+describe('getIntakeReceiptLabels — self-service+delivery antes de que el técnico vaya', () => {
+  it('orden de mostrador (deliveryAmount null): siempre "Recibo de Recepción"', () => {
+    const labels = getIntakeReceiptLabels({ deliveryAmount: null, diagnosis: null })
+    expect(labels.pendingPickup).toBe(false)
+    expect(labels.title).toBe('Recibo de Recepción')
+  })
+
+  it('self-service+delivery sin diagnóstico todavía: "Recibo de Anticipo"', () => {
+    const labels = getIntakeReceiptLabels({ deliveryAmount: 10, diagnosis: null })
+    expect(labels.pendingPickup).toBe(true)
+    expect(labels.title).toBe('Recibo de Anticipo')
+    expect(labels.dateLabel).toBe('Fecha de la orden')
+  })
+
+  it('self-service+delivery con diagnóstico ya registrado: "Recibo de Recepción"', () => {
+    const labels = getIntakeReceiptLabels({ deliveryAmount: 10, diagnosis: 'Cambio de pantalla' })
+    expect(labels.pendingPickup).toBe(false)
+    expect(labels.title).toBe('Recibo de Recepción')
   })
 })
 

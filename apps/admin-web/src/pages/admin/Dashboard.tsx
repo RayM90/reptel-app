@@ -12,6 +12,7 @@ interface Order {
   orderNumber: string
   status: string
   problem: string
+  diagnosis: string | null
   budget: string | null
   deliveredAt: string | null
   client: { name: string; lastName: string }
@@ -175,13 +176,19 @@ export default function Dashboard() {
     }
   }
 
+  // Self-service + delivery: RECEIVED solo significa "pago confirmado", no que el
+  // técnico ya fue a buscar el equipo. Hasta que haya diagnóstico, el recibo de
+  // intake se etiqueta como "anticipo" en vez de "recepción".
+  const isIntakePendingPickup = (order: Order) => order.deliveryAmount != null && !order.diagnosis
+
   const downloadReceipt = async (order: Order, type: 'intake' | 'final') => {
     try {
       const response = await api.get(`/api/orders/${order.id}/receipt/${type}`, { responseType: 'blob' })
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = `recibo-${type === 'intake' ? 'recepcion' : 'entrega'}-${order.orderNumber}.pdf`
+      const pendingPickup = type === 'intake' && isIntakePendingPickup(order)
+      link.download = `recibo-${type === 'final' ? 'entrega' : pendingPickup ? 'anticipo' : 'recepcion'}-${order.orderNumber}.pdf`
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -439,7 +446,7 @@ export default function Dashboard() {
                         '—'
                       ) : (
                         <button className="btn btn-outline" onClick={() => downloadReceipt(order, 'intake')}>
-                          📄 Recepción
+                          📄 {isIntakePendingPickup(order) ? 'Anticipo' : 'Recepción'}
                         </button>
                       )}
                     </td>
@@ -519,7 +526,7 @@ export default function Dashboard() {
                     <td className="money" data-label="Comisión técnico">{order.technicianCommission ? `$${order.technicianCommission}` : '—'}</td>
                     <td data-label="Fecha entrega">{formatDate(order.deliveredAt)}</td>
                     <td data-label="Recibos">
-                      <button className="btn btn-outline" onClick={() => downloadReceipt(order, 'intake')}>📄 Recepción</button>{' '}
+                      <button className="btn btn-outline" onClick={() => downloadReceipt(order, 'intake')}>📄 {isIntakePendingPickup(order) ? 'Anticipo' : 'Recepción'}</button>{' '}
                       {order.status === 'DELIVERED' && (
                         <button className="btn btn-outline" onClick={() => downloadReceipt(order, 'final')}>📄 Entrega</button>
                       )}
