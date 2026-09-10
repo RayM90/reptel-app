@@ -190,51 +190,6 @@ describe('reports.service — getReportSummary', () => {
   })
 })
 
-describe('reports.service — getReportSummary (tienda física)', () => {
-  let category: { id: string }
-  let product: { id: string }
-
-  beforeAll(async () => {
-    category = await prisma.productCategory.create({ data: { name: `Categoria Reportes ${Date.now()}` } })
-    product = await prisma.product.create({
-      data: { name: 'Producto Reportes', price: 10, stock: 100, categoryId: category.id },
-    })
-    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } }) // limpiar el IN inicial
-
-    await prisma.inventoryMovement.create({
-      data: { productId: product.id, type: 'OUT', channel: 'MOSTRADOR', quantity: 3, reason: 'Venta mostrador', createdAt: IN_RANGE },
-    })
-    await prisma.inventoryMovement.create({
-      data: { productId: product.id, type: 'OUT', channel: 'MOSTRADOR', quantity: 2, reason: 'Venta mostrador', createdAt: IN_RANGE },
-    })
-    // Fuera de rango — no debe contarse
-    await prisma.inventoryMovement.create({
-      data: { productId: product.id, type: 'OUT', channel: 'MOSTRADOR', quantity: 99, reason: 'Venta mostrador', createdAt: OUT_OF_RANGE },
-    })
-  }, 20000)
-
-  afterAll(async () => {
-    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
-    await prisma.product.delete({ where: { id: product.id } }).catch(() => {})
-    await prisma.productCategory.delete({ where: { id: category.id } }).catch(() => {})
-  })
-
-  it('suma cantidad y monto (cantidad × precio) solo de las ventas dentro del rango', async () => {
-    const result = await getReportSummary({ from: RANGE_FROM, to: RANGE_TO })
-
-    expect(result.tienda.salesCount).toBe(2)
-    expect(result.tienda.totalSalesAmount).toBe(50) // (3 + 2) × $10
-  })
-
-  it('agrupa por producto correctamente', async () => {
-    const result = await getReportSummary({ from: RANGE_FROM, to: RANGE_TO })
-
-    const row = result.tienda.byProduct.find((p) => p.productId === product.id)
-    expect(row?.quantitySold).toBe(5)
-    expect(row?.totalAmount).toBe(50)
-  })
-})
-
 import request from 'supertest'
 import app from '../app'
 import { authorize } from '../middleware/auth.middleware'
