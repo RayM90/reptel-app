@@ -65,6 +65,15 @@ enum InventoryMovementType {
   OUT
 }
 
+// Por dónde salió/entró el producto. Hoy solo existe MOSTRADOR (única vía real
+// de venta); SERVICIO_TECNICO queda reservado para si se reintroduce el flujo
+// de repuesto vinculado a una orden (eliminado en el sub-proyecto de
+// remoción de tienda online).
+enum InventoryChannel {
+  MOSTRADOR
+  SERVICIO_TECNICO
+}
+
 // ─────────────────────────────────────────────
 // MÓDULO USUARIOS Y CLIENTES
 // ─────────────────────────────────────────────
@@ -255,6 +264,7 @@ model Product {
 model InventoryMovement {
   id        String                 @id @default(uuid())
   type      InventoryMovementType
+  channel   InventoryChannel       @default(MOSTRADOR)
   quantity  Int
   reason    String
   createdAt DateTime               @default(now())

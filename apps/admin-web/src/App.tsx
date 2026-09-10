@@ -7,6 +7,7 @@ import TechnicianDashboard from './pages/technician/Dashboard'
 import CreateStaff from './pages/admin/CreateStaff'
 import InventoryList from './pages/admin/InventoryList'
 import InventoryForm from './pages/admin/InventoryForm'
+import InventoryMovements from './pages/admin/InventoryMovements'
 import Reports from './pages/admin/Reports'
 import Registro from './pages/admin/Registro'
 import Toast from './components/Toast'
@@ -60,6 +61,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <InventoryForm />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/inventory/movements"
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <InventoryMovements />
             </ProtectedRoute>
           }
         />
