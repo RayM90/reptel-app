@@ -77,4 +77,10 @@ router.post('/:id/confirm-final-payment', authenticate, authorize('ADMIN'), orde
 // ADMIN cierra una orden con presupuesto $0 (sin pago final que aprobar)
 router.post('/:id/close-zero-budget', authenticate, authorize('ADMIN'), ordersController.closeZeroBudgetOrder)
 
+// Repuestos de inventario usados en la orden — solo el técnico asignado
+// (la validación fina "es tu orden" vive dentro del service)
+router.get('/:id/parts', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.getPartsUsedInOrderHandler)
+router.post('/:id/parts', authenticate, authorize('TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.useProductInOrderHandler)
+router.delete('/:id/parts/:movementId', authenticate, authorize('TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.revertProductUsageHandler)
+
 export default router

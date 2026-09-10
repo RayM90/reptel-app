@@ -644,3 +644,69 @@ export const getMyTechnicianOrders = async (req: AuthRequest, res: Response): Pr
     res.status(500).json({ success: false, message: 'Error al obtener tus órdenes', error: String(error) })
   }
 }
+// ─────────────────────────────────────────────
+// REPUESTOS DE INVENTARIO USADOS EN LA ORDEN — solo el técnico asignado
+// ─────────────────────────────────────────────
+
+export const useProductInOrderHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const orderId = String(req.params.id)
+    const { productId, quantity } = req.body
+
+    if (!productId || !Number.isInteger(quantity) || quantity <= 0) {
+      res.status(400).json({ success: false, message: 'productId y quantity (entero > 0) son requeridos' })
+      return
+    }
+
+    const result = await ordersService.useProductInOrder(orderId, productId, quantity, email)
+    res.status(201).json({ success: true, data: result })
+  } catch (error: any) {
+    if (error.message?.includes('Solo el técnico asignado')) {
+      res.status(403).json({ success: false, message: error.message })
+      return
+    }
+    if (error.constructor?.name === 'InsufficientStockError') {
+      res.status(400).json({ success: false, message: 'Stock insuficiente para este repuesto' })
+      return
+    }
+    console.error('ERROR USAR REPUESTO EN ORDEN:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al registrar el repuesto' })
+  }
+}
+
+export const revertProductUsageHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const movementId = String(req.params.movementId)
+    const result = await ordersService.revertProductUsage(movementId, email)
+    res.status(200).json({ success: true, data: result })
+  } catch (error: any) {
+    if (error.message?.includes('Solo el técnico asignado')) {
+      res.status(403).json({ success: false, message: error.message })
+      return
+    }
+    console.error('ERROR REVERTIR REPUESTO:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al revertir el repuesto' })
+  }
+}
+
+export const getPartsUsedInOrderHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const orderId = String(req.params.id)
+    const parts = await ordersService.getPartsUsedInOrder(orderId)
+    res.status(200).json({ success: true, data: parts })
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Error al obtener los repuestos usados' })
+  }
+}

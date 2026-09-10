@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import prisma from '../../lib/prisma'
+import { InsufficientStockError } from '../products/products.service'
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -1128,5 +1129,112 @@ export const getOrdersByTechnician = async (technicianId: string) => {
       statusHistory: { orderBy: { createdAt: 'desc' } },
     },
     orderBy: { receivedAt: 'desc' },
+  })
+}
+// ─────────────────────────────────────────────
+// REPUESTOS DE INVENTARIO USADOS EN LA ORDEN
+// Solo el técnico asignado a la orden puede registrar/revertir. Se suma al
+// budget de inmediato, incluso si ya fue aprobado por el cliente — el
+// diagnóstico previo debería cubrir todo, pero puede aparecer una falla
+// adicional mientras se repara.
+// ─────────────────────────────────────────────
+
+export const useProductInOrder = async (
+  orderId: string,
+  productId: string,
+  quantity: number,
+  actorEmail: string
+) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const order = await prisma.order.findUnique({ where: { id: orderId } })
+  if (!order) throw new Error('Orden no encontrada')
+  if (order.technicianId !== actor.id) {
+    throw new Error('Solo el técnico asignado a esta orden puede registrar repuestos')
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const product = await tx.product.findUniqueOrThrow({ where: { id: productId } })
+    if (product.stock < quantity) {
+      throw new InsufficientStockError()
+    }
+
+    await tx.product.update({
+      where: { id: productId },
+      data: { stock: { decrement: quantity } },
+    })
+
+    const movement = await tx.inventoryMovement.create({
+      data: {
+        productId,
+        type: 'OUT',
+        channel: 'SERVICIO_TECNICO',
+        quantity,
+        reason: `Repuesto usado en orden ${order.orderNumber}`,
+        userId: actor.id,
+        orderId,
+        unitPriceAtUse: product.price,
+      },
+    })
+
+    const addedCost = Number(product.price) * quantity
+    const updatedOrder = await tx.order.update({
+      where: { id: orderId },
+      data: { budget: { increment: addedCost } },
+    })
+
+    return { movement, order: updatedOrder }
+  })
+}
+
+export const revertProductUsage = async (movementId: string, actorEmail: string) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const movement = await prisma.inventoryMovement.findUnique({ where: { id: movementId } })
+  if (!movement) throw new Error('Movimiento no encontrado')
+  if (movement.channel !== 'SERVICIO_TECNICO' || !movement.orderId) {
+    throw new Error('Este movimiento no corresponde a un repuesto de orden de servicio')
+  }
+  if (movement.reversedAt) {
+    throw new Error('Este repuesto ya fue revertido')
+  }
+
+  const order = await prisma.order.findUnique({ where: { id: movement.orderId } })
+  if (!order) throw new Error('Orden no encontrada')
+  if (order.technicianId !== actor.id) {
+    throw new Error('Solo el técnico asignado a esta orden puede revertir este repuesto')
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    await tx.product.update({
+      where: { id: movement.productId },
+      data: { stock: { increment: movement.quantity } },
+    })
+
+    const revertedCost = Number(movement.unitPriceAtUse ?? 0) * movement.quantity
+    const updatedOrder = await tx.order.update({
+      where: { id: movement.orderId! },
+      data: { budget: { decrement: revertedCost } },
+    })
+
+    const updatedMovement = await tx.inventoryMovement.update({
+      where: { id: movementId },
+      data: { reversedAt: new Date(), reversedByUserId: actor.id },
+    })
+
+    return { movement: updatedMovement, order: updatedOrder }
+  })
+}
+
+export const getPartsUsedInOrder = async (orderId: string) => {
+  return await prisma.inventoryMovement.findMany({
+    where: { orderId, channel: 'SERVICIO_TECNICO' },
+    include: {
+      product: { select: { id: true, name: true } },
+      user: { select: { id: true, name: true, lastName: true } },
+    },
+    orderBy: { createdAt: 'desc' },
   })
 }

@@ -44,6 +44,16 @@ interface CatalogItem {
   basePrice: string
 }
 
+interface PartUsed {
+  id: string
+  quantity: number
+  unitPriceAtUse: string | null
+  createdAt: string
+  reversedAt: string | null
+  product: { id: string; name: string }
+  user: { id: string; name: string; lastName: string | null } | null
+}
+
 interface TechOrder {
   id: string
   orderNumber: string
@@ -110,13 +120,59 @@ export default function TechnicianDashboard() {
   const [statusSelection, setStatusSelection] = useState<Record<string, OrderStatus>>({})
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
 
+  // ── Repuestos de inventario usados en la orden ──
+  const [products, setProducts] = useState<{ id: string; name: string; stock: number }[]>([])
+  const [partsByOrder, setPartsByOrder] = useState<Record<string, PartUsed[]>>({})
+  const [partsProductId, setPartsProductId] = useState<Record<string, string>>({})
+  const [partsQuantity, setPartsQuantity] = useState<Record<string, string>>({})
+
   useEffect(() => {
     fetchData()
+    api.get('/api/products').then((res) => setProducts(res.data.data))
     // Polling automático — mismo intervalo que Admin y Motorizado, para que los
     // 3 paneles internos se mantengan coordinados entre sí.
     const interval = setInterval(() => fetchData(true), POLL_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [])
+
+  const fetchParts = async (orderId: string) => {
+    try {
+      const res = await api.get(`/api/orders/${orderId}/parts`)
+      setPartsByOrder((prev) => ({ ...prev, [orderId]: res.data.data }))
+    } catch {
+      // silencioso — no bloquea el resto del detalle de la orden
+    }
+  }
+
+  const handleAddPart = async (orderId: string) => {
+    const productId = partsProductId[orderId]
+    const quantity = Number(partsQuantity[orderId])
+    if (!productId || !Number.isInteger(quantity) || quantity <= 0) {
+      showToast('Elegí un producto y una cantidad válida', 'error')
+      return
+    }
+    try {
+      await api.post(`/api/orders/${orderId}/parts`, { productId, quantity })
+      showToast('✅ Repuesto registrado, presupuesto actualizado', 'success')
+      setPartsProductId((prev) => ({ ...prev, [orderId]: '' }))
+      setPartsQuantity((prev) => ({ ...prev, [orderId]: '' }))
+      fetchParts(orderId)
+      fetchData(true)
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al registrar el repuesto', 'error')
+    }
+  }
+
+  const handleRevertPart = async (orderId: string, movementId: string) => {
+    try {
+      await api.delete(`/api/orders/${orderId}/parts/${movementId}`)
+      showToast('Repuesto revertido — stock y presupuesto restaurados', 'success')
+      fetchParts(orderId)
+      fetchData(true)
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al revertir el repuesto', 'error')
+    }
+  }
 
   const fetchData = async (isPoll = false) => {
     if (!isPoll) {
@@ -155,6 +211,9 @@ export default function TechnicianDashboard() {
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id))
+    if (expandedId !== id && !partsByOrder[id]) {
+      fetchParts(id)
+    }
     if (newIds.has(id)) {
       setNewIds((prev) => {
         const next = new Set(prev)
@@ -336,6 +395,69 @@ export default function TechnicianDashboard() {
                     <p><strong>Problema:</strong> {order.problem}</p>
                     {order.diagnosis && <p><strong>Diagnóstico:</strong> {order.diagnosis}</p>}
                     {order.budget && <p><strong>Presupuesto:</strong> ${order.budget}</p>}
+
+                    <div className="card">
+                      <h4>Repuestos usados</h4>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                        <div className="form-group" style={{ flex: 1, marginBottom: 0, minWidth: 160 }}>
+                          <label>Producto</label>
+                          <select
+                            value={partsProductId[order.id] || ''}
+                            onChange={(e) => setPartsProductId((prev) => ({ ...prev, [order.id]: e.target.value }))}
+                          >
+                            <option value="">— Seleccionar —</option>
+                            {products.map((p) => (
+                              <option key={p.id} value={p.id} disabled={p.stock <= 0}>
+                                {p.name} (stock: {p.stock})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group" style={{ width: 90, marginBottom: 0 }}>
+                          <label>Cantidad</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={partsQuantity[order.id] || ''}
+                            onChange={(e) => setPartsQuantity((prev) => ({ ...prev, [order.id]: e.target.value }))}
+                          />
+                        </div>
+                        <button className="btn btn-secondary" onClick={() => handleAddPart(order.id)}>
+                          Usar repuesto
+                        </button>
+                      </div>
+
+                      {(partsByOrder[order.id] ?? []).filter((p) => !p.reversedAt).length > 0 && (
+                        <div className="table-wrapper" style={{ marginTop: 10 }}>
+                          <table className="styled-table">
+                            <thead>
+                              <tr>
+                                <th scope="col">Producto</th>
+                                <th scope="col">Cantidad</th>
+                                <th scope="col">Quién</th>
+                                <th scope="col">Fecha</th>
+                                <th scope="col">Acciones</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(partsByOrder[order.id] ?? []).filter((p) => !p.reversedAt).map((p) => (
+                                <tr key={p.id}>
+                                  <td data-label="Producto">{p.product.name}</td>
+                                  <td data-label="Cantidad">{p.quantity}</td>
+                                  <td data-label="Quién">{p.user ? `${p.user.name} ${p.user.lastName ?? ''}`.trim() : '—'}</td>
+                                  <td data-label="Fecha">{new Date(p.createdAt).toLocaleString('es-VE')}</td>
+                                  <td data-label="Acciones">
+                                    <button className="btn btn-danger" onClick={() => handleRevertPart(order.id, p.id)}>
+                                      Revertir
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
 
                     {needsDiagnosis && (
                       <div className="card">
