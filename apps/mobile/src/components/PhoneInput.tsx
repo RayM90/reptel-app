@@ -23,7 +23,6 @@ export default function PhoneInput({ value, onChange }: PhoneInputProps) {
   return (
     <View>
       <SelectField
-        label="Código"
         value={prefix}
         options={[...PHONE_PREFIXES]}
         onChange={(p) => emit(p, digits)}
