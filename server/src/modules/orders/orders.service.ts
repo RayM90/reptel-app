@@ -1202,10 +1202,15 @@ export const useProductInOrder = async (
     })
 
     const addedCost = Number(product.price) * quantity
-    const updatedOrder = await tx.order.update({
-      where: { id: orderId },
-      data: { budget: { increment: addedCost } },
-    })
+    // Usar UPDATE atómico en lugar de read-then-write. En MySQL REPEATABLE READ,
+    // dos transacciones concurrentes pueden leer el mismo budget y escribir sobre él,
+    // causando pérdida de actualización. El UPDATE atómico con COALESCE evita esto
+    // mediante row-locking de InnoDB.
+    await tx.$executeRaw`UPDATE \`Order\` SET budget = COALESCE(budget, 0) + ${addedCost} WHERE id = ${orderId}`
+
+    // Leer el order actualizado para retornar el state actual. Esto es seguro porque
+    // estamos leyendo después de la escritura de la misma transacción.
+    const updatedOrder = await tx.order.findUniqueOrThrow({ where: { id: orderId } })
 
     return { movement, order: updatedOrder }
   })
@@ -1237,10 +1242,15 @@ export const revertProductUsage = async (movementId: string, actorEmail: string)
     })
 
     const revertedCost = Number(movement.unitPriceAtUse ?? 0) * movement.quantity
-    const updatedOrder = await tx.order.update({
-      where: { id: movement.orderId! },
-      data: { budget: { decrement: revertedCost } },
-    })
+    // Usar UPDATE atómico en lugar de read-then-write para evitar pérdida de
+    // actualización bajo concurrencia. COALESCE maneja NULL como 0. GREATEST
+    // evita que el budget quede negativo en órdenes legacy donde budget era
+    // NULL cuando se agregó el repuesto (antes de la corrección de este
+    // branch): sin el clamp, COALESCE(NULL, 0) - revertedCost daría negativo.
+    await tx.$executeRaw`UPDATE \`Order\` SET budget = GREATEST(COALESCE(budget, 0) - ${revertedCost}, 0) WHERE id = ${movement.orderId!}`
+
+    // Leer el order actualizado para retornar el state actual, después de la escritura.
+    const updatedOrder = await tx.order.findUniqueOrThrow({ where: { id: movement.orderId! } })
 
     const updatedMovement = await tx.inventoryMovement.update({
       where: { id: movementId },

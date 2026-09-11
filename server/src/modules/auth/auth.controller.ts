@@ -8,9 +8,9 @@ import { isValidVenezuelanPhone, isValidVenezuelanIdNumber } from '../../lib/ven
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, name, role, phone, address } = req.body;
+    const { email, password, name, lastName, idNumber, role, phone, addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding } = req.body;
 
-    if (!email || !password || !name || !role) {
+    if (!email || !password || !name || !lastName || !idNumber || !role) {
       res.status(400).json({ message: 'Todos los campos son requeridos' });
       return;
     }
@@ -24,12 +24,21 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    if (!isValidVenezuelanIdNumber(idNumber)) {
+      res.status(400).json({ message: 'La cédula debe tener el formato V-12345678 o E-12345678' });
+      return;
+    }
+
     if (phone && !isValidVenezuelanPhone(phone)) {
       res.status(400).json({ message: 'El teléfono debe ser un número venezolano válido (04XX + 7 dígitos)' });
       return;
     }
 
-    const result = await registerUser(email, password, name, role, phone, address);
+    // La resolución de qué Client usar (cédula nueva, cédula con cuenta ya
+    // vinculada, o cédula de un walk-in de Recepción que requiere verificar
+    // el teléfono) ocurre dentro de registerUser(), ANTES de tocar Cognito
+    // — así una cédula rechazada nunca deja un usuario huérfano en Cognito.
+    const result = await registerUser(email, password, name, lastName, idNumber, role, phone, addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding);
     res.status(201).json(result);
   } catch (error: any) {
     res.status(400).json({ message: translateCognitoError(error) || 'Error al registrar usuario' });

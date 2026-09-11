@@ -9,6 +9,7 @@ let otherTechnician: { id: string; email: string }
 let client: { id: string }
 let device: { id: string }
 let order: { id: string; orderNumber: string; budget: any }
+let orderSinPresupuesto: { id: string; orderNumber: string }
 
 beforeAll(async () => {
   const suffix = Date.now()
@@ -40,12 +41,28 @@ beforeAll(async () => {
       technicianId: technician.id,
     },
   })
+
+  orderSinPresupuesto = await prisma.order.create({
+    data: {
+      orderNumber: `REP-TEST-PARTS-NULL-${suffix}`,
+      problem: 'Falla original, aún sin diagnóstico',
+      status: 'DIAGNOSING',
+      // budget se omite a propósito — así queda NULL, igual que una orden
+      // real antes de que el técnico envíe el diagnóstico.
+      clientId: client.id,
+      deviceId: device.id,
+      technicianId: technician.id,
+    },
+  })
 }, 20000)
 
 afterAll(async () => {
   await prisma.inventoryMovement.deleteMany({ where: { orderId: order.id } })
   await prisma.orderStatusHistory.deleteMany({ where: { orderId: order.id } })
   await prisma.order.delete({ where: { id: order.id } }).catch(() => {})
+  await prisma.inventoryMovement.deleteMany({ where: { orderId: orderSinPresupuesto.id } })
+  await prisma.orderStatusHistory.deleteMany({ where: { orderId: orderSinPresupuesto.id } })
+  await prisma.order.delete({ where: { id: orderSinPresupuesto.id } }).catch(() => {})
   await prisma.device.delete({ where: { id: device.id } }).catch(() => {})
   await prisma.client.delete({ where: { id: client.id } }).catch(() => {})
   await prisma.user.delete({ where: { id: technician.id } }).catch(() => {})
@@ -77,6 +94,16 @@ describe('useProductInOrder', () => {
       useProductInOrder(order.id, product.id, 999, technician.email)
     ).rejects.toThrow()
   })
+
+  it('suma el costo al budget cuando la orden todavía no tiene presupuesto (NULL)', async () => {
+    const result = await useProductInOrder(orderSinPresupuesto.id, product.id, 1, technician.email)
+
+    expect(result.order.budget).not.toBeNull()
+    expect(Number(result.order.budget)).toBe(20) // 0 (null) + 1 × $20
+
+    const persisted = await prisma.order.findUniqueOrThrow({ where: { id: orderSinPresupuesto.id } })
+    expect(Number(persisted.budget)).toBe(20)
+  })
 })
 
 describe('revertProductUsage', () => {
@@ -99,6 +126,51 @@ describe('revertProductUsage', () => {
     await revertProductUsage(used.movement.id, technician.email)
 
     await expect(revertProductUsage(used.movement.id, technician.email)).rejects.toThrow(/ya fue revertido/)
+  })
+
+  it('revertir un repuesto agregado cuando el budget era NULL deja el budget en 0, no en NULL', async () => {
+    const used = await useProductInOrder(orderSinPresupuesto.id, product.id, 1, technician.email)
+    expect(Number(used.order.budget)).toBe(40) // 20 (del test anterior) + 1 × $20
+
+    const reverted = await revertProductUsage(used.movement.id, technician.email)
+
+    expect(reverted.order.budget).not.toBeNull()
+    expect(Number(reverted.order.budget)).toBe(20) // vuelve a lo que había antes de este repuesto
+  })
+
+  it('revertir en una orden legacy cuyo budget actual es menor al costo revertido nunca lo deja negativo (se clampa a 0)', async () => {
+    const legacyOrder = await prisma.order.create({
+      data: {
+        orderNumber: `REP-TEST-PARTS-LEGACY-${Date.now()}`,
+        problem: 'Orden legacy con budget bajo',
+        status: 'DIAGNOSING',
+        budget: 50,
+        clientId: client.id,
+        deviceId: device.id,
+        technicianId: technician.id,
+      },
+    })
+
+    const used = await useProductInOrder(legacyOrder.id, product.id, 1, technician.email) // costo = $20
+
+    // Simular el estado legacy: el budget "actual" quedó por debajo del costo
+    // que se va a revertir (p.ej. una orden donde budget era NULL cuando se
+    // agregó el repuesto originalmente — el bug exacto que este branch
+    // corrigió — o cualquier ajuste posterior que lo dejó bajo). Forzamos
+    // ese estado directo en la BD: el flujo normal add→revert siempre deja
+    // budget suficiente, así que no alcanza para reproducir el bug.
+    await prisma.order.update({ where: { id: legacyOrder.id }, data: { budget: 5 } })
+
+    const reverted = await revertProductUsage(used.movement.id, technician.email)
+
+    expect(Number(reverted.order.budget)).toBe(0) // GREATEST(5 - 20, 0) = 0, nunca -15
+
+    const persisted = await prisma.order.findUniqueOrThrow({ where: { id: legacyOrder.id } })
+    expect(Number(persisted.budget)).toBe(0)
+
+    await prisma.inventoryMovement.deleteMany({ where: { orderId: legacyOrder.id } })
+    await prisma.orderStatusHistory.deleteMany({ where: { orderId: legacyOrder.id } })
+    await prisma.order.delete({ where: { id: legacyOrder.id } }).catch(() => {})
   })
 })
 

@@ -4,7 +4,7 @@ import { View, Text, TouchableOpacity, Modal, FlatList, StyleSheet, TextInput } 
 const OTHER = '__OTRO__'
 
 interface SelectFieldProps {
-  label: string
+  label?: string
   value: string
   options: string[]
   onChange: (value: string) => void
@@ -22,7 +22,7 @@ export default function SelectField({ label, value, options, onChange, allowOthe
   if (otherMode) {
     return (
       <View style={{ marginBottom: 12 }}>
-        <Text style={styles.label}>{label}</Text>
+        {label ? <Text style={styles.label}>{label}</Text> : null}
         <TextInput
           style={styles.otherInput}
           value={value}
@@ -38,7 +38,7 @@ export default function SelectField({ label, value, options, onChange, allowOthe
 
   return (
     <View style={{ marginBottom: 12 }}>
-      <Text style={styles.label}>{label}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <TouchableOpacity style={styles.trigger} onPress={() => setOpen(true)}>
         <Text style={value ? styles.triggerText : styles.triggerPlaceholder}>
           {value || placeholder || 'Seleccionar…'}

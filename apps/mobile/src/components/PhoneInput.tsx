@@ -1,13 +1,15 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, TextInput, StyleSheet } from 'react-native'
 import { PHONE_PREFIXES, PHONE_DIGITS_LENGTH } from '../constants/venezuela'
+import SelectField from './SelectField'
 
 interface PhoneInputProps {
   value: string
   onChange: (value: string) => void
 }
 
-// Teléfono venezolano: botones de prefijo de operadora (0412/0414/0416/0424/0426)
-// + input solo de dígitos con el límite correcto (prefijo + 7 dígitos = 11 total).
+// Teléfono venezolano: SelectField (modal + lista) para el prefijo de
+// operadora (0412/0414/0416/0424/0426) + input solo de dígitos con el
+// límite correcto (prefijo + 7 dígitos = 11 total).
 // `value` siempre es el string completo (ej. "04121234567").
 export default function PhoneInput({ value, onChange }: PhoneInputProps) {
   const knownPrefix = PHONE_PREFIXES.find((p) => value.startsWith(p))
@@ -20,17 +22,11 @@ export default function PhoneInput({ value, onChange }: PhoneInputProps) {
 
   return (
     <View>
-      <View style={styles.prefixRow}>
-        {PHONE_PREFIXES.map((p) => (
-          <TouchableOpacity
-            key={p}
-            style={[styles.prefixBtn, prefix === p && styles.prefixBtnActive]}
-            onPress={() => emit(p, digits)}
-          >
-            <Text style={[styles.prefixBtnText, prefix === p && styles.prefixBtnTextActive]}>{p}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <SelectField
+        value={prefix}
+        options={[...PHONE_PREFIXES]}
+        onChange={(p) => emit(p, digits)}
+      />
       <TextInput
         style={styles.digitsInput}
         value={digits}
@@ -44,15 +40,7 @@ export default function PhoneInput({ value, onChange }: PhoneInputProps) {
 }
 
 const styles = StyleSheet.create({
-  prefixRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
-  prefixBtn: {
-    paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 2,
-    borderColor: '#e0e0e0', backgroundColor: '#f9f9f9',
-  },
-  prefixBtnActive: { borderColor: '#5564ad', backgroundColor: '#eef2ff' },
-  prefixBtnText: { fontSize: 14, color: '#666', fontWeight: '600' },
-  prefixBtnTextActive: { color: '#17247a' },
   digitsInput: {
-    borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, fontSize: 15,
+    borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, fontSize: 15, marginTop: 8,
   },
 })
