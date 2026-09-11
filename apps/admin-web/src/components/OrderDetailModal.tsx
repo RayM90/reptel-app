@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { isIntakePendingPickup, type Order, type PaymentSubmission } from '../pages/admin/dashboard.types'
 import { getStatusBadge, badgeClassName } from '../utils/statusBadge'
+import { useConfirmDialogStore } from '../store/confirmDialog.store'
 
 function PaymentDetailsView({ details }: { details: Record<string, string> | null }) {
   if (!details) return <span>—</span>
@@ -103,9 +104,14 @@ export default function OrderDetailModal({
 
   useEffect(() => {
     boxRef.current?.focus()
+  }, [])
 
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        if (useConfirmDialogStore.getState().isOpen) return
+        onClose()
+      }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
