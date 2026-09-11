@@ -137,6 +137,41 @@ describe('revertProductUsage', () => {
     expect(reverted.order.budget).not.toBeNull()
     expect(Number(reverted.order.budget)).toBe(20) // vuelve a lo que había antes de este repuesto
   })
+
+  it('revertir en una orden legacy cuyo budget actual es menor al costo revertido nunca lo deja negativo (se clampa a 0)', async () => {
+    const legacyOrder = await prisma.order.create({
+      data: {
+        orderNumber: `REP-TEST-PARTS-LEGACY-${Date.now()}`,
+        problem: 'Orden legacy con budget bajo',
+        status: 'DIAGNOSING',
+        budget: 50,
+        clientId: client.id,
+        deviceId: device.id,
+        technicianId: technician.id,
+      },
+    })
+
+    const used = await useProductInOrder(legacyOrder.id, product.id, 1, technician.email) // costo = $20
+
+    // Simular el estado legacy: el budget "actual" quedó por debajo del costo
+    // que se va a revertir (p.ej. una orden donde budget era NULL cuando se
+    // agregó el repuesto originalmente — el bug exacto que este branch
+    // corrigió — o cualquier ajuste posterior que lo dejó bajo). Forzamos
+    // ese estado directo en la BD: el flujo normal add→revert siempre deja
+    // budget suficiente, así que no alcanza para reproducir el bug.
+    await prisma.order.update({ where: { id: legacyOrder.id }, data: { budget: 5 } })
+
+    const reverted = await revertProductUsage(used.movement.id, technician.email)
+
+    expect(Number(reverted.order.budget)).toBe(0) // GREATEST(5 - 20, 0) = 0, nunca -15
+
+    const persisted = await prisma.order.findUniqueOrThrow({ where: { id: legacyOrder.id } })
+    expect(Number(persisted.budget)).toBe(0)
+
+    await prisma.inventoryMovement.deleteMany({ where: { orderId: legacyOrder.id } })
+    await prisma.orderStatusHistory.deleteMany({ where: { orderId: legacyOrder.id } })
+    await prisma.order.delete({ where: { id: legacyOrder.id } }).catch(() => {})
+  })
 })
 
 describe('getPartsUsedInOrder', () => {
