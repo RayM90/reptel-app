@@ -34,18 +34,10 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Si ya existe un Client con esta cédula y ese Client ya tiene una
-    // cuenta (User) vinculada, no se puede volver a registrar — evita
-    // llegar a Cognito para un caso que de todas formas se va a rechazar.
-    // Si existe el Client pero SIN cuenta (lo registró Recepción en
-    // persona antes de que el cliente se descargara la app), registerUser()
-    // reutiliza ese mismo Client en vez de crear uno duplicado.
-    const existingClient = await prisma.client.findUnique({ where: { idNumber }, include: { user: true } });
-    if (existingClient?.user) {
-      res.status(400).json({ message: 'Ya existe una cuenta para esta cédula. Inicia sesión en su lugar.' });
-      return;
-    }
-
+    // La resolución de qué Client usar (cédula nueva, cédula con cuenta ya
+    // vinculada, o cédula de un walk-in de Recepción que requiere verificar
+    // el teléfono) ocurre dentro de registerUser(), ANTES de tocar Cognito
+    // — así una cédula rechazada nunca deja un usuario huérfano en Cognito.
     const result = await registerUser(email, password, name, lastName, idNumber, role, phone, address);
     res.status(201).json(result);
   } catch (error: any) {

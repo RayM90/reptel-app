@@ -17,6 +17,86 @@ const client = new CognitoIdentityProviderClient({
 const CLIENT_ID = process.env.COGNITO_CLIENT_ID!;
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID!;
 
+/**
+ * Resultado de decidir qué Client debe usar un auto-registro de cliente.
+ * Discriminado por `type` para que el caller no tenga que re-derivar el
+ * estado a partir de excepciones genéricas.
+ */
+export type ClientRegistrationResolution =
+  | { type: 'create' }
+  | { type: 'reuse'; clientId: string }
+  | { type: 'already_registered' }
+  | { type: 'verification_failed' };
+
+/** La cédula ya tiene una cuenta (User) vinculada — no se puede volver a registrar. */
+export class ClientAlreadyRegisteredError extends Error {}
+/** Existe un Client walk-in (sin User) con esa cédula, pero no se pudo verificar identidad. */
+export class ClientVerificationFailedError extends Error {}
+
+/**
+ * Decide qué Client debe usar un auto-registro, dadas la cédula y el
+ * teléfono enviados en el formulario. Solo consulta Prisma — no toca
+ * Cognito — por lo que se puede unit-testear directamente.
+ *
+ * - No existe ningún Client con esa cédula → 'create' (el caller crea uno).
+ * - Existe un Client con User ya vinculado → 'already_registered'.
+ * - Existe un Client SIN User (lo creó Recepción en persona) y el teléfono
+ *   enviado coincide exactamente con Client.phone → 'reuse'.
+ * - Existe ese mismo Client walk-in pero el teléfono no coincide o no se
+ *   envió → 'verification_failed'. La cédula no es secreta en Venezuela y
+ *   Cognito auto-confirma sin verificar el correo, así que sin esta
+ *   verificación cualquiera que conozca la cédula de otra persona podría
+ *   apropiarse de su cuenta y de las órdenes asociadas.
+ */
+export const resolveClientForRegistration = async (
+  idNumber: string,
+  phone?: string
+): Promise<ClientRegistrationResolution> => {
+  const existingClient = await prisma.client.findUnique({
+    where: { idNumber },
+    include: { user: true },
+  });
+
+  if (!existingClient) {
+    return { type: 'create' };
+  }
+
+  if (existingClient.user) {
+    return { type: 'already_registered' };
+  }
+
+  if (phone && phone === existingClient.phone) {
+    return { type: 'reuse', clientId: existingClient.id };
+  }
+
+  return { type: 'verification_failed' };
+};
+
+/**
+ * Arma el payload de `prisma.user.create` para el auto-registro de CLIENT.
+ * Pura (sin I/O) para poder confirmar en un test, sin tocar Prisma ni
+ * Cognito, que lastName/idNumber quedan en el User (antes se perdían:
+ * solo se guardaban en Client) — el mismo patrón que ya usa createStaffUser.
+ */
+export const buildClientUserCreateData = (
+  email: string,
+  name: string,
+  lastName: string,
+  idNumber: string,
+  role: string,
+  phone: string | undefined,
+  clientId: string | undefined,
+) => ({
+  email,
+  name,
+  lastName,
+  idNumber,
+  role: role as any,
+  phone: phone ?? null,
+  password: '',
+  clientId: clientId ?? null,
+});
+
 export const registerUser = async (
   email: string,
   password: string,
@@ -27,6 +107,36 @@ export const registerUser = async (
   phone?: string,
   address?: string,
 ) => {
+  // 0. Resolver ANTES de tocar Cognito: si esto rechaza, no debe quedar
+  //    ningún usuario huérfano en Cognito (SignUp/Confirm/AddToGroup ya
+  //    habrían corrido si este chequeo fuera posterior — ese era el bug).
+  //    Solo aplica a CLIENT: es el único caller de esta función.
+  let clientId: string | undefined = undefined;
+  let createClientAfterCognito = false;
+  if (role === 'CLIENT') {
+    // idNumber también es @unique en User (ver createStaffUser) — evita que
+    // una cédula de personal choque más adelante con un P2002 crudo.
+    const existingUserWithIdNumber = await prisma.user.findUnique({ where: { idNumber } });
+    if (existingUserWithIdNumber) {
+      throw new ClientAlreadyRegisteredError('Ya existe una cuenta para esta cédula. Inicia sesión en su lugar.');
+    }
+
+    const resolution = await resolveClientForRegistration(idNumber, phone);
+    if (resolution.type === 'already_registered') {
+      throw new ClientAlreadyRegisteredError('Ya existe una cuenta para esta cédula. Inicia sesión en su lugar.');
+    }
+    if (resolution.type === 'verification_failed') {
+      throw new ClientVerificationFailedError(
+        'No pudimos verificar tu identidad para esta cédula. Visita Recepción para vincular tu cuenta.'
+      );
+    }
+    if (resolution.type === 'reuse') {
+      clientId = resolution.clientId;
+    } else {
+      createClientAfterCognito = true;
+    }
+  }
+
   // 1. Registrar en Cognito
   await client.send(
     new SignUpCommand({
@@ -57,40 +167,27 @@ export const registerUser = async (
     })
   );
 
-  // 4. Si es CLIENT: reutilizar el Client existente por cédula (lo pudo
-  //    haber creado Recepción antes, sin cuenta todavía) en vez de crear
-  //    una fila duplicada — el controller ya garantizó que si existe, no
-  //    tiene un User vinculado.
-  let clientId: string | undefined = undefined;
-  if (role === 'CLIENT') {
-    const existingClient = await prisma.client.findUnique({ where: { idNumber } });
-    if (existingClient) {
-      clientId = existingClient.id;
-    } else {
-      const newClient = await prisma.client.create({
-        data: {
-          name,
-          lastName,
-          idNumber,
-          phone: phone ?? '',
-          email,
-          addressStreet: address ?? null,
-        },
-      });
-      clientId = newClient.id;
-    }
+  // 4. Si es CLIENT y no se reutilizó un Client existente (ver paso 0),
+  //    crearlo ahora.
+  if (createClientAfterCognito) {
+    const newClient = await prisma.client.create({
+      data: {
+        name,
+        lastName,
+        idNumber,
+        phone: phone ?? '',
+        email,
+        addressStreet: address ?? null,
+      },
+    });
+    clientId = newClient.id;
   }
 
-  // 5. Crear User vinculado al Client si aplica
+  // 5. Crear User vinculado al Client si aplica. lastName/idNumber se
+  //    guardan siempre — el único caller de registerUser es el endpoint de
+  //    auto-registro de CLIENT (auth.controller.ts ya restringe el role).
   const user = await prisma.user.create({
-    data: {
-      email,
-      name,
-      role: role as any,
-      phone: phone ?? null,
-      password: '',
-      clientId: clientId ?? null,
-    },
+    data: buildClientUserCreateData(email, name, lastName, idNumber, role, phone, clientId),
   });
 
   return { message: 'Usuario registrado exitosamente', userId: user.id };
