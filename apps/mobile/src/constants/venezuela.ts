@@ -7,6 +7,12 @@ export const PHONE_PREFIXES = ['0412', '0414', '0416', '0424', '0426'] as const
 
 export const PHONE_DIGITS_LENGTH = 7
 
+// V (persona natural venezolana) o E (persona natural extranjera) — J/G
+// (jurídico/gobierno) no aplican a un cliente que se auto-registra.
+export const ID_NUMBER_PREFIXES = ['V', 'E'] as const
+
+export const ID_NUMBER_DIGITS_MAX_LENGTH = 9
+
 export interface Bank {
   code: string
   name: string

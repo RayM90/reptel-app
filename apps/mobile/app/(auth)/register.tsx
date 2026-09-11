@@ -20,6 +20,7 @@ import { Feather } from "@expo/vector-icons";
 import { useToastStore } from "../../src/store/toast.store";
 import { api } from "../../src/services/api";
 import PhoneInput from "../../src/components/PhoneInput";
+import IdNumberInput from "../../src/components/IdNumberInput";
 
 const { width } = Dimensions.get("window");
 
@@ -45,6 +46,8 @@ const traducirErrorCognito = (mensaje: string): string => {
 
 export default function RegisterScreen() {
   const [nombre,        setNombre]        = useState("");
+  const [apellido,      setApellido]      = useState("");
+  const [cedula,        setCedula]        = useState("");
   const [correo,        setCorreo]        = useState("");
   const [telefono,      setTelefono]      = useState("");
   const [direccion,     setDireccion]     = useState("");
@@ -56,8 +59,12 @@ export default function RegisterScreen() {
   const showToast = useToastStore((state) => state.showToast);
 
   const handleRegister = async () => {
-    if (!nombre || !correo || !telefono || !direccion || !password || !confirmar) {
+    if (!nombre || !apellido || !cedula || !correo || !telefono || !direccion || !password || !confirmar) {
       showToast("Por favor completa todos los campos", "error");
+      return;
+    }
+    if (!/^[VE]-\d{7,9}$/.test(cedula)) {
+      showToast("La cédula debe tener el formato V-12345678 o E-12345678", "error");
       return;
     }
     if (password !== confirmar) {
@@ -73,6 +80,8 @@ export default function RegisterScreen() {
       setLoading(true);
       await api.post("/api/auth/register", {
         name:     nombre,
+        lastName: apellido,
+        idNumber: cedula,
         email:    correo,
         phone:    telefono,
         address:  direccion,
@@ -129,16 +138,30 @@ export default function RegisterScreen() {
             {/* Formulario */}
             <View style={styles.form}>
 
-              <Text style={styles.label}>Nombre completo</Text>
+              <Text style={styles.label}>Nombre</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Juan Pérez"
+                placeholder="Juan"
                 placeholderTextColor="#9ca3af"
                 value={nombre}
                 onChangeText={setNombre}
                 autoCapitalize="words"
                 returnKeyType="next"
               />
+
+              <Text style={styles.label}>Apellido</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Pérez"
+                placeholderTextColor="#9ca3af"
+                value={apellido}
+                onChangeText={setApellido}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+
+              <Text style={styles.label}>Cédula</Text>
+              <IdNumberInput value={cedula} onChange={setCedula} />
 
               <Text style={styles.label}>Correo electrónico</Text>
               <TextInput
