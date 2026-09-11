@@ -105,7 +105,11 @@ export const registerUser = async (
   idNumber: string,
   role: string,
   phone?: string,
-  address?: string,
+  addressState?: string,
+  addressCity?: string,
+  addressNeighborhood?: string,
+  addressStreet?: string,
+  addressBuilding?: string,
 ) => {
   // 0. Resolver ANTES de tocar Cognito: si esto rechaza, no debe quedar
   //    ningún usuario huérfano en Cognito (SignUp/Confirm/AddToGroup ya
@@ -177,7 +181,11 @@ export const registerUser = async (
         idNumber,
         phone: phone ?? '',
         email,
-        addressStreet: address ?? null,
+        addressState: addressState ?? null,
+        addressCity: addressCity ?? null,
+        addressNeighborhood: addressNeighborhood ?? null,
+        addressStreet: addressStreet ?? null,
+        addressBuilding: addressBuilding ?? null,
       },
     });
     clientId = newClient.id;

@@ -8,7 +8,7 @@ import { isValidVenezuelanPhone, isValidVenezuelanIdNumber } from '../../lib/ven
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, name, lastName, idNumber, role, phone, address } = req.body;
+    const { email, password, name, lastName, idNumber, role, phone, addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding } = req.body;
 
     if (!email || !password || !name || !lastName || !idNumber || !role) {
       res.status(400).json({ message: 'Todos los campos son requeridos' });
@@ -38,7 +38,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     // vinculada, o cédula de un walk-in de Recepción que requiere verificar
     // el teléfono) ocurre dentro de registerUser(), ANTES de tocar Cognito
     // — así una cédula rechazada nunca deja un usuario huérfano en Cognito.
-    const result = await registerUser(email, password, name, lastName, idNumber, role, phone, address);
+    const result = await registerUser(email, password, name, lastName, idNumber, role, phone, addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding);
     res.status(201).json(result);
   } catch (error: any) {
     res.status(400).json({ message: translateCognitoError(error) || 'Error al registrar usuario' });
