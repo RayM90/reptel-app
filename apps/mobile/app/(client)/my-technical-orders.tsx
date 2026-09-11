@@ -52,16 +52,19 @@ interface TechOrder {
   problem: string
   observations?: string
   diagnosis?: string | null
-  budget?: number | null
+  // Decimal de Prisma serializa a string en JSON — no number. Cada call site
+  // ya envuelve en Number(...) antes de operar (ver budget/deliveryAmount/
+  // revisionAmount/technicianCommission más abajo en este archivo).
+  budget?: string | null
   budgetApproved?: boolean | null
-  deliveryAmount?: number | null
-  revisionAmount?: number | null
+  deliveryAmount?: string | null
+  revisionAmount?: string | null
   // Viene del backend como enum de Prisma (MOBILE_PAYMENT/TRANSFER/BINANCE),
   // no como los literales del formulario — se traduce con BACKEND_TO_FRONTEND_METHOD.
   advancePaymentMethod?: string | null
   advancePaymentSubmissions?: {
     id: string
-    amount: number
+    amount: string
     status: 'PENDING' | 'CONFIRMED' | 'REJECTED'
     rejectionReason?: string | null
     createdAt: string
@@ -69,7 +72,7 @@ interface TechOrder {
   finalPaymentDetails?: Record<string, string> | null
   finalPaymentConfirmed?: boolean
   finalPaymentRejectionReason?: string | null
-  technicianCommission?: number | null
+  technicianCommission?: string | null
   receivedAt: string
   device: {
     type: string
