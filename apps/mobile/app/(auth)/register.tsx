@@ -50,7 +50,11 @@ export default function RegisterScreen() {
   const [cedula,        setCedula]        = useState("");
   const [correo,        setCorreo]        = useState("");
   const [telefono,      setTelefono]      = useState("");
-  const [direccion,     setDireccion]     = useState("");
+  const [estado,        setEstado]        = useState("");
+  const [municipio,     setMunicipio]     = useState("");
+  const [barrio,        setBarrio]        = useState("");
+  const [calle,         setCalle]         = useState("");
+  const [edificio,      setEdificio]      = useState("");
   const [password,      setPassword]      = useState("");
   const [confirmar,     setConfirmar]     = useState("");
   const [loading,       setLoading]       = useState(false);
@@ -59,7 +63,7 @@ export default function RegisterScreen() {
   const showToast = useToastStore((state) => state.showToast);
 
   const handleRegister = async () => {
-    if (!nombre || !apellido || !cedula || !correo || !telefono || !direccion || !password || !confirmar) {
+    if (!nombre || !apellido || !cedula || !correo || !telefono || !estado || !municipio || !barrio || !calle || !edificio || !password || !confirmar) {
       showToast("Por favor completa todos los campos", "error");
       return;
     }
@@ -79,14 +83,18 @@ export default function RegisterScreen() {
     try {
       setLoading(true);
       await api.post("/api/auth/register", {
-        name:     nombre,
-        lastName: apellido,
-        idNumber: cedula,
-        email:    correo,
-        phone:    telefono,
-        address:  direccion,
+        name:                nombre,
+        lastName:            apellido,
+        idNumber:            cedula,
+        email:               correo,
+        phone:               telefono,
+        addressState:        estado,
+        addressCity:         municipio,
+        addressNeighborhood: barrio,
+        addressStreet:       calle,
+        addressBuilding:     edificio,
         password,
-        role:     "CLIENT",
+        role:                "CLIENT",
       });
 
       // El Alert original solo tenía un botón ("Iniciar sesión") que navegaba
@@ -138,6 +146,8 @@ export default function RegisterScreen() {
             {/* Formulario */}
             <View style={styles.form}>
 
+              <Text style={styles.sectionTitle}>Datos personales</Text>
+
               <Text style={styles.label}>Nombre</Text>
               <TextInput
                 style={styles.input}
@@ -163,6 +173,8 @@ export default function RegisterScreen() {
               <Text style={styles.label}>Cédula</Text>
               <IdNumberInput value={cedula} onChange={setCedula} />
 
+              <Text style={styles.sectionTitle}>Contacto</Text>
+
               <Text style={styles.label}>Correo electrónico</Text>
               <TextInput
                 style={styles.input}
@@ -178,17 +190,64 @@ export default function RegisterScreen() {
               <Text style={styles.label}>Teléfono</Text>
               <PhoneInput value={telefono} onChange={setTelefono} />
 
-              <Text style={styles.label}>Dirección completa</Text>
+              <Text style={styles.sectionTitle}>Dirección</Text>
+
+              <Text style={styles.label}>Estado</Text>
               <TextInput
-                style={[styles.input, styles.inputMultiline]}
-                placeholder="Calle, Urbanización, Ciudad, Estado"
+                style={styles.input}
+                placeholder="Ej. Miranda"
                 placeholderTextColor="#9ca3af"
-                value={direccion}
-                onChangeText={setDireccion}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
+                value={estado}
+                onChangeText={setEstado}
+                autoCapitalize="words"
+                returnKeyType="next"
               />
+
+              <Text style={styles.label}>Municipio</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej. Sucre"
+                placeholderTextColor="#9ca3af"
+                value={municipio}
+                onChangeText={setMunicipio}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+
+              <Text style={styles.label}>Barrio/Urb.</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej. Los Dos Caminos"
+                placeholderTextColor="#9ca3af"
+                value={barrio}
+                onChangeText={setBarrio}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+
+              <Text style={styles.label}>Calle</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej. Calle Rondón"
+                placeholderTextColor="#9ca3af"
+                value={calle}
+                onChangeText={setCalle}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+
+              <Text style={styles.label}>Edificio/Casa</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej. Casa 12 / Edif. Roraima, piso 3"
+                placeholderTextColor="#9ca3af"
+                value={edificio}
+                onChangeText={setEdificio}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+
+              <Text style={styles.sectionTitle}>Contraseña</Text>
 
               {/* Contraseña con ojito */}
               <Text style={styles.label}>Contraseña</Text>
@@ -323,6 +382,13 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#1a1a6e",
+    marginTop: 20,
+    marginBottom: 4,
+  },
   label: {
     fontSize: 13,
     fontWeight: "600",
@@ -338,10 +404,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#1a1a6e",
     backgroundColor: "#f0f4ff",
-  },
-  inputMultiline: {
-    height: 80,
-    paddingTop: 12,
   },
   inputRow: {
     flexDirection: "row",
