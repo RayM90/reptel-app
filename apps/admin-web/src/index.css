@@ -431,6 +431,11 @@ table.styled-table--sticky-actions th:last-child {
   color: var(--color-secondary);
 }
 
+.badge-warning {
+  background: #fff3e0;
+  color: #b45309;
+}
+
 /* ─── Fila de historial (comisiones) ─────── */
 
 .history-row {

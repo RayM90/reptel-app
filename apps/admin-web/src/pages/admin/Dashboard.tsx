@@ -5,7 +5,7 @@ import { api } from '../../services/api'
 import { useToastStore } from '../../store/toast.store'
 import { useConfirm } from '../../hooks/useConfirm'
 import { POLL_INTERVAL_MS } from '../../config/constants'
-import { getStatusBadge, badgeClassName } from '../../utils/statusBadge'
+import { getStatusBadge, badgeClassName, hasPendingPayment } from '../../utils/statusBadge'
 
 interface Order {
   id: string
@@ -397,6 +397,11 @@ export default function Dashboard() {
                           <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
                             {getStatusBadge('order', order.status).label}
                           </span>
+                          {hasPendingPayment(order) && (
+                            <span className={badgeClassName('warning')} style={{ marginLeft: 6 }}>
+                              💰 Pago pendiente
+                            </span>
+                          )}
                         </td>
                         <td data-label="">
                           <button className="btn btn-outline">{isExpanded ? '▲ Cerrar' : '▼ Detalles'}</button>

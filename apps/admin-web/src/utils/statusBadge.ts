@@ -1,4 +1,4 @@
-export type BadgeVariant = 'success' | 'danger' | 'progress' | 'neutral'
+export type BadgeVariant = 'success' | 'danger' | 'progress' | 'warning' | 'neutral'
 
 interface StatusBadgeInfo {
   label: string
@@ -38,4 +38,19 @@ export function getStatusBadge(domain: StatusDomain, status: string): StatusBadg
 
 export function badgeClassName(variant: BadgeVariant): string {
   return variant === 'neutral' ? 'badge' : `badge badge-${variant}`
+}
+
+// Una orden "necesita tu atención" cuando tiene un anticipo reportado sin
+// confirmar, o un pago final reportado (mientras la orden sigue en
+// `activeOrders`, un `finalPaymentDetails` no nulo SIEMPRE significa
+// "esperando aprobación" — al aprobarlo el status pasa a DELIVERED y la
+// orden sale de la lista; al rechazarlo, el backend limpia
+// `finalPaymentDetails` a null. No hace falta consultar ningún otro campo.
+export function hasPendingPayment(order: {
+  advancePaymentSubmissions: { status: string }[]
+  finalPaymentDetails: unknown
+}): boolean {
+  const pendingAdvance = order.advancePaymentSubmissions.some((s) => s.status === 'PENDING')
+  const pendingFinal = order.finalPaymentDetails != null
+  return pendingAdvance || pendingFinal
 }
