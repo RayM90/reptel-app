@@ -6,9 +6,11 @@ import { api } from "../services/api";
 
 type Role =
   | "ADMIN"
+  | "CASHIER"
+  | "TECHNICIAN"
   | "TECHNICIAN_DELIVERY"
-  | "DELIVERY"
-  | "CLIENT";
+  | "CLIENT"
+  | "MANAGER";
 
 interface User {
   id: string;
