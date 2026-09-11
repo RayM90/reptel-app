@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
@@ -6,106 +6,8 @@ import { useToastStore } from '../../store/toast.store'
 import { useConfirm } from '../../hooks/useConfirm'
 import { POLL_INTERVAL_MS } from '../../config/constants'
 import { getStatusBadge, badgeClassName, hasPendingPayment } from '../../utils/statusBadge'
-
-interface Order {
-  id: string
-  orderNumber: string
-  status: string
-  problem: string
-  diagnosis: string | null
-  budget: string | null
-  deliveredAt: string | null
-  client: { name: string; lastName: string }
-  technician: { id: string; name: string } | null
-  deliveryAmount: string | null
-  revisionAmount: string | null
-  advancePaymentSubmissions: PaymentSubmission[]
-  finalPaymentDetails: Record<string, string> | null
-  technicianCommission: string | null
-}
-
-interface PaymentSubmission {
-  id: string
-  amount: string
-  paymentDetails: Record<string, string>
-  status: 'PENDING' | 'CONFIRMED' | 'REJECTED'
-  rejectionReason: string | null
-  createdAt: string
-}
-
-function PaymentDetailsView({ details }: { details: Record<string, string> | null }) {
-  if (!details) return <span>—</span>
-  return (
-    <div className="form-hint">
-      {Object.entries(details).map(([key, value]) => (
-        <div key={key}>
-          <strong>{key}:</strong> {value}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function PaymentSubmissionsView({
-  submissions,
-  total,
-  onApprove,
-  onReject,
-  pendingIds,
-}: {
-  submissions: PaymentSubmission[]
-  total: string
-  onApprove: (submissionId: string, amount: string) => void
-  onReject: (submissionId: string, amount: string) => void
-  pendingIds: Set<string>
-}) {
-  if (submissions.length === 0) return <span>—</span>
-
-  const confirmedTotal = submissions
-    .filter((s) => s.status === 'CONFIRMED')
-    .reduce((sum, s) => sum + Number(s.amount), 0)
-  const remaining = Number(total) - confirmedTotal
-
-  return (
-    <div>
-      <p className="form-hint" style={{ marginBottom: 8 }}>
-        <strong>Recibido: ${confirmedTotal.toFixed(2)} de ${Number(total).toFixed(2)}</strong>
-        {remaining > 0.009 && <span> · Restante: ${remaining.toFixed(2)}</span>}
-      </p>
-      {submissions.map((s) => (
-        <div
-          key={s.id}
-          style={{
-            marginBottom: 8,
-            paddingBottom: 8,
-            borderBottom: '1px solid var(--color-border)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span className={badgeClassName(getStatusBadge('partialPayment', s.status).variant)}>
-              {getStatusBadge('partialPayment', s.status).label}
-            </span>
-            <strong>${Number(s.amount).toFixed(2)}</strong>
-          </div>
-          <PaymentDetailsView details={s.paymentDetails} />
-          {s.status === 'REJECTED' && s.rejectionReason && (
-            <p className="form-hint">Motivo: {s.rejectionReason}</p>
-          )}
-          {s.status === 'PENDING' && (
-            <div style={{ marginTop: 6 }}>
-              <button className="btn btn-primary" disabled={pendingIds.has(s.id)} onClick={() => onApprove(s.id, s.amount)}>
-                Aprobar abono
-              </button>{' '}
-              <button className="btn btn-danger" disabled={pendingIds.has(s.id)} onClick={() => onReject(s.id, s.amount)}>
-                Rechazar
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
+import OrderDetailModal from '../../components/OrderDetailModal'
+import { isIntakePendingPickup, type Order } from './dashboard.types'
 
 // Estilo del resaltado para filas nuevas — mismo criterio en los 3 paneles internos.
 const NEW_ROW_STYLE: CSSProperties = {
@@ -125,7 +27,7 @@ export default function Dashboard() {
   const [error, setError] = useState('')
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set())
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
   const showToast = useToastStore((state) => state.showToast)
   const confirmDialog = useConfirm()
 
@@ -175,11 +77,6 @@ export default function Dashboard() {
       if (!isPoll) setLoading(false)
     }
   }
-
-  // Self-service + delivery: RECEIVED solo significa "pago confirmado", no que el
-  // técnico ya fue a buscar el equipo. Hasta que haya diagnóstico, el recibo de
-  // intake se etiqueta como "anticipo" en vez de "recepción".
-  const isIntakePendingPickup = (order: Order) => order.deliveryAmount != null && !order.diagnosis
 
   const downloadReceipt = async (order: Order, type: 'intake' | 'final') => {
     try {
@@ -329,6 +226,12 @@ export default function Dashboard() {
     (o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
   )
 
+  // Deriva del array `orders` en cada render — el modal se actualiza solo con
+  // cada ciclo de polling. Si la orden sale de `activeOrders` (se completó, se
+  // canceló) `selectedOrder` pasa a `null` y el modal deja de renderizarse
+  // sin necesitar un efecto separado que lo "cierre".
+  const selectedOrder = activeOrders.find((o) => o.id === selectedOrderId) ?? null
+
   // Total de presupuestos en curso — servicios activos aún no completados,
   // por eso no tienen comisión todavía (esa solo se calcula al entregar).
   const activeBudgetTotal = activeOrders.reduce(
@@ -372,107 +275,48 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {activeOrders.map((order) => {
-                  const isExpanded = expandedId === order.id
-                  return (
-                    <Fragment key={order.id}>
-                      <tr
-                        key={order.id}
-                        onClick={() => {
-                          setExpandedId((prev) => (prev === order.id ? null : order.id))
+                {activeOrders.map((order) => (
+                  <tr
+                    key={order.id}
+                    onClick={() => {
+                      setSelectedOrderId(order.id)
+                      clearNewOrder(order.id)
+                    }}
+                    style={newOrderIds.has(order.id) ? NEW_ROW_STYLE : undefined}
+                  >
+                    <td data-label="Orden">
+                      {order.orderNumber}
+                      {newOrderIds.has(order.id) && (
+                        <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>
+                      )}
+                    </td>
+                    <td data-label="Origen">{order.deliveryAmount != null ? '📱 App' : '🏢 Recepción'}</td>
+                    <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
+                    <td data-label="Técnico">{order.technician?.name || 'Sin asignar'}</td>
+                    <td data-label="Estado">
+                      <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
+                        {getStatusBadge('order', order.status).label}
+                      </span>
+                      {hasPendingPayment(order) && (
+                        <span className={badgeClassName('warning')} style={{ marginLeft: 6 }}>
+                          💰 Pago pendiente
+                        </span>
+                      )}
+                    </td>
+                    <td data-label="">
+                      <button
+                        className="btn btn-outline"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedOrderId(order.id)
                           clearNewOrder(order.id)
                         }}
-                        style={newOrderIds.has(order.id) ? NEW_ROW_STYLE : undefined}
                       >
-                        <td data-label="Orden">
-                          {order.orderNumber}
-                          {newOrderIds.has(order.id) && (
-                            <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>
-                          )}
-                        </td>
-                        <td data-label="Origen">{order.deliveryAmount != null ? '📱 App' : '🏢 Recepción'}</td>
-                        <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
-                        <td data-label="Técnico">{order.technician?.name || 'Sin asignar'}</td>
-                        <td data-label="Estado">
-                          <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
-                            {getStatusBadge('order', order.status).label}
-                          </span>
-                          {hasPendingPayment(order) && (
-                            <span className={badgeClassName('warning')} style={{ marginLeft: 6 }}>
-                              💰 Pago pendiente
-                            </span>
-                          )}
-                        </td>
-                        <td data-label="">
-                          <button className="btn btn-outline">{isExpanded ? '▲ Cerrar' : '▼ Detalles'}</button>
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr key={`${order.id}-detail`}>
-                          <td colSpan={6}>
-                            <p><strong>Problema:</strong> {order.problem}</p>
-                            <p><strong>Presupuesto:</strong> {order.budget ? `$${order.budget}` : '—'}</p>
-
-                            <div className="card">
-                              <h4>Pago anticipado</h4>
-                              <PaymentSubmissionsView
-                                submissions={order.advancePaymentSubmissions ?? []}
-                                total={String(
-                                  order.deliveryAmount != null
-                                    ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? 15)
-                                    : Number(order.revisionAmount ?? 15)
-                                )}
-                                onApprove={handleApproveAdvanceInstallment}
-                                onReject={handleRejectAdvanceInstallment}
-                                pendingIds={pendingIds}
-                              />
-                            </div>
-
-                            <div className="card">
-                              <h4>Pago final</h4>
-                              <PaymentDetailsView details={order.finalPaymentDetails} />
-                            </div>
-
-                            <p>
-                              <strong>Recibo:</strong>{' '}
-                              {order.status === 'PENDING_PAYMENT' ? (
-                                '—'
-                              ) : (
-                                <button className="btn btn-outline" onClick={() => downloadReceipt(order, 'intake')}>
-                                  📄 {isIntakePendingPickup(order) ? 'Anticipo' : 'Recepción'}
-                                </button>
-                              )}
-                            </p>
-
-                            <p>
-                              <strong>Acciones:</strong>{' '}
-                              {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') && order.budget != null && Number(order.budget) === 0 ? (
-                                <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => handleCloseZeroBudgetOrder(order)}>
-                                  Marcar como entregada
-                                </button>
-                              ) : order.status === 'READY' ? (
-                                <>
-                                  <button
-                                    className="btn btn-primary"
-                                    onClick={() => handleApproveFinalPayment(order)}
-                                    disabled={!order.finalPaymentDetails || pendingIds.has(order.id)}
-                                  >
-                                    Aprobar pago final
-                                  </button>{' '}
-                                  <button className="btn btn-danger" disabled={pendingIds.has(order.id)} onClick={() => handleRejectFinalPayment(order)}>
-                                    Rechazar
-                                  </button>
-                                </>
-                              ) : (
-                                '—'
-                              )}
-                            </p>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  )
-                })}
+                        Detalles
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
               <tfoot>
                 <tr>
@@ -484,6 +328,20 @@ export default function Dashboard() {
           </div>
         )}
       </section>
+
+      {selectedOrder && (
+        <OrderDetailModal
+          order={selectedOrder}
+          pendingIds={pendingIds}
+          onClose={() => setSelectedOrderId(null)}
+          onApproveAdvanceInstallment={handleApproveAdvanceInstallment}
+          onRejectAdvanceInstallment={handleRejectAdvanceInstallment}
+          onApproveFinalPayment={handleApproveFinalPayment}
+          onRejectFinalPayment={handleRejectFinalPayment}
+          onCloseZeroBudgetOrder={handleCloseZeroBudgetOrder}
+          onDownloadReceipt={downloadReceipt}
+        />
+      )}
     </div>
   )
 }
