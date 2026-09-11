@@ -414,6 +414,19 @@ table.styled-table--sticky-actions th:last-child {
   box-shadow: 0 8px 24px rgba(35, 38, 47, 0.2);
 }
 
+.modal-box-lg {
+  max-width: 640px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
 /* ─── Variantes de badge por estado ──────── */
 
 .badge-success {
