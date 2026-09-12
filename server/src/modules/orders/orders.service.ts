@@ -867,6 +867,93 @@ export const confirmFinalPayment = async (
 }
 
 // ─────────────────────────────────────────────
+// ADMIN — Marcar la entrega física del equipo ya reparado y pagado.
+// Solo aplica a órdenes en PAID_PENDING_DELIVERY (pago ya aprobado en
+// confirmFinalPayment) — la comisión del técnico ya se calculó ahí, este
+// paso solo cierra el ciclo físico.
+// ─────────────────────────────────────────────
+
+export const markOrderDelivered = async (id: string) => {
+  const order = await prisma.order.findUnique({
+    where: { id },
+  })
+
+  if (!order) {
+    throw new Error('Orden no encontrada')
+  }
+
+  if (order.status !== 'PAID_PENDING_DELIVERY') {
+    throw new Error('Esta acción solo aplica a órdenes pagadas, pendientes de entrega')
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: { id },
+    data: {
+      status: 'DELIVERED',
+      deliveredAt: new Date(),
+      statusHistory: {
+        create: {
+          status: 'DELIVERED',
+          comment: 'Equipo entregado al cliente.',
+        },
+      },
+    },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+
+  return updatedOrder
+}
+
+// ─────────────────────────────────────────────
+// ADMIN — Marcar que el cliente retiró su equipo sin reparar, tras rechazar
+// el presupuesto. Solo aplica a órdenes en REJECTED_PENDING_PICKUP — la
+// comisión del técnico ya se calculó en rejectBudget, este paso solo cierra
+// el ciclo físico. Reutiliza `deliveredAt` como "fecha en que el equipo
+// salió del taller", reparado o no.
+// ─────────────────────────────────────────────
+
+export const markOrderPickedUpUnrepaired = async (id: string) => {
+  const order = await prisma.order.findUnique({
+    where: { id },
+  })
+
+  if (!order) {
+    throw new Error('Orden no encontrada')
+  }
+
+  if (order.status !== 'REJECTED_PENDING_PICKUP') {
+    throw new Error('Esta acción solo aplica a órdenes con presupuesto rechazado, pendientes de retiro')
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: { id },
+    data: {
+      status: 'CANCELLED',
+      deliveredAt: new Date(),
+      statusHistory: {
+        create: {
+          status: 'CANCELLED',
+          comment: 'Equipo retirado por el cliente sin reparar.',
+        },
+      },
+    },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+
+  return updatedOrder
+}
+
+// ─────────────────────────────────────────────
 // ADMIN — Cerrar una orden con presupuesto $0 (diagnóstico sin costo)
 // No hay saldo que el cliente deba pagar ni aprobar, así que este cierre
 // no pasa por confirmFinalPayment. La comisión del técnico, en este caso,

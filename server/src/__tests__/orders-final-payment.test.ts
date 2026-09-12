@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma'
-import { confirmFinalPayment } from '../modules/orders/orders.service'
+import { confirmFinalPayment, markOrderDelivered, markOrderPickedUpUnrepaired } from '../modules/orders/orders.service'
 
 let client: { id: string }
 let technician: { id: string }
@@ -73,5 +73,39 @@ describe('orders.service — confirmFinalPayment', () => {
     expect(result.finalPaymentDetails).toBeNull()
     expect(result.finalPaymentConfirmed).toBe(false)
     expect(result.finalPaymentRejectionReason).toBe('Monto incorrecto')
+  })
+})
+
+describe('orders.service — markOrderDelivered', () => {
+  it('desde PAID_PENDING_DELIVERY: pasa a DELIVERED y setea deliveredAt', async () => {
+    const order = await makeOrder({ status: 'PAID_PENDING_DELIVERY' })
+    const result = await markOrderDelivered(order.id)
+
+    expect(result.status).toBe('DELIVERED')
+    expect(result.deliveredAt).not.toBeNull()
+  })
+
+  it('lanza error si el status no es PAID_PENDING_DELIVERY', async () => {
+    const order = await makeOrder({ status: 'READY' })
+    await expect(markOrderDelivered(order.id)).rejects.toThrow(
+      'Esta acción solo aplica a órdenes pagadas, pendientes de entrega'
+    )
+  })
+})
+
+describe('orders.service — markOrderPickedUpUnrepaired', () => {
+  it('desde REJECTED_PENDING_PICKUP: pasa a CANCELLED y setea deliveredAt', async () => {
+    const order = await makeOrder({ status: 'REJECTED_PENDING_PICKUP' })
+    const result = await markOrderPickedUpUnrepaired(order.id)
+
+    expect(result.status).toBe('CANCELLED')
+    expect(result.deliveredAt).not.toBeNull()
+  })
+
+  it('lanza error si el status no es REJECTED_PENDING_PICKUP', async () => {
+    const order = await makeOrder({ status: 'READY' })
+    await expect(markOrderPickedUpUnrepaired(order.id)).rejects.toThrow(
+      'Esta acción solo aplica a órdenes con presupuesto rechazado, pendientes de retiro'
+    )
   })
 })

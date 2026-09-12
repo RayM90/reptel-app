@@ -80,6 +80,8 @@ router.post('/:id/confirm-final-payment', authenticate, authorize('ADMIN'), orde
 
 // ADMIN cierra una orden con presupuesto $0 (sin pago final que aprobar)
 router.post('/:id/close-zero-budget', authenticate, authorize('ADMIN'), ordersController.closeZeroBudgetOrder)
+router.post('/:id/mark-delivered', authenticate, authorize('ADMIN'), ordersController.markDelivered)
+router.post('/:id/mark-picked-up-unrepaired', authenticate, authorize('ADMIN'), ordersController.markPickedUpUnrepaired)
 
 // Repuestos de inventario usados en la orden — solo el técnico asignado
 // (la validación fina "es tu orden" vive dentro del service)
