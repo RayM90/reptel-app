@@ -63,6 +63,7 @@ interface OrderForReceipt {
   advancePaymentMethod: string | null
   finalPaymentDetails: Record<string, string> | null
   finalPaymentConfirmedAt: Date | string | null
+  budgetAdvanceConfirmedAt: Date | string | null
   budgetRejectionReason: string | null
   technicianCommission: unknown
   receivedAt: Date | string | null
@@ -223,6 +224,32 @@ export const generateClosureReceipt = (order: OrderForReceipt): PDFKit.PDFDocume
   doc.moveDown(0.5)
 
   addRow(doc, 'Fecha de retiro', formatDate(order.deliveredAt))
+
+  doc.end()
+  return doc
+}
+
+// Recibo de Anticipo de Presupuesto — se genera cuando se completa el 50%
+// del presupuesto (kind BUDGET en AdvancePaymentSubmission), que ahora es
+// lo que autoriza al técnico a reparar. Mismo desglose de cobro (vía
+// addCostBreakdown) que el recibo de pago/entrega, fechado con
+// budgetAdvanceConfirmedAt.
+export const generateBudgetAdvanceReceipt = (order: OrderForReceipt): PDFKit.PDFDocument => {
+  const doc = new PDFDocument({ margin: 50 })
+
+  addHeader(doc, 'Recibo de Anticipo de Presupuesto', order.orderNumber)
+
+  addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
+  addRow(doc, 'Técnico asignado', order.technician?.name ?? 'Sin asignar')
+  doc.moveDown(0.5)
+
+  addRow(doc, 'Falla reportada', order.problem)
+  addRow(doc, 'Diagnóstico', order.diagnosis ?? '—')
+  doc.moveDown(0.5)
+
+  addCostBreakdown(doc, order, 'Forma de pago')
+
+  addRow(doc, 'Fecha de anticipo', formatDate(order.budgetAdvanceConfirmedAt))
 
   doc.end()
   return doc

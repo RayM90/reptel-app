@@ -63,6 +63,7 @@ router.get('/:id/receipt/intake', authenticate, receiptsController.downloadIntak
 router.get('/:id/receipt/final', authenticate, receiptsController.downloadFinalReceipt)
 router.get('/:id/receipt/payment', authenticate, receiptsController.downloadPaymentReceipt)
 router.get('/:id/receipt/closure', authenticate, receiptsController.downloadClosureReceipt)
+router.get('/:id/receipt/budget-advance', authenticate, receiptsController.downloadBudgetAdvanceReceipt)
 
 // Crear una nueva orden (uso interno/admin — no cliente) — ADMIN
 router.post('/', authenticate, authorize('ADMIN'), ordersController.createOrder)
