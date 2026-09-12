@@ -86,9 +86,10 @@ export const ordersAPI = {
     submitFinalPayment: (id: string, paymentDetails: Record<string, string>) =>
     api.post(`/api/orders/${id}/final-payment`, { paymentDetails }),
 
-  // Cliente decide sobre el presupuesto tras el diagnóstico del técnico
-  approveBudget: (id: string) =>
-    api.post(`/api/orders/${id}/approve-budget`),
+  // Cliente paga el anticipo del presupuesto (50%) — pagar ES aprobar,
+  // ya no existe una aprobación gratis por separado.
+  submitBudgetPaymentInstallment: (id: string, paymentDetails: Record<string, string>, amount: number) =>
+    api.post(`/api/orders/${id}/budget-payment-installment`, { paymentDetails, amount }),
 
   rejectBudget: (id: string, reason: string) =>
     api.post(`/api/orders/${id}/reject-budget`, { reason }),

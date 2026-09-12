@@ -209,26 +209,6 @@ export default function MyTechnicalOrdersScreen() {
     })
   }
 
-  const handleApproveBudget = async (order: TechOrder) => {
-    const confirmed = await confirmDialog({
-      title: 'Aprobar presupuesto',
-      message: `¿Confirmas que aceptas el presupuesto de $${Number(order.budget).toFixed(2)} para reparar tu equipo?`,
-      confirmLabel: 'Aprobar',
-    })
-    if (!confirmed) return
-
-    setActionLoading((prev) => ({ ...prev, [order.id]: true }))
-    try {
-      await ordersAPI.approveBudget(order.id)
-      showToast('✅ Presupuesto aprobado. El técnico continuará con la reparación.', 'success')
-      fetchOrders()
-    } catch (error: any) {
-      showToast(error?.response?.data?.message || 'Error al aprobar el presupuesto', 'error')
-    } finally {
-      setActionLoading((prev) => ({ ...prev, [order.id]: false }))
-    }
-  }
-
   const handleRejectBudget = async (order: TechOrder) => {
     const selected = rejectReason[order.id]
     if (!selected) {
@@ -513,11 +493,21 @@ export default function MyTechnicalOrdersScreen() {
                           <Text style={styles.decisionTitle}>¿Qué decides con este presupuesto?</Text>
 
                           <TouchableOpacity
-                            style={[styles.approveBtn, actionLoading[order.id] && styles.actionBtnDisabled]}
-                            onPress={(e) => { e.stopPropagation(); handleApproveBudget(order) }}
-                            disabled={actionLoading[order.id]}
+                            style={styles.approveBtn}
+                            onPress={(e) => {
+                              e.stopPropagation()
+                              router.push({
+                                pathname: '/(client)/budget-payment',
+                                params: {
+                                  orderId: order.id,
+                                  orderNumber: order.orderNumber,
+                                  budget: String(order.budget ?? 0),
+                                  revisionAmount: String(order.revisionAmount ?? 0),
+                                },
+                              })
+                            }}
                           >
-                            <Text style={styles.approveBtnText}>✅ Aprobar presupuesto</Text>
+                            <Text style={styles.approveBtnText}>✅ Pagar anticipo y aprobar</Text>
                           </TouchableOpacity>
 
                           <Text style={styles.reasonLabel}>O si prefieres no reparar, indica por qué:</Text>
