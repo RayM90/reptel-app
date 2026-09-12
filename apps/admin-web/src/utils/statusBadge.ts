@@ -61,3 +61,13 @@ export function hasPendingPayment(order: {
   const pendingFinal = order.finalPaymentDetails != null && !order.finalPaymentConfirmed
   return pendingAdvance || pendingFinal
 }
+
+// Una orden "en cola" no tiene técnico asignado porque, al crearla, nadie
+// del cargo correspondiente (mostrador o motorizado — nunca se mezclan)
+// estaba libre ni con capacidad. El backend la reasigna solo apenas alguien
+// de ese cargo se desocupa (ver tryAssignQueuedOrder en orders.service.ts) —
+// este flag es solo para que el admin vea de un vistazo que está esperando,
+// en vez de pensar que se olvidaron de asignarla.
+export function isQueuedForTechnician(order: { technician: unknown; status: string }): boolean {
+  return order.technician == null && order.status !== 'DELIVERED' && order.status !== 'CANCELLED'
+}

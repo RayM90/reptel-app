@@ -526,7 +526,7 @@ export default function Registro() {
           </div>
           <div className="form-group">
             <label>Descripción del problema</label>
-            <textarea value={orderForm.problem} onChange={(e) => setOrderForm({ ...orderForm, problem: e.target.value })} />
+            <textarea spellCheck value={orderForm.problem} onChange={(e) => setOrderForm({ ...orderForm, problem: e.target.value })} />
           </div>
           <div className="form-group">
             <label>Método de pago de la revisión ($15)</label>
@@ -600,6 +600,9 @@ export default function Registro() {
           {orderError && <p className="alert-error">{orderError}</p>}
           {lastCreatedTechnician && (
             <p className="alert-success">Última orden registrada — técnico asignado: <strong>{lastCreatedTechnician}</strong></p>
+          )}
+          {lastCreatedTechnician && role === 'ADMIN' && (
+            <p><Link to="/admin">← Volver al Panel de Administrador</Link></p>
           )}
 
           <button className="btn btn-primary" onClick={handleCreateOrder} disabled={creatingOrder || !!pendingAbono}>

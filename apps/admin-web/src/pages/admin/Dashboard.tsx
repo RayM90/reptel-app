@@ -5,7 +5,7 @@ import { api } from '../../services/api'
 import { useToastStore } from '../../store/toast.store'
 import { useConfirm } from '../../hooks/useConfirm'
 import { POLL_INTERVAL_MS } from '../../config/constants'
-import { getStatusBadge, badgeClassName, hasPendingPayment } from '../../utils/statusBadge'
+import { getStatusBadge, badgeClassName, hasPendingPayment, isQueuedForTechnician } from '../../utils/statusBadge'
 import OrderDetailModal from '../../components/OrderDetailModal'
 import { isIntakePendingPickup, type Order } from './dashboard.types'
 
@@ -270,6 +270,21 @@ export default function Dashboard() {
     }
   }
 
+  // ── Registrar pago final desde el mostrador (cliente pagó en persona) ──
+  const handleSubmitCounterFinalPayment = async (order: Order, paymentDetails: Record<string, string>) => {
+    if (pendingIds.has(order.id)) return
+    setBusy(order.id, true)
+    try {
+      await api.post(`/api/orders/${order.id}/counter-final-payment`, { paymentDetails })
+      showToast('✅ Pago final registrado — pendiente de aprobación.', 'success')
+      fetchData()
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al registrar el pago final', 'error')
+    } finally {
+      setBusy(order.id, false)
+    }
+  }
+
   const activeOrders = orders.filter(
     (o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
   )
@@ -340,7 +355,14 @@ export default function Dashboard() {
                     </td>
                     <td data-label="Origen">{order.deliveryAmount != null ? '📱 App' : '🏢 Recepción'}</td>
                     <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
-                    <td data-label="Técnico">{order.technician?.name || 'Sin asignar'}</td>
+                    <td data-label="Técnico">
+                      {order.technician?.name || 'Sin asignar'}
+                      {isQueuedForTechnician(order) && (
+                        <span className={badgeClassName('warning')} style={{ marginLeft: 6 }}>
+                          🕐 En cola
+                        </span>
+                      )}
+                    </td>
                     <td data-label="Estado">
                       <span className={badgeClassName(getStatusBadge('order', order.status).variant)}>
                         {getStatusBadge('order', order.status).label}
@@ -389,6 +411,7 @@ export default function Dashboard() {
           onCloseZeroBudgetOrder={handleCloseZeroBudgetOrder}
           onMarkDelivered={handleMarkDelivered}
           onMarkPickedUpUnrepaired={handleMarkPickedUpUnrepaired}
+          onSubmitCounterFinalPayment={handleSubmitCounterFinalPayment}
           onDownloadReceipt={downloadReceipt}
         />
       )}
