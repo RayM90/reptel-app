@@ -477,6 +477,31 @@ export const submitFinalPayment = async (req: AuthRequest, res: Response): Promi
 }
 
 // ─────────────────────────────────────────────
+// ADMIN/TECHNICIAN — Registrar el pago final desde el mostrador
+// ─────────────────────────────────────────────
+
+export const submitCounterFinalPaymentHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const { paymentDetails } = req.body
+
+    if (!paymentDetails || typeof paymentDetails !== 'object') {
+      res.status(400).json({ success: false, message: 'paymentDetails es requerido' })
+      return
+    }
+
+    const order = await ordersService.submitCounterFinalPayment(id, paymentDetails)
+
+    broadcastOrderUpdate({ type: 'ORDER_STATUS_UPDATED', data: order })
+
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR REGISTRAR PAGO FINAL EN MOSTRADOR:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al registrar el pago final' })
+  }
+}
+
+// ─────────────────────────────────────────────
 // ADMIN — Confirmar o rechazar el pago final (calcula comisión al aprobar)
 // ─────────────────────────────────────────────
 

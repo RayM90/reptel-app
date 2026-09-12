@@ -1,7 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatClientAddress, isIntakePendingPickup, type Order, type PaymentSubmission, type StatusHistoryEntry } from '../pages/admin/dashboard.types'
 import { getStatusBadge, badgeClassName } from '../utils/statusBadge'
 import { useConfirmDialogStore } from '../store/confirmDialog.store'
+import PhoneInput from './PhoneInput'
+import SelectWithOther from './SelectWithOther'
+import { VENEZUELAN_BANKS } from '../constants/venezuela'
 
 function PaymentDetailsView({ details }: { details: Record<string, string> | null }) {
   if (!details) return <span>—</span>
@@ -108,6 +111,81 @@ function StatusTimeline({ history }: { history: StatusHistoryEntry[] }) {
   )
 }
 
+// Formulario para que el mostrador registre el pago final cuando el cliente
+// paga en persona — mismos campos que el formulario de anticipo de
+// Registro.tsx (transferencia/pago móvil vía SelectWithOther+PhoneInput, o
+// Binance), pero con su propio estado local: es un dato puntual que se
+// arma y se envía, no algo que el resto del modal necesite mientras se
+// escribe.
+function CounterFinalPaymentForm({
+  disabled,
+  onSubmit,
+}: {
+  disabled: boolean
+  onSubmit: (paymentDetails: Record<string, string>) => void
+}) {
+  const [method, setMethod] = useState<'TRANSFER' | 'BINANCE'>('TRANSFER')
+  const [banco, setBanco] = useState('')
+  const [telefono, setTelefono] = useState('')
+  const [referencia, setReferencia] = useState('')
+  const [correo, setCorreo] = useState('')
+  const [uid, setUid] = useState('')
+  const [nombre, setNombre] = useState('')
+
+  const handleSubmit = () => {
+    const details: Record<string, string> = method === 'BINANCE'
+      ? { correo, uid, nombre }
+      : { banco, telefono, referencia }
+    onSubmit(details)
+  }
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div className="form-group">
+        <label>Método de pago</label>
+        <select value={method} onChange={(e) => setMethod(e.target.value as 'TRANSFER' | 'BINANCE')}>
+          <option value="TRANSFER">Transferencia / Pago Móvil</option>
+          <option value="BINANCE">Binance</option>
+        </select>
+      </div>
+      {method === 'BINANCE' ? (
+        <>
+          <div className="form-group">
+            <label>Correo Binance</label>
+            <input type="email" value={correo} onChange={(e) => setCorreo(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label>UID Binance</label>
+            <input type="text" value={uid} onChange={(e) => setUid(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label>Nombre del titular</label>
+            <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="form-group">
+            <label>Banco</label>
+            <SelectWithOther value={banco} options={VENEZUELAN_BANKS.map((b) => b.name)} onChange={setBanco} />
+          </div>
+          <div className="form-group">
+            <label>Teléfono emisor</label>
+            <PhoneInput value={telefono} onChange={setTelefono} />
+          </div>
+          <div className="form-group">
+            <label>Referencia</label>
+            <input type="text" value={referencia} onChange={(e) => setReferencia(e.target.value)} />
+          </div>
+        </>
+      )}
+      <button className="btn btn-primary" disabled={disabled} onClick={handleSubmit}>
+        Registrar pago
+      </button>
+    </div>
+  )
+}
+
 interface OrderDetailModalProps {
   order: Order
   pendingIds: Set<string>
@@ -119,6 +197,7 @@ interface OrderDetailModalProps {
   onCloseZeroBudgetOrder: (order: Order) => void
   onMarkDelivered: (order: Order) => void
   onMarkPickedUpUnrepaired: (order: Order) => void
+  onSubmitCounterFinalPayment: (order: Order, paymentDetails: Record<string, string>) => void
   onDownloadReceipt: (order: Order, type: 'intake' | 'payment' | 'final' | 'closure') => void
 }
 
@@ -133,6 +212,7 @@ export default function OrderDetailModal({
   onCloseZeroBudgetOrder,
   onMarkDelivered,
   onMarkPickedUpUnrepaired,
+  onSubmitCounterFinalPayment,
   onDownloadReceipt,
 }: OrderDetailModalProps) {
   const boxRef = useRef<HTMLDivElement>(null)
@@ -154,19 +234,15 @@ export default function OrderDetailModal({
 
   const clientAddress = formatClientAddress(order.client)
 
-  const receiptOptions: { type: 'intake' | 'payment' | 'final' | 'closure'; label: string }[] = []
-  if (order.status !== 'PENDING_PAYMENT') {
-    receiptOptions.push({ type: 'intake', label: isIntakePendingPickup(order) ? 'Anticipo' : 'Recepción' })
-  }
-  if (order.finalPaymentConfirmed && order.budget != null && Number(order.budget) > 0) {
-    receiptOptions.push({ type: 'payment', label: 'Pago' })
-  }
-  if (order.status === 'DELIVERED') {
-    receiptOptions.push({ type: 'final', label: 'Entrega' })
-  }
-  if (order.status === 'CANCELLED') {
-    receiptOptions.push({ type: 'closure', label: 'Cierre' })
-  }
+  // Cada recibo se muestra junto a la sección de la que es constancia, no
+  // todos juntos al final — así queda claro a qué pago/paso corresponde
+  // cada uno sin tener que adivinar.
+  const showIntakeReceipt = order.status !== 'PENDING_PAYMENT'
+  const showPaymentReceipt = order.finalPaymentConfirmed && order.budget != null && Number(order.budget) > 0
+  const showFinalReceipt = order.status === 'DELIVERED'
+  const showClosureReceipt = order.status === 'CANCELLED'
+  const canRegisterCounterFinalPayment =
+    order.status === 'READY' && order.finalPaymentDetails == null && order.budget != null && Number(order.budget) > 0
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -223,24 +299,32 @@ export default function OrderDetailModal({
             onReject={onRejectAdvanceInstallment}
             pendingIds={pendingIds}
           />
+          {showIntakeReceipt && (
+            <p style={{ marginTop: 8 }}>
+              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'intake')}>
+                📄 Recibo de {isIntakePendingPickup(order) ? 'Anticipo' : 'Recepción'}
+              </button>
+            </p>
+          )}
         </div>
 
         <div className="card">
           <h4>Pago final</h4>
           <PaymentDetailsView details={order.finalPaymentDetails} />
-        </div>
-
-        <p>
-          <strong>Recibos:</strong>{' '}
-          {receiptOptions.length === 0 ? '—' : receiptOptions.map((opt, i) => (
-            <span key={opt.type}>
-              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, opt.type)}>
-                📄 {opt.label}
+          {canRegisterCounterFinalPayment && (
+            <CounterFinalPaymentForm
+              disabled={pendingIds.has(order.id)}
+              onSubmit={(details) => onSubmitCounterFinalPayment(order, details)}
+            />
+          )}
+          {showPaymentReceipt && (
+            <p style={{ marginTop: 8 }}>
+              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'payment')}>
+                📄 Recibo de Pago
               </button>
-              {i < receiptOptions.length - 1 && ' '}
-            </span>
-          ))}
-        </p>
+            </p>
+          )}
+        </div>
 
         <p>
           <strong>Acciones:</strong>{' '}
@@ -271,6 +355,22 @@ export default function OrderDetailModal({
             </button>
           ) : (
             '—'
+          )}
+          {showFinalReceipt && (
+            <>
+              {' '}
+              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'final')}>
+                📄 Recibo de Entrega
+              </button>
+            </>
+          )}
+          {showClosureReceipt && (
+            <>
+              {' '}
+              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'closure')}>
+                📄 Recibo de Cierre
+              </button>
+            </>
           )}
         </p>
       </div>

@@ -213,7 +213,7 @@ model OrderStatusHistory {
 
 model ServiceCatalog {
   id                String   @id @default(uuid())
-  name              String
+  name              String   @unique
   description       String?  @db.Text
   basePrice         Decimal  @db.Decimal(10, 2)
   isOnSiteResolvable Boolean @default(false)

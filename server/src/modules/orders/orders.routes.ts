@@ -77,6 +77,9 @@ router.post('/advance-payment-installment/:submissionId/confirm', authenticate, 
 // Cliente envía los datos del pago final (saldo restante tras la reparación)
 router.post('/:id/final-payment', authenticate, authorize('CLIENT'), ordersController.submitFinalPayment)
 
+// Personal de mostrador registra el pago final cuando el cliente paga en persona
+router.post('/:id/counter-final-payment', authenticate, authorize('ADMIN', 'TECHNICIAN'), ordersController.submitCounterFinalPaymentHandler)
+
 // ADMIN aprueba o rechaza el pago final (calcula comisión del técnico al aprobar)
 router.post('/:id/confirm-final-payment', authenticate, authorize('ADMIN'), ordersController.confirmFinalPayment)
 

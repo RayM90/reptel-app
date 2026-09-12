@@ -26,20 +26,20 @@ const ADVANCE_REVISION_AMOUNT = 15
 
 // ─────────────────────────────────────────────
 // ASIGNACIÓN AUTOMÁTICA DE TÉCNICO
+// Cada cargo cubre su propio lugar — TECHNICIAN (mostrador) nunca se mezcla
+// con TECHNICIAN_DELIVERY (motorizado), ni al revés, sin importar si el
+// otro cargo tiene gente libre. Si nadie del cargo correcto está disponible
+// (ni siquiera ocupado bajo su límite), la orden queda sin asignar — pasa a
+// "en cola", ver hasPendingAssignment/statusBadge.ts en el frontend.
 // Prioridad 1: AVAILABLE (menos carga)
 // Prioridad 2: BUSY bajo su límite (menos carga)
-// Prioridad 3: null → asignación manual
+// Prioridad 3: null → en cola, esperando que alguien de ese cargo se libere
 // ─────────────────────────────────────────────
 
-// includeReception: las órdenes de recepción (equipo ya en el local) también
-// pueden asignarse a un TECHNICIAN — a diferencia de self-service+delivery,
-// que requiere ir a buscar el equipo y sigue siendo solo TECHNICIAN_DELIVERY.
-const assignTechnician = async (includeReception = false): Promise<string | null> => {
-  const roles = includeReception ? ['TECHNICIAN_DELIVERY', 'TECHNICIAN'] : ['TECHNICIAN_DELIVERY']
-
+const assignTechnician = async (role: 'TECHNICIAN' | 'TECHNICIAN_DELIVERY'): Promise<string | null> => {
   const available = await prisma.user.findMany({
     where: {
-      role: { in: roles as any },
+      role,
       isActive: true,
       technicianStatus: 'AVAILABLE',
     },
@@ -55,7 +55,7 @@ const assignTechnician = async (includeReception = false): Promise<string | null
 
   const busy = await prisma.user.findMany({
     where: {
-      role: { in: roles as any },
+      role,
       isActive: true,
       technicianStatus: 'BUSY',
     },
@@ -110,6 +110,45 @@ export const decrementTechnicianLoad = async (technicianId: string) => {
       technicianStatus: newStatus,
     },
   })
+
+  // Este técnico acaba de liberar capacidad — si hay una orden de su mismo
+  // cargo esperando en cola (sin técnico asignado porque nadie estaba libre
+  // cuando se creó), se la asignamos ahora mismo, sin esperar a que un
+  // admin lo note. FIFO: la más antigua primero.
+  if (technician.role === 'TECHNICIAN' || technician.role === 'TECHNICIAN_DELIVERY') {
+    await tryAssignQueuedOrder(technicianId, technician.role)
+  }
+}
+
+// La orden de mostrador (equipo ya en el local, deliveryAmount null) solo
+// puede ir a un TECHNICIAN; la de self-service+delivery (deliveryAmount no
+// nulo) solo a un TECHNICIAN_DELIVERY — mismo criterio que assignTechnician.
+const tryAssignQueuedOrder = async (technicianId: string, role: 'TECHNICIAN' | 'TECHNICIAN_DELIVERY') => {
+  const queuedOrder = await prisma.order.findFirst({
+    where: {
+      technicianId: null,
+      status: { notIn: ['DELIVERED', 'CANCELLED'] },
+      deliveryAmount: role === 'TECHNICIAN_DELIVERY' ? { not: null } : null,
+    },
+    orderBy: { receivedAt: 'asc' },
+  })
+
+  if (!queuedOrder) return
+
+  await prisma.order.update({
+    where: { id: queuedOrder.id },
+    data: {
+      technicianId,
+      statusHistory: {
+        create: {
+          status: queuedOrder.status,
+          comment: 'Técnico asignado automáticamente al liberarse capacidad — la orden estaba en cola.',
+        },
+      },
+    },
+  })
+
+  await incrementTechnicianLoad(technicianId)
 }
 
 // ─────────────────────────────────────────────
@@ -209,7 +248,7 @@ export const createOrder = async (data: {
 }) => {
   const orderNumber = generateOrderNumber()
 
-  const resolvedTechnicianId = data.technicianId ?? (await assignTechnician())
+  const resolvedTechnicianId = data.technicianId ?? (await assignTechnician('TECHNICIAN_DELIVERY'))
 
   const order = await prisma.order.create({
     data: {
@@ -287,7 +326,9 @@ export const createSelfServiceOrder = async (data: {
   const clientId = user.clientId
   const orderNumber = generateOrderNumber()
 
-  const resolvedTechnicianId = await assignTechnician()
+  // Self-service+delivery: el equipo hay que ir a buscarlo, solo un
+  // motorizado puede tomarlo — nunca un técnico de mostrador.
+  const resolvedTechnicianId = await assignTechnician('TECHNICIAN_DELIVERY')
 
   const order = await prisma.$transaction(async (tx) => {
     const device = await tx.device.create({
@@ -372,7 +413,9 @@ export const createCounterOrder = async (data: {
   const actor = await prisma.user.findUnique({ where: { email: data.actorEmail } })
 
   const orderNumber = generateOrderNumber()
-  const resolvedTechnicianId = await assignTechnician(true)
+  // Mostrador: el equipo ya está en el local — solo un técnico de mostrador
+  // puede tomarla, nunca un motorizado (aunque esté libre).
+  const resolvedTechnicianId = await assignTechnician('TECHNICIAN')
 
   const order = await prisma.$transaction(async (tx) => {
     const device = await tx.device.create({
@@ -783,6 +826,41 @@ export const submitFinalPayment = async (
 
   if (!order) {
     throw new Error('Orden no encontrada')
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: { id: orderId },
+    data: { finalPaymentDetails: paymentDetails },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+
+  return updatedOrder
+}
+
+// ─────────────────────────────────────────────
+// ADMIN/TECHNICIAN — Registrar el pago final desde el mostrador (equivalente
+// a submitCounterAdvanceInstallment, pero para el saldo final). El cliente
+// vuelve a buscar el equipo y paga en persona — el personal carga los datos
+// en vez de esperar a que el cliente lo haga desde su cuenta. Sin
+// verificación de dueño (a diferencia de submitFinalPayment, que sí la tiene
+// porque ahí el actor es el propio cliente).
+// ─────────────────────────────────────────────
+
+export const submitCounterFinalPayment = async (
+  orderId: string,
+  paymentDetails: Record<string, string>
+) => {
+  const order = await prisma.order.findUnique({ where: { id: orderId } })
+  if (!order) {
+    throw new Error('Orden no encontrada')
+  }
+  if (order.status !== 'READY') {
+    throw new Error('Esta acción solo aplica a órdenes listas para entrega')
   }
 
   const updatedOrder = await prisma.order.update({
