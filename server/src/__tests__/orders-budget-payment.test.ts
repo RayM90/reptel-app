@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma'
-import { submitAdvancePaymentInstallment, submitBudgetPaymentInstallment } from '../modules/orders/orders.service'
+import { submitAdvancePaymentInstallment, submitBudgetPaymentInstallment, submitCounterBudgetInstallment } from '../modules/orders/orders.service'
 
 let client: { id: string }
 let clientUser: { id: string; email: string }
@@ -71,5 +71,25 @@ describe('orders.service — submitBudgetPaymentInstallment', () => {
     await expect(
       submitBudgetPaymentInstallment(order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '3333' }, 5)
     ).rejects.toThrow('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
+  })
+})
+
+describe('orders.service — submitCounterBudgetInstallment', () => {
+  it('crea el abono con kind BUDGET desde mostrador, sin verificar dueño', async () => {
+    const order = await makeOrder({ budget: 30, revisionAmount: 15 })
+    const admin = await prisma.user.findFirst({ where: { role: 'ADMIN' }, select: { email: true } })
+    const submission = await submitCounterBudgetInstallment(
+      order.id, admin!.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '4444' }, 7.5
+    )
+    expect(submission.kind).toBe('BUDGET')
+    expect(Number(submission.amount)).toBe(7.5)
+  })
+
+  it('lanza error si el monto excede el tope del 50%', async () => {
+    const order = await makeOrder({ budget: 30, revisionAmount: 15 })
+    const admin = await prisma.user.findFirst({ where: { role: 'ADMIN' }, select: { email: true } })
+    await expect(
+      submitCounterBudgetInstallment(order.id, admin!.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '5555' }, 10)
+    ).rejects.toThrow(/excede/)
   })
 })
