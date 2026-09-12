@@ -62,6 +62,8 @@ interface OrderForReceipt {
   deliveryAmount: unknown
   advancePaymentMethod: string | null
   finalPaymentDetails: Record<string, string> | null
+  finalPaymentConfirmedAt: Date | string | null
+  budgetRejectionReason: string | null
   technicianCommission: unknown
   receivedAt: Date | string | null
   deliveredAt: Date | string | null
@@ -114,19 +116,11 @@ export const generateIntakeReceipt = (order: OrderForReceipt): PDFKit.PDFDocumen
   return doc
 }
 
-export const generateFinalReceipt = (order: OrderForReceipt): PDFKit.PDFDocument => {
-  const doc = new PDFDocument({ margin: 50 })
-
-  addHeader(doc, 'Recibo de Entrega', order.orderNumber)
-
-  addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
-  addRow(doc, 'Técnico asignado', order.technician?.name ?? 'Sin asignar')
-  doc.moveDown(0.5)
-
-  addRow(doc, 'Falla reportada', order.problem)
-  addRow(doc, 'Diagnóstico', order.diagnosis ?? '—')
-  doc.moveDown(0.5)
-
+// Bloque "Detalle de cobro" — lo comparten el recibo de entrega y el recibo
+// de pago (mismo desglose: revisión, delivery, repuestos, total, forma de
+// pago). `paymentMethodLabel` deja a cada llamador su propia etiqueta para
+// no cambiar el texto que ya usa `generateFinalReceipt` en producción.
+const addCostBreakdown = (doc: PDFKit.PDFDocument, order: OrderForReceipt, paymentMethodLabel: string) => {
   // Detalle tipo factura simple — igual que el presupuesto se arma sumando
   // catálogo + monto manual + repuestos, el recibo desglosa esas mismas partes.
   doc.font('Helvetica-Bold').fontSize(12).text('Detalle de cobro', { underline: false })
@@ -149,11 +143,86 @@ export const generateFinalReceipt = (order: OrderForReceipt): PDFKit.PDFDocument
     const methodEntries = Object.entries(order.finalPaymentDetails)
       .map(([key, value]) => `${key}: ${value}`)
       .join(' — ')
-    if (methodEntries) addRow(doc, 'Forma de pago final', methodEntries)
+    if (methodEntries) addRow(doc, paymentMethodLabel, methodEntries)
+  }
+  doc.moveDown(0.5)
+}
+
+export const generateFinalReceipt = (order: OrderForReceipt): PDFKit.PDFDocument => {
+  const doc = new PDFDocument({ margin: 50 })
+
+  addHeader(doc, 'Recibo de Entrega', order.orderNumber)
+
+  addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
+  addRow(doc, 'Técnico asignado', order.technician?.name ?? 'Sin asignar')
+  doc.moveDown(0.5)
+
+  addRow(doc, 'Falla reportada', order.problem)
+  addRow(doc, 'Diagnóstico', order.diagnosis ?? '—')
+  doc.moveDown(0.5)
+
+  addCostBreakdown(doc, order, 'Forma de pago final')
+
+  addRow(doc, 'Fecha de entrega', formatDate(order.deliveredAt))
+
+  doc.end()
+  return doc
+}
+
+// Recibo de Pago — se genera cuando el admin aprueba el pago final
+// (PAID_PENDING_DELIVERY), ANTES de que el equipo salga físicamente del
+// taller. Mismo desglose de cobro que el recibo de entrega (vía
+// addCostBreakdown), pero fechado con finalPaymentConfirmedAt en vez de
+// deliveredAt — es la única constancia que tiene el cliente de lo que pagó
+// hasta que retire el equipo.
+export const generatePaymentReceipt = (order: OrderForReceipt): PDFKit.PDFDocument => {
+  const doc = new PDFDocument({ margin: 50 })
+
+  addHeader(doc, 'Recibo de Pago', order.orderNumber)
+
+  addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
+  addRow(doc, 'Técnico asignado', order.technician?.name ?? 'Sin asignar')
+  doc.moveDown(0.5)
+
+  addRow(doc, 'Falla reportada', order.problem)
+  addRow(doc, 'Diagnóstico', order.diagnosis ?? '—')
+  doc.moveDown(0.5)
+
+  addCostBreakdown(doc, order, 'Forma de pago')
+
+  addRow(doc, 'Fecha de pago', formatDate(order.finalPaymentConfirmedAt))
+
+  doc.end()
+  return doc
+}
+
+// Recibo de Cierre — se genera cuando el cliente retira su equipo SIN
+// reparar, tras rechazar el presupuesto (CANCELLED vía
+// markOrderPickedUpUnrepaired). Deja constancia de lo único que sí se cobró
+// (revisión + delivery) y del motivo del rechazo.
+export const generateClosureReceipt = (order: OrderForReceipt): PDFKit.PDFDocument => {
+  const doc = new PDFDocument({ margin: 50 })
+
+  addHeader(doc, 'Recibo de Cierre', order.orderNumber)
+
+  addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
+  doc.moveDown(0.5)
+
+  addRow(doc, 'Falla reportada', order.problem)
+  addRow(doc, 'Diagnóstico', order.diagnosis ?? '—')
+  addRow(doc, 'Presupuesto rechazado', formatMoney(order.budget))
+  addRow(doc, 'Motivo del rechazo', order.budgetRejectionReason ?? '—')
+  doc.moveDown(0.5)
+
+  doc.font('Helvetica-Bold').fontSize(12).text('Total cobrado (revisión, sin reparación)', { underline: false })
+  doc.moveDown(0.3)
+  addRow(doc, 'Subtotal (revisión)', formatMoney(order.revisionAmount))
+  if (order.deliveryAmount !== null && order.deliveryAmount !== undefined) {
+    addRow(doc, 'Subtotal (delivery)', formatMoney(order.deliveryAmount))
   }
   doc.moveDown(0.5)
 
-  addRow(doc, 'Fecha de entrega', formatDate(order.deliveredAt))
+  addRow(doc, 'Fecha de retiro', formatDate(order.deliveredAt))
 
   doc.end()
   return doc
