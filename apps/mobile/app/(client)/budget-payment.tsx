@@ -91,11 +91,14 @@ export default function BudgetPaymentScreen() {
 
   const montoNumber = monto ? Number(monto) : 0
   const faltante = totalNumber - montoNumber
-  const montoInsuficiente = faltante > 0.009
+  // El cliente puede pagar el anticipo en partes — igual que ya permite el
+  // anticipo de revisión (upload-advance-receipt.tsx) — solo bloqueamos si
+  // el monto es 0/vacío o si excede lo que falta.
+  const montoExcedeElTotal = montoNumber - totalNumber > 0.009
 
   const isFormValid = () => {
     if (!selectedMethod) return false
-    if (!monto || montoInsuficiente) return false
+    if (!monto || montoNumber <= 0 || montoExcedeElTotal) return false
     if (selectedMethod === 'PAGO_MOVIL') return !!banco && !!telefono && !!referencia
     if (selectedMethod === 'TRANSFERENCIA') return !!banco && !!titular && !!cedula && !!referencia
     if (selectedMethod === 'BINANCE') return !!correo && !!uid && !!nombre
@@ -129,7 +132,9 @@ export default function BudgetPaymentScreen() {
       // El Alert original solo tenía un botón ("Ver mis órdenes") que
       // navegaba — mostramos el toast de éxito y navegamos directo.
       showToast(
-        '✅ Datos enviados. El equipo de RepTel los revisará y confirmará tu pago pronto.',
+        faltante > 0.009
+          ? `✅ Abono de $${montoNumber.toFixed(2)} enviado. Te falta $${faltante.toFixed(2)} para completar el anticipo — puedes enviarlo cuando quieras desde "Mis Órdenes".`
+          : '✅ Datos enviados. El equipo de RepTel los revisará y confirmará tu pago pronto.',
         'success'
       )
       router.replace('/(client)/my-technical-orders')
@@ -264,10 +269,17 @@ export default function BudgetPaymentScreen() {
 
               <Field label="Monto enviado ($)" value={monto} onChangeText={(text) => setMonto(onlyDecimal(text))} placeholder="Ej. 35.00" keyboardType="decimal-pad" />
 
-              {montoInsuficiente && (
+              {faltante > 0.009 && (
                 <View style={styles.warningCard}>
                   <Text style={styles.warningText}>
-                    ⚠️ Faltan ${faltante.toFixed(2)} para completar el pago total de ${totalNumber.toFixed(2)}
+                    💡 Puedes pagar en partes. Con este abono quedarían ${faltante.toFixed(2)} pendientes de ${totalNumber.toFixed(2)} — envía el resto cuando quieras desde "Mis Órdenes".
+                  </Text>
+                </View>
+              )}
+              {montoExcedeElTotal && (
+                <View style={styles.warningCard}>
+                  <Text style={styles.warningText}>
+                    ⚠️ El monto no puede superar el total pendiente de ${totalNumber.toFixed(2)}
                   </Text>
                 </View>
               )}

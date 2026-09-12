@@ -64,6 +64,7 @@ interface OrderForReceipt {
   finalPaymentDetails: Record<string, string> | null
   finalPaymentConfirmedAt: Date | string | null
   budgetAdvanceConfirmedAt: Date | string | null
+  budgetAdvanceAmount: unknown
   budgetRejectionReason: string | null
   technicianCommission: unknown
   receivedAt: Date | string | null
@@ -249,6 +250,7 @@ export const generateBudgetAdvanceReceipt = (order: OrderForReceipt): PDFKit.PDF
 
   addCostBreakdown(doc, order, 'Forma de pago')
 
+  addRow(doc, 'Anticipo pagado', formatMoney(order.budgetAdvanceAmount))
   addRow(doc, 'Fecha de anticipo', formatDate(order.budgetAdvanceConfirmedAt))
 
   doc.end()

@@ -157,18 +157,27 @@ export const downloadBudgetAdvanceReceipt = async (req: AuthRequest, res: Respon
       return
     }
 
-    const confirmedBudgetSubmission = (order as any).advancePaymentSubmissions
+    const confirmedBudgetSubmissions = (order as any).advancePaymentSubmissions
       .filter((s: any) => s.kind === 'BUDGET' && s.status === 'CONFIRMED')
-      .sort((a: any, b: any) => new Date(b.confirmedAt).getTime() - new Date(a.confirmedAt).getTime())[0]
 
-    const budgetAdvanceConfirmedAt = confirmedBudgetSubmission?.confirmedAt ?? null
+    // El cliente puede pagar el anticipo en partes — el recibo muestra la
+    // suma de todo lo confirmado, no solo el último abono.
+    const budgetAdvanceAmount = confirmedBudgetSubmissions.reduce(
+      (sum: number, s: any) => sum + Number(s.amount),
+      0
+    )
+    const mostRecentBudgetSubmission = [...confirmedBudgetSubmissions].sort(
+      (a: any, b: any) => new Date(b.confirmedAt).getTime() - new Date(a.confirmedAt).getTime()
+    )[0]
+    const budgetAdvanceConfirmedAt = mostRecentBudgetSubmission?.confirmedAt ?? null
 
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="recibo-anticipo-presupuesto-${order.orderNumber}.pdf"`)
     const doc = generateBudgetAdvanceReceipt({
       ...order,
       budgetAdvanceConfirmedAt,
-      finalPaymentDetails: confirmedBudgetSubmission?.paymentDetails as Record<string, string>,
+      budgetAdvanceAmount,
+      finalPaymentDetails: mostRecentBudgetSubmission?.paymentDetails as Record<string, string>,
     } as any)
     doc.pipe(res)
   } catch (error: any) {
