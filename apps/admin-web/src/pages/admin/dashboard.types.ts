@@ -37,6 +37,7 @@ export interface PaymentSubmission {
   status: 'PENDING' | 'CONFIRMED' | 'REJECTED'
   rejectionReason: string | null
   createdAt: string
+  kind: 'REVISION' | 'BUDGET'
 }
 
 export interface StatusHistoryEntry {
