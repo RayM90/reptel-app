@@ -398,15 +398,15 @@ export const updateStatus = async (req: AuthRequest, res: Response): Promise<voi
 export const updateBudget = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const id = String(req.params.id)
-    const { budget, approved } = req.body
-    if (budget === undefined || approved === undefined) {
+    const { budget } = req.body
+    if (budget === undefined) {
       res.status(400).json({
         success: false,
-        message: 'budget y approved son requeridos',
+        message: 'budget es requerido',
       })
       return
     }
-    const order = await ordersService.updateOrderBudget(id, budget, approved)
+    const order = await ordersService.updateOrderBudget(id, budget)
 
     broadcastOrderUpdate({
       type: 'ORDER_BUDGET_UPDATED',
