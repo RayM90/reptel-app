@@ -1,7 +1,7 @@
 import request from 'supertest'
 import app from '../app'
 import prisma from '../lib/prisma'
-import { generateIntakeReceipt, generateFinalReceipt, getIntakeReceiptLabels } from '../modules/receipts/receipts.service'
+import { generateIntakeReceipt, generateFinalReceipt, generatePaymentReceipt, generateClosureReceipt, getIntakeReceiptLabels } from '../modules/receipts/receipts.service'
 import { decrementTechnicianLoad } from '../modules/orders/orders.service'
 
 const fakeOrder = {
@@ -13,6 +13,8 @@ const fakeOrder = {
   deliveryAmount: 10,
   advancePaymentMethod: 'MOBILE_PAYMENT',
   finalPaymentDetails: { referencia: '123456' },
+  finalPaymentConfirmedAt: new Date(),
+  budgetRejectionReason: 'Muy costoso',
   technicianCommission: 20,
   receivedAt: new Date(),
   deliveredAt: new Date(),
@@ -56,6 +58,16 @@ describe('receipts.service — generación de PDF', () => {
   it('generateIntakeReceipt no falla si el dispositivo no tiene color (campo opcional en Device)', async () => {
     const orderWithoutColor = { ...fakeOrder, device: { ...fakeOrder.device, color: null } }
     const buffer = await collectPdfBuffer(generateIntakeReceipt(orderWithoutColor as any))
+    expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
+  })
+
+  it('generatePaymentReceipt produce un PDF válido', async () => {
+    const buffer = await collectPdfBuffer(generatePaymentReceipt(fakeOrder as any))
+    expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
+  })
+
+  it('generateClosureReceipt produce un PDF válido', async () => {
+    const buffer = await collectPdfBuffer(generateClosureReceipt(fakeOrder as any))
     expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
   })
 })
