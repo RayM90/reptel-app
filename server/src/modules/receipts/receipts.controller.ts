@@ -2,7 +2,7 @@ import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
 import prisma from '../../lib/prisma'
 import { getOrderById, getPartsUsedInOrder } from '../orders/orders.service'
-import { generateIntakeReceipt, generateFinalReceipt, generatePaymentReceipt, generateClosureReceipt, getIntakeReceiptLabels } from './receipts.service'
+import { generateIntakeReceipt, generateFinalReceipt, generatePaymentReceipt, generateClosureReceipt, generateBudgetAdvanceReceipt, getIntakeReceiptLabels } from './receipts.service'
 
 // Cliente dueño de la orden, o ADMIN/técnico asignado — nunca otro cliente.
 const canAccessOrder = async (
@@ -133,6 +133,40 @@ export const downloadClosureReceipt = async (req: AuthRequest, res: Response): P
     doc.pipe(res)
   } catch (error: any) {
     console.error('ERROR GENERAR RECIBO DE CIERRE:', error)
+    res.status(500).json({ success: false, message: error.message || 'Error al generar el recibo' })
+  }
+}
+
+export const downloadBudgetAdvanceReceipt = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const order = await getOrderById(id)
+    if (!order) {
+      res.status(404).json({ success: false, message: 'Orden no encontrada' })
+      return
+    }
+    const hasBudgetAdvance = (order as any).advancePaymentSubmissions?.some(
+      (s: any) => s.kind === 'BUDGET' && s.status === 'CONFIRMED'
+    )
+    if (!hasBudgetAdvance) {
+      res.status(400).json({ success: false, message: 'El recibo de anticipo de presupuesto no está disponible: aún no se ha confirmado ese pago' })
+      return
+    }
+    if (!(await canAccessOrder(req, order))) {
+      res.status(403).json({ success: false, message: 'No tienes permisos para esta acción' })
+      return
+    }
+
+    const budgetAdvanceConfirmedAt = (order as any).advancePaymentSubmissions
+      .filter((s: any) => s.kind === 'BUDGET' && s.status === 'CONFIRMED')
+      .sort((a: any, b: any) => new Date(b.confirmedAt).getTime() - new Date(a.confirmedAt).getTime())[0]?.confirmedAt ?? null
+
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="recibo-anticipo-presupuesto-${order.orderNumber}.pdf"`)
+    const doc = generateBudgetAdvanceReceipt({ ...order, budgetAdvanceConfirmedAt } as any)
+    doc.pipe(res)
+  } catch (error: any) {
+    console.error('ERROR GENERAR RECIBO DE ANTICIPO DE PRESUPUESTO:', error)
     res.status(500).json({ success: false, message: error.message || 'Error al generar el recibo' })
   }
 }

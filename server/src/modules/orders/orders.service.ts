@@ -200,6 +200,7 @@ export const getOrderById = async (id: string) => {
       technician: { select: { id: true, name: true, email: true } },
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
+      advancePaymentSubmissions: { orderBy: { createdAt: 'desc' } },
     },
   })
 }

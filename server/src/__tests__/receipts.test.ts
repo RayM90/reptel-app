@@ -1,7 +1,7 @@
 import request from 'supertest'
 import app from '../app'
 import prisma from '../lib/prisma'
-import { generateIntakeReceipt, generateFinalReceipt, generatePaymentReceipt, generateClosureReceipt, getIntakeReceiptLabels } from '../modules/receipts/receipts.service'
+import { generateIntakeReceipt, generateFinalReceipt, generatePaymentReceipt, generateClosureReceipt, generateBudgetAdvanceReceipt, getIntakeReceiptLabels } from '../modules/receipts/receipts.service'
 import { decrementTechnicianLoad } from '../modules/orders/orders.service'
 
 const fakeOrder = {
@@ -14,6 +14,7 @@ const fakeOrder = {
   advancePaymentMethod: 'MOBILE_PAYMENT',
   finalPaymentDetails: { referencia: '123456' },
   finalPaymentConfirmedAt: new Date(),
+  budgetAdvanceConfirmedAt: new Date(),
   budgetRejectionReason: 'Muy costoso',
   technicianCommission: 20,
   receivedAt: new Date(),
@@ -68,6 +69,11 @@ describe('receipts.service — generación de PDF', () => {
 
   it('generateClosureReceipt produce un PDF válido', async () => {
     const buffer = await collectPdfBuffer(generateClosureReceipt(fakeOrder as any))
+    expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
+  })
+
+  it('generateBudgetAdvanceReceipt produce un PDF válido', async () => {
+    const buffer = await collectPdfBuffer(generateBudgetAdvanceReceipt(fakeOrder as any))
     expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
   })
 })
