@@ -801,7 +801,9 @@ export const submitFinalPayment = async (
 
 // ─────────────────────────────────────────────
 // ADMIN — Confirmar o rechazar el pago final (Fase 4 — comisión)
-// Al aprobar: orden pasa a DELIVERED y se calcula la comisión del técnico:
+// Al aprobar: orden pasa a PAID_PENDING_DELIVERY (el pago ya está confirmado
+// y la comisión del técnico ya se calcula aquí, pero el equipo todavía no
+// salió del taller — eso lo marca markOrderDelivered en un paso aparte).
 //   comisión = deliveryAmount (100%) + 40% × (budget - revisionAmount)
 // Al rechazar: se guarda el motivo, se limpian los datos de pago viejos
 // (Prisma.JsonNull) para que el cliente reenvíe.
@@ -839,11 +841,10 @@ export const confirmFinalPayment = async (
       ...(approved
         ? {}
         : { finalPaymentDetails: Prisma.JsonNull }),
-      status: approved ? 'DELIVERED' : 'READY',
-      deliveredAt: approved ? new Date() : null,
+      status: approved ? 'PAID_PENDING_DELIVERY' : 'READY',
       statusHistory: {
         create: {
-          status: approved ? 'DELIVERED' : 'READY',
+          status: approved ? 'PAID_PENDING_DELIVERY' : 'READY',
           comment: approved
             ? `Pago final confirmado por el administrador. Comisión del técnico: $${commission?.toFixed(2)}`
             : `Pago final rechazado: ${rejectionReason}`,
