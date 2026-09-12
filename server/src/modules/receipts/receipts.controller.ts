@@ -157,13 +157,19 @@ export const downloadBudgetAdvanceReceipt = async (req: AuthRequest, res: Respon
       return
     }
 
-    const budgetAdvanceConfirmedAt = (order as any).advancePaymentSubmissions
+    const confirmedBudgetSubmission = (order as any).advancePaymentSubmissions
       .filter((s: any) => s.kind === 'BUDGET' && s.status === 'CONFIRMED')
-      .sort((a: any, b: any) => new Date(b.confirmedAt).getTime() - new Date(a.confirmedAt).getTime())[0]?.confirmedAt ?? null
+      .sort((a: any, b: any) => new Date(b.confirmedAt).getTime() - new Date(a.confirmedAt).getTime())[0]
+
+    const budgetAdvanceConfirmedAt = confirmedBudgetSubmission?.confirmedAt ?? null
 
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="recibo-anticipo-presupuesto-${order.orderNumber}.pdf"`)
-    const doc = generateBudgetAdvanceReceipt({ ...order, budgetAdvanceConfirmedAt } as any)
+    const doc = generateBudgetAdvanceReceipt({
+      ...order,
+      budgetAdvanceConfirmedAt,
+      finalPaymentDetails: confirmedBudgetSubmission?.paymentDetails as Record<string, string>,
+    } as any)
     doc.pipe(res)
   } catch (error: any) {
     console.error('ERROR GENERAR RECIBO DE ANTICIPO DE PRESUPUESTO:', error)
