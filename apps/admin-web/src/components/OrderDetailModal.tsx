@@ -269,6 +269,8 @@ export default function OrderDetailModal({
           {clientAddress && <p><strong>Dirección:</strong> {clientAddress}</p>}
         </div>
 
+        <StatusTimeline history={order.statusHistory} />
+
         <div className="card">
           <h4>Recepción</h4>
           <p><strong>Origen:</strong> {order.deliveryAmount != null ? '📱 App' : '🏢 Recepción'}</p>
@@ -283,8 +285,6 @@ export default function OrderDetailModal({
           <p><strong>Diagnóstico:</strong> {order.diagnosis || '—'}</p>
           <p><strong>Presupuesto:</strong> {order.budget ? `$${order.budget}` : '—'}</p>
         </div>
-
-        <StatusTimeline history={order.statusHistory} />
 
         <div className="card">
           <h4>Pago anticipado</h4>
