@@ -589,22 +589,24 @@ export const submitBudgetPaymentInstallment = async (
   }
 
   const base = Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
-  const total = 0.5 * base
 
   // budget <= revisionAmount (ej. un trabajo de $15 igual a la revisión ya
-  // pagada) → el 50% da <= 0. No hay nada que cobrar por esta vía; la orden
-  // debe cerrarse por el camino de "diagnóstico sin costo adicional"
-  // (confirmZeroBudgetDiagnosis/disputeZeroBudgetDiagnosis en el cliente,
-  // onCloseZeroBudgetOrder en el admin), no por un abono.
-  if (total <= 0) {
+  // pagada) → no hay nada que cobrar por esta vía; la orden debe cerrarse por
+  // el camino de "diagnóstico sin costo adicional" (confirmZeroBudgetDiagnosis/
+  // disputeZeroBudgetDiagnosis en el cliente, onCloseZeroBudgetOrder en el
+  // admin), no por un abono.
+  if (base <= 0) {
     throw new Error('Esta acción no aplica — el presupuesto no supera el costo de la revisión ya pagada')
   }
 
+  // El cliente puede abonar en partes hasta completar el 100% de la base si
+  // lo desea, pero nunca más de eso — el mínimo para autorizar la reparación
+  // (50%) se exige aparte, en confirmAdvancePaymentInstallment.
   const alreadyAccounted = order.advancePaymentSubmissions.reduce(
     (sum, s) => sum + Number(s.amount),
     0
   )
-  const remaining = total - alreadyAccounted
+  const remaining = base - alreadyAccounted
 
   if (amount > remaining + 0.009) {
     throw new Error(
@@ -658,8 +660,10 @@ export const confirmAdvancePaymentInstallment = async (
 
   // Órdenes de recepción no tienen deliveryAmount (no hay que ir a buscar el
   // equipo) — su total es solo la revisión, no revisión+delivery como self-service.
-  // Para BUDGET: 50% de (budget - revisionAmount) — el otro 50% se cobra al
-  // entregar (confirmFinalPayment).
+  // Para BUDGET: el mínimo del 50% de (budget - revisionAmount) autoriza a
+  // reparar — el cliente puede haber abonado más (hasta el 100% de la base,
+  // ver submitBudgetPaymentInstallment), el resto se cobra al entregar
+  // (confirmFinalPayment) sobre lo que realmente falte.
   const total = isBudgetKind
     ? 0.5 * (Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT))
     : order.deliveryAmount != null
@@ -703,7 +707,7 @@ export const confirmAdvancePaymentInstallment = async (
                   create: [
                     {
                       status: 'APPROVED',
-                      comment: `Anticipo de presupuesto ($${total.toFixed(2)}) completado — confirmado por el administrador`,
+                      comment: `Anticipo de presupuesto ($${newTotalConfirmed.toFixed(2)}) completado — confirmado por el administrador`,
                       userId: actor?.id,
                     },
                     {
@@ -1616,16 +1620,18 @@ export const submitCounterBudgetInstallment = async (
   }
 
   const base = Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
-  const total = 0.5 * base
 
   // Mismo caso que en submitBudgetPaymentInstallment: budget <= revisionAmount
   // no deja nada que cobrar por esta vía.
-  if (total <= 0) {
+  if (base <= 0) {
     throw new Error('Esta acción no aplica — el presupuesto no supera el costo de la revisión ya pagada')
   }
 
+  // Igual que en submitBudgetPaymentInstallment: se puede abonar hasta el
+  // 100% de la base, nunca más — el mínimo del 50% para autorizar se exige
+  // en confirmAdvancePaymentInstallment.
   const alreadyAccounted = order.advancePaymentSubmissions.reduce((sum, s) => sum + Number(s.amount), 0)
-  const remaining = total - alreadyAccounted
+  const remaining = base - alreadyAccounted
 
   if (amount > remaining + 0.009) {
     throw new Error(`El monto excede lo que falta por pagar ($${remaining.toFixed(2)})`)

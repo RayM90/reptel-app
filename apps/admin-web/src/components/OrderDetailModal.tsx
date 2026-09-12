@@ -19,6 +19,19 @@ function PaymentDetailsView({ details }: { details: Record<string, string> | nul
   )
 }
 
+// Desglose "Presupuesto $30 − Revisión $15 = Base $15" — se muestra debajo
+// de cada monto de presupuesto para que quede claro de dónde sale la base
+// sobre la que se calcula el anticipo (nunca se vuelve a cobrar la revisión,
+// ya está pagada).
+function BudgetBreakdown({ budget, revisionAmount }: { budget: number; revisionAmount: number }) {
+  const base = budget - revisionAmount
+  return (
+    <p className="form-hint">
+      Presupuesto ${budget.toFixed(2)} − Revisión ${revisionAmount.toFixed(2)} = Base ${base.toFixed(2)}
+    </p>
+  )
+}
+
 function PaymentSubmissionsView({
   submissions,
   total,
@@ -184,8 +197,15 @@ function CounterFinalPaymentForm({
             <PhoneInput value={telefono} onChange={setTelefono} />
           </div>
           <div className="form-group">
-            <label>Referencia</label>
-            <input type="text" value={referencia} onChange={(e) => setReferencia(e.target.value)} />
+            <label>Últimos 4 dígitos de la referencia</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              placeholder="1234"
+              value={referencia}
+              onChange={(e) => setReferencia(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            />
           </div>
         </>
       )}
@@ -230,7 +250,9 @@ function CounterBudgetPaymentForm({
       <div className="form-group">
         <label>Monto recibido ($)</label>
         <input type="number" min="0.01" step="0.01" value={monto} onChange={(e) => setMonto(e.target.value)} />
-        <p className="form-hint">El cliente puede pagar el anticipo en partes — este es solo lo que trajo hoy.</p>
+        <p className="form-hint">
+          Mínimo 50% para autorizar la reparación — el cliente puede pagar en partes o cancelar hasta el 100% de una vez, nunca más.
+        </p>
       </div>
       <div className="form-group">
         <label>Método de pago</label>
@@ -265,8 +287,15 @@ function CounterBudgetPaymentForm({
             <PhoneInput value={telefono} onChange={setTelefono} />
           </div>
           <div className="form-group">
-            <label>Referencia</label>
-            <input type="text" value={referencia} onChange={(e) => setReferencia(e.target.value)} />
+            <label>Últimos 4 dígitos de la referencia</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              placeholder="1234"
+              value={referencia}
+              onChange={(e) => setReferencia(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            />
           </div>
         </>
       )}
@@ -395,12 +424,15 @@ export default function OrderDetailModal({
           <p><strong>Asignado:</strong> {order.technician?.name || 'Sin asignar'}</p>
           <p><strong>Diagnóstico:</strong> {order.diagnosis || '—'}</p>
           <p><strong>Presupuesto:</strong> {order.budget ? `$${order.budget}` : '—'}</p>
+          {order.budget != null && Number(order.budget) > 0 && (
+            <BudgetBreakdown budget={Number(order.budget)} revisionAmount={Number(order.revisionAmount ?? 15)} />
+          )}
           {showBudgetAdvanceSection && (
             <>
-              <h4 style={{ marginTop: 16 }}>Anticipo de presupuesto (50%)</h4>
+              <h4 style={{ marginTop: 16 }}>Anticipo de presupuesto (mínimo 50%)</h4>
               <PaymentSubmissionsView
                 submissions={(order.advancePaymentSubmissions ?? []).filter((s) => s.kind === 'BUDGET')}
-                total={String(0.5 * (Number(order.budget ?? 0) - Number(order.revisionAmount ?? 15)))}
+                total={String(Number(order.budget ?? 0) - Number(order.revisionAmount ?? 15))}
                 onApprove={onApproveAdvanceInstallment}
                 onReject={onRejectAdvanceInstallment}
                 pendingIds={pendingIds}

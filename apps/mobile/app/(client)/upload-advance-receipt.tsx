@@ -204,7 +204,7 @@ export default function UploadAdvanceReceiptScreen() {
                     />
                   </View>
                 </View>
-                <Field label="Número de referencia" value={referencia} onChangeText={(text) => setReferencia(onlyDigits(text))} placeholder="Referencia de la transferencia" keyboardType="number-pad" />
+                <Field label="Últimos 4 dígitos de la referencia" value={referencia} onChangeText={(text) => setReferencia(onlyDigits(text))} placeholder="Ej. 1234" keyboardType="number-pad" maxLength={4} />
               </>
             )}
 
