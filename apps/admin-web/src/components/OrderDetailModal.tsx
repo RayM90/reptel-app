@@ -92,21 +92,31 @@ function StatusTimeline({ history }: { history: StatusHistoryEntry[] }) {
   return (
     <div className="card">
       <h4>Historial de estados</h4>
-      {chronological.map((entry, i) => {
-        const isLast = i === chronological.length - 1
-        const start = new Date(entry.createdAt).getTime()
-        const end = isLast ? Date.now() : new Date(chronological[i + 1].createdAt).getTime()
-        const days = Math.floor((end - start) / (1000 * 60 * 60 * 24))
-        const durationLabel = days > 0
-          ? ` — ${days} día${days === 1 ? '' : 's'}${isLast ? ' (en curso)' : ''}`
-          : isLast ? ' (recién)' : ''
-        return (
-          <p key={entry.id} className="form-hint" style={{ marginBottom: 4 }}>
-            {isLast ? '○' : '✓'} {getStatusBadge('order', entry.status).label} — {new Date(entry.createdAt).toLocaleString('es-VE')}
-            {durationLabel}
-          </p>
-        )
-      })}
+      <div className="status-timeline">
+        {chronological.map((entry, i) => {
+          const isLast = i === chronological.length - 1
+          const start = new Date(entry.createdAt).getTime()
+          const end = isLast ? Date.now() : new Date(chronological[i + 1].createdAt).getTime()
+          const days = Math.floor((end - start) / (1000 * 60 * 60 * 24))
+          const durationLabel = days > 0
+            ? `${days} día${days === 1 ? '' : 's'}${isLast ? ' (en curso)' : ''}`
+            : isLast ? 'Recién' : null
+          const badge = getStatusBadge('order', entry.status)
+          return (
+            <div key={entry.id} className="status-timeline-item">
+              <div className={`status-timeline-dot status-timeline-dot-${isLast ? badge.variant : 'success'}`} />
+              {!isLast && <div className="status-timeline-line" />}
+              <div className="status-timeline-content">
+                <p className="status-timeline-label">{badge.label}</p>
+                <p className="form-hint status-timeline-meta">
+                  {new Date(entry.createdAt).toLocaleString('es-VE')}
+                  {durationLabel && ` · ${durationLabel}`}
+                </p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
