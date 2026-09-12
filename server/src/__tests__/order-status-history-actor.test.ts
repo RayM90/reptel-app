@@ -60,29 +60,4 @@ describe('orders.service — actor en OrderStatusHistory', () => {
     })
     expect(history?.userId).toBeNull()
   })
-
-  it('approveBudget registra el userId del cliente que aprueba', async () => {
-    // Reutiliza `order`; lo deja en WAITING_APPROVAL con presupuesto.
-    await prisma.order.update({
-      where: { id: order.id },
-      data: { status: 'WAITING_APPROVAL', budget: 50 },
-    })
-    const clientUser = await prisma.user.create({
-      data: {
-        name: 'Cliente Actor', email: (await prisma.client.findUnique({ where: { id: client.id } }))!.email!,
-        role: 'CLIENT', password: 'COGNITO_MANAGED', clientId: client.id,
-      },
-    })
-
-    const { approveBudget } = await import('../modules/orders/orders.service')
-    await approveBudget(order.id, clientUser.email)
-
-    const history = await prisma.orderStatusHistory.findFirst({
-      where: { orderId: order.id, status: 'APPROVED' },
-      orderBy: { createdAt: 'desc' },
-    })
-    expect(history?.userId).toBe(clientUser.id)
-
-    await prisma.user.delete({ where: { id: clientUser.id } })
-  })
 })

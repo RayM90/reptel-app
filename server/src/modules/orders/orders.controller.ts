@@ -635,27 +635,8 @@ export const markPickedUpUnrepaired = async (req: AuthRequest, res: Response): P
 }
 
 // ─────────────────────────────────────────────
-// CLIENTE — Aprobar o rechazar el presupuesto (Fase 5)
+// CLIENTE — Rechazar el presupuesto (Fase 5)
 // ─────────────────────────────────────────────
-
-export const approveBudget = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const email = req.user?.email
-    if (!email) {
-      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
-      return
-    }
-    const id = String(req.params.id)
-    const order = await ordersService.approveBudget(id, email)
-
-    broadcastOrderUpdate({ type: 'ORDER_BUDGET_UPDATED', data: order })
-
-    res.json({ success: true, data: order })
-  } catch (error: any) {
-    console.error('ERROR APROBAR PRESUPUESTO:', error)
-    res.status(400).json({ success: false, message: error.message || 'Error al aprobar el presupuesto' })
-  }
-}
 
 export const rejectBudget = async (req: AuthRequest, res: Response): Promise<void> => {
   try {

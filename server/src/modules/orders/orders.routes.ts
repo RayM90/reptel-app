@@ -33,8 +33,7 @@ router.post('/:id/counter-payment-installment', authenticate, authorize('ADMIN',
 
 router.post('/:id/counter-budget-payment-installment', authenticate, authorize('ADMIN', 'TECHNICIAN'), ordersController.submitCounterBudgetInstallmentHandler)
 
-// Aprobar o rechazar el presupuesto tras el diagnóstico del técnico
-router.post('/:id/approve-budget', authenticate, authorize('CLIENT'), ordersController.approveBudget)
+// Rechazar el presupuesto tras el diagnóstico del técnico
 router.post('/:id/reject-budget', authenticate, authorize('CLIENT'), ordersController.rejectBudget)
 
 // Confirmar o disputar un diagnóstico sin costo
