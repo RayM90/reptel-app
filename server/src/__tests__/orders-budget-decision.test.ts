@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma'
-import { approveBudget, rejectBudget, confirmZeroBudgetDiagnosis, disputeZeroBudgetDiagnosis } from '../modules/orders/orders.service'
+import { rejectBudget, confirmZeroBudgetDiagnosis, disputeZeroBudgetDiagnosis } from '../modules/orders/orders.service'
 import { submitDiagnosis } from '../modules/orders/orders.service'
 
 let clientA: { id: string }
@@ -80,27 +80,6 @@ afterAll(async () => {
   await prisma.user.delete({ where: { id: technician.id } }).catch((e) => console.error('TECH DELETE FAILED', e))
   await prisma.client.delete({ where: { id: clientA.id } }).catch((e) => console.error('CLIENT A DELETE FAILED', e))
   await prisma.client.delete({ where: { id: clientB.id } }).catch((e) => console.error('CLIENT B DELETE FAILED', e))
-})
-
-describe('orders.service — approveBudget', () => {
-  it('aprueba una orden en WAITING_APPROVAL y autoriza a reparar de inmediato', async () => {
-    const order = await makeOrder()
-    const result = await approveBudget(order.id, userA.email)
-    expect(result.status).toBe('REPAIRING')
-    expect(result.budgetApproved).toBe(true)
-  })
-
-  it('lanza error si el status no es WAITING_APPROVAL', async () => {
-    const order = await makeOrder({ status: 'RECEIVED' })
-    await expect(approveBudget(order.id, userA.email)).rejects.toThrow(
-      'Esta acción solo aplica a órdenes esperando aprobación de presupuesto'
-    )
-  })
-
-  it('lanza error si la orden no pertenece al cliente', async () => {
-    const order = await makeOrder()
-    await expect(approveBudget(order.id, userB.email)).rejects.toThrow('Orden no encontrada')
-  })
 })
 
 describe('orders.service — rejectBudget', () => {

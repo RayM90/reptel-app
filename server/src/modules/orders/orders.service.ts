@@ -1206,55 +1206,6 @@ export const closeZeroBudgetOrder = async (id: string) => {
 // docs/design-plans/2026-08-16-rechazo-presupuesto-flujo.md
 // ─────────────────────────────────────────────
 
-export const approveBudget = async (id: string, email: string) => {
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, clientId: true },
-  })
-  if (!user || !user.clientId) {
-    throw new Error('Cliente no encontrado para este usuario')
-  }
-
-  const order = await prisma.order.findFirst({
-    where: { id, clientId: user.clientId },
-  })
-  if (!order) {
-    throw new Error('Orden no encontrada')
-  }
-  if (order.status !== 'WAITING_APPROVAL') {
-    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
-  }
-
-  return await prisma.order.update({
-    where: { id },
-    data: {
-      budgetApproved: true,
-      // El presupuesto aprobado autoriza al técnico a empezar la reparación
-      // de inmediato — no queda un paso manual extra para "iniciar reparación".
-      status: 'REPAIRING',
-      statusHistory: {
-        create: [
-          {
-            status: 'APPROVED',
-            comment: `Presupuesto de $${order.budget} aprobado por el cliente en la app`,
-            userId: user.id,
-          },
-          {
-            status: 'REPAIRING',
-            comment: 'Presupuesto aprobado — técnico autorizado a iniciar la reparación',
-          },
-        ],
-      },
-    },
-    include: {
-      client: true,
-      device: true,
-      technician: { select: { id: true, name: true } },
-      statusHistory: { orderBy: { createdAt: 'desc' } },
-    },
-  })
-}
-
 // Cuando el cliente rechaza: la revisión ($15) y el delivery ($10) ya están
 // cobrados (se pagaron antes de despachar al técnico), así que no hay nada
 // más que cobrar ni reembolsar. La comisión del técnico usa la misma
