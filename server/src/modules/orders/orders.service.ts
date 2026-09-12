@@ -590,6 +590,16 @@ export const submitBudgetPaymentInstallment = async (
 
   const base = Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
   const total = 0.5 * base
+
+  // budget <= revisionAmount (ej. un trabajo de $15 igual a la revisión ya
+  // pagada) → el 50% da <= 0. No hay nada que cobrar por esta vía; la orden
+  // debe cerrarse por el camino de "diagnóstico sin costo adicional"
+  // (confirmZeroBudgetDiagnosis/disputeZeroBudgetDiagnosis en el cliente,
+  // onCloseZeroBudgetOrder en el admin), no por un abono.
+  if (total <= 0) {
+    throw new Error('Esta acción no aplica — el presupuesto no supera el costo de la revisión ya pagada')
+  }
+
   const alreadyAccounted = order.advancePaymentSubmissions.reduce(
     (sum, s) => sum + Number(s.amount),
     0
@@ -676,23 +686,59 @@ export const confirmAdvancePaymentInstallment = async (
 
       if (orderNowComplete) {
         if (isBudgetKind) {
-          // 50% del presupuesto completado → pagar ES aprobar, autoriza a
-          // reparar de inmediato (reemplaza el approveBudget gratis).
+          // Solo transicionamos si la orden SIGUE esperando aprobación. Si ya
+          // se movió (ej. el cliente rechazó el presupuesto — rejectBudget —
+          // mientras este abono seguía PENDING), el dinero ya quedó CONFIRMED
+          // arriba pero no volvemos a tocar status/budgetApproved/historial:
+          // cae al fallback de abajo, que devuelve la orden tal cual está.
+          if (order.status === 'WAITING_APPROVAL') {
+            // 50% del presupuesto completado → pagar ES aprobar, autoriza a
+            // reparar de inmediato (reemplaza el approveBudget gratis).
+            return await tx.order.update({
+              where: { id: order.id },
+              data: {
+                budgetApproved: true,
+                status: 'REPAIRING',
+                statusHistory: {
+                  create: [
+                    {
+                      status: 'APPROVED',
+                      comment: `Anticipo de presupuesto ($${total.toFixed(2)}) completado — confirmado por el administrador`,
+                      userId: actor?.id,
+                    },
+                    {
+                      status: 'REPAIRING',
+                      comment: 'Anticipo de presupuesto confirmado — técnico autorizado a iniciar la reparación',
+                    },
+                  ],
+                },
+              },
+              include: {
+                client: true,
+                device: true,
+                statusHistory: { orderBy: { createdAt: 'desc' } },
+                advancePaymentSubmissions: true,
+              },
+            })
+          }
+        } else {
+          // Pago completo confirmado por el admin → autoriza al técnico a
+          // proceder de inmediato (revisar en recepción, o ir a buscar el
+          // equipo en delivery — "revisión" incluye ese viaje en ese caso).
           return await tx.order.update({
             where: { id: order.id },
             data: {
-              budgetApproved: true,
-              status: 'REPAIRING',
+              status: 'DIAGNOSING',
               statusHistory: {
                 create: [
                   {
-                    status: 'APPROVED',
-                    comment: `Anticipo de presupuesto ($${total.toFixed(2)}) completado — confirmado por el administrador`,
+                    status: 'RECEIVED',
+                    comment: `Anticipo de $${total} completado mediante abonos — confirmado por el administrador`,
                     userId: actor?.id,
                   },
                   {
-                    status: 'REPAIRING',
-                    comment: 'Anticipo de presupuesto confirmado — técnico autorizado a iniciar la reparación',
+                    status: 'DIAGNOSING',
+                    comment: 'Pago confirmado — técnico autorizado a proceder con la revisión',
                   },
                 ],
               },
@@ -705,35 +751,6 @@ export const confirmAdvancePaymentInstallment = async (
             },
           })
         }
-
-        // Pago completo confirmado por el admin → autoriza al técnico a
-        // proceder de inmediato (revisar en recepción, o ir a buscar el
-        // equipo en delivery — "revisión" incluye ese viaje en ese caso).
-        return await tx.order.update({
-          where: { id: order.id },
-          data: {
-            status: 'DIAGNOSING',
-            statusHistory: {
-              create: [
-                {
-                  status: 'RECEIVED',
-                  comment: `Anticipo de $${total} completado mediante abonos — confirmado por el administrador`,
-                  userId: actor?.id,
-                },
-                {
-                  status: 'DIAGNOSING',
-                  comment: 'Pago confirmado — técnico autorizado a proceder con la revisión',
-                },
-              ],
-            },
-          },
-          include: {
-            client: true,
-            device: true,
-            statusHistory: { orderBy: { createdAt: 'desc' } },
-            advancePaymentSubmissions: true,
-          },
-        })
       }
     }
 
@@ -767,11 +784,23 @@ export const updateOrderStatus = async (
     ? await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true } })
     : null
 
-  if (expectedVersion !== undefined) {
-    const current = await prisma.order.findUniqueOrThrow({ where: { id }, select: { version: true } })
-    if (current.version !== expectedVersion) {
-      throw new Error('La orden fue modificada por otro usuario, recarga e intenta de nuevo')
-    }
+  const current = await prisma.order.findUniqueOrThrow({
+    where: { id },
+    select: { version: true, status: true, budgetApproved: true },
+  })
+
+  if (expectedVersion !== undefined && current.version !== expectedVersion) {
+    throw new Error('La orden fue modificada por otro usuario, recarga e intenta de nuevo')
+  }
+
+  // No se puede saltar de WAITING_APPROVAL a REPAIRING por esta vía genérica
+  // sin el anticipo de presupuesto confirmado — eso solo debe ocurrir vía
+  // confirmAdvancePaymentInstallment (kind BUDGET). Otras transiciones hacia
+  // REPAIRING (ej. WAITING_PART -> REPAIRING) siguen permitidas.
+  if (status === 'REPAIRING' && current.status === 'WAITING_APPROVAL' && current.budgetApproved !== true) {
+    throw new Error(
+      'No se puede pasar a REPAIRING sin el anticipo de presupuesto confirmado — use la aprobación del abono de presupuesto'
+    )
   }
 
   const order = await prisma.order.update({
@@ -807,24 +836,25 @@ export const updateOrderStatus = async (
   return order
 }
 
-export const updateOrderBudget = async (
-  id: string,
-  budget: number,
-  approved: boolean
-) => {
+// NOTA (revisión final — Finding 1b): este endpoint editaba el presupuesto Y
+// podía "aprobarlo" gratis (approved: true -> status REPAIRING sin ningún
+// pago), atribuyéndolo a "el cliente" en el historial aunque nadie hubiera
+// pagado nada. Ningún frontend lo llama así hoy — la aprobación real pasa
+// por el anticipo de presupuesto (submitBudgetPaymentInstallment +
+// confirmAdvancePaymentInstallment). Se removió el salto de estado gratis;
+// este endpoint ahora solo permite corregir el monto del presupuesto,
+// sin tocar status ni budgetApproved.
+export const updateOrderBudget = async (id: string, budget: number) => {
+  const current = await prisma.order.findUniqueOrThrow({ where: { id }, select: { status: true } })
+
   return await prisma.order.update({
     where: { id },
     data: {
       budget,
-      budgetApproved: approved,
-      status: approved ? 'REPAIRING' : 'WAITING_APPROVAL',
+      // El historial exige un `status` — no cambiamos el estado de la orden,
+      // así que registramos el que ya tenía (no un salto a REPAIRING).
       statusHistory: {
-        create: approved
-          ? [
-              { status: 'APPROVED', comment: `Presupuesto de $${budget} aprobado por el cliente` },
-              { status: 'REPAIRING', comment: 'Presupuesto aprobado — técnico autorizado a iniciar la reparación' },
-            ]
-          : [{ status: 'WAITING_APPROVAL', comment: `Presupuesto de $${budget} enviado al cliente para aprobación` }],
+        create: [{ status: current.status, comment: `Presupuesto corregido a $${budget} por el administrador` }],
       },
     },
     include: {
@@ -1160,7 +1190,11 @@ export const closeZeroBudgetOrder = async (id: string) => {
   }
 
   const budget = order.budget != null ? Number(order.budget) : null
-  if (budget !== 0) {
+  // budget <= revisionAmount (no solo budget === 0) es económicamente el
+  // mismo caso de "nada más que cobrar" — el 50% del anticipo de presupuesto
+  // daría <= 0 (ver Finding 4, revisión final: submitBudgetPaymentInstallment
+  // ya rechaza ese anticipo con un mensaje propio).
+  if (budget == null || budget > Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)) {
     throw new Error('Esta acción solo aplica a órdenes con presupuesto $0')
   }
 
@@ -1263,6 +1297,17 @@ export const rejectBudget = async (id: string, email: string, reason: string) =>
     },
   })
 
+  // Anular cualquier abono BUDGET todavía PENDING — la orden ya se cerró con
+  // el rechazo, así que ese abono nunca debe poder confirmarse después y
+  // hacerla saltar de vuelta a REPAIRING (ver Finding 3, revisión final).
+  await prisma.advancePaymentSubmission.updateMany({
+    where: { orderId: id, status: 'PENDING', kind: 'BUDGET' },
+    data: {
+      status: 'REJECTED',
+      rejectionReason: 'Orden cerrada — cliente rechazó el presupuesto',
+    },
+  })
+
   if (order.technicianId) {
     await decrementTechnicianLoad(order.technicianId)
   }
@@ -1285,7 +1330,9 @@ export const confirmZeroBudgetDiagnosis = async (id: string, email: string) => {
   if (order.status !== 'WAITING_APPROVAL') {
     throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
   }
-  if (order.budget == null || Number(order.budget) !== 0) {
+  // budget <= revisionAmount (no solo === 0) — mismo caso de "nada más que
+  // cobrar", ver Finding 4 (revisión final).
+  if (order.budget == null || Number(order.budget) > Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)) {
     throw new Error('Esta acción solo aplica a diagnósticos sin costo')
   }
 
@@ -1336,7 +1383,9 @@ export const disputeZeroBudgetDiagnosis = async (id: string, email: string, note
   if (order.status !== 'WAITING_APPROVAL') {
     throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
   }
-  if (order.budget == null || Number(order.budget) !== 0) {
+  // budget <= revisionAmount (no solo === 0) — mismo caso de "nada más que
+  // cobrar", ver Finding 4 (revisión final).
+  if (order.budget == null || Number(order.budget) > Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)) {
     throw new Error('Esta acción solo aplica a diagnósticos sin costo')
   }
 
@@ -1568,6 +1617,13 @@ export const submitCounterBudgetInstallment = async (
 
   const base = Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
   const total = 0.5 * base
+
+  // Mismo caso que en submitBudgetPaymentInstallment: budget <= revisionAmount
+  // no deja nada que cobrar por esta vía.
+  if (total <= 0) {
+    throw new Error('Esta acción no aplica — el presupuesto no supera el costo de la revisión ya pagada')
+  }
+
   const alreadyAccounted = order.advancePaymentSubmissions.reduce((sum, s) => sum + Number(s.amount), 0)
   const remaining = total - alreadyAccounted
 
