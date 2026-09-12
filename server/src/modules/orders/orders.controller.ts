@@ -849,3 +849,31 @@ export const submitCounterAdvanceInstallmentHandler = async (req: AuthRequest, r
     res.status(400).json({ success: false, message: error.message || 'Error al registrar el abono' })
   }
 }
+
+export const submitCounterBudgetInstallmentHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const actorEmail = req.user?.email
+    if (!actorEmail) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const orderId = String(req.params.id)
+    const { paymentDetails, amount } = req.body
+
+    if (!paymentDetails || typeof paymentDetails !== 'object') {
+      res.status(400).json({ success: false, message: 'paymentDetails es requerido' })
+      return
+    }
+    if (amount === undefined || amount === null || Number.isNaN(Number(amount))) {
+      res.status(400).json({ success: false, message: 'amount es requerido y debe ser numérico' })
+      return
+    }
+
+    const submission = await ordersService.submitCounterBudgetInstallment(orderId, actorEmail, paymentDetails, Number(amount))
+    res.status(201).json({ success: true, data: submission })
+  } catch (error: any) {
+    console.error('ERROR ANTICIPO PRESUPUESTO MOSTRADOR:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al registrar el anticipo' })
+  }
+}

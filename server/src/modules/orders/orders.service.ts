@@ -1547,3 +1547,48 @@ export const submitCounterAdvanceInstallment = async (
     },
   })
 }
+
+// ─────────────────────────────────────────────
+// ADMIN/TECHNICIAN — Anticipo del presupuesto registrado en persona
+// (mostrador). Sin verificación de dueño, mismo cálculo que
+// submitBudgetPaymentInstallment.
+// ─────────────────────────────────────────────
+
+export const submitCounterBudgetInstallment = async (
+  orderId: string,
+  actorEmail: string,
+  paymentDetails: Record<string, string>,
+  amount: number
+) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      advancePaymentSubmissions: { where: { status: { in: ['CONFIRMED', 'PENDING'] }, kind: 'BUDGET' } },
+    },
+  })
+  if (!order) throw new Error('Orden no encontrada')
+
+  if (order.status !== 'WAITING_APPROVAL') {
+    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
+  }
+
+  if (amount == null || amount <= 0) {
+    throw new Error('El monto del pago debe ser mayor a cero')
+  }
+
+  const base = Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+  const total = 0.5 * base
+  const alreadyAccounted = order.advancePaymentSubmissions.reduce((sum, s) => sum + Number(s.amount), 0)
+  const remaining = total - alreadyAccounted
+
+  if (amount > remaining + 0.009) {
+    throw new Error(`El monto excede lo que falta por pagar ($${remaining.toFixed(2)})`)
+  }
+
+  return await prisma.advancePaymentSubmission.create({
+    data: { orderId, amount, paymentDetails, status: 'PENDING', kind: 'BUDGET' },
+  })
+}
