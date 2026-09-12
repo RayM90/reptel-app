@@ -78,14 +78,20 @@ export default function Dashboard() {
     }
   }
 
-  const downloadReceipt = async (order: Order, type: 'intake' | 'final') => {
+  const downloadReceipt = async (order: Order, type: 'intake' | 'payment' | 'final' | 'closure') => {
     try {
       const response = await api.get(`/api/orders/${order.id}/receipt/${type}`, { responseType: 'blob' })
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
       const link = document.createElement('a')
       link.href = url
       const pendingPickup = type === 'intake' && isIntakePendingPickup(order)
-      link.download = `recibo-${type === 'final' ? 'entrega' : pendingPickup ? 'anticipo' : 'recepcion'}-${order.orderNumber}.pdf`
+      const filenames: Record<'intake' | 'payment' | 'final' | 'closure', string> = {
+        intake: pendingPickup ? 'anticipo' : 'recepcion',
+        payment: 'pago',
+        final: 'entrega',
+        closure: 'cierre',
+      }
+      link.download = `recibo-${filenames[type]}-${order.orderNumber}.pdf`
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -222,6 +228,48 @@ export default function Dashboard() {
     }
   }
 
+  // ── Marcar entrega física del equipo ya pagado ──
+  const handleMarkDelivered = async (order: Order) => {
+    if (pendingIds.has(order.id)) return
+    const confirmed = await confirmDialog({
+      title: 'Marcar como entregado',
+      message: `Orden ${order.orderNumber} — ${order.client.name} ${order.client.lastName}. Confirma que el cliente ya recibió el equipo reparado.`,
+      confirmLabel: 'Marcar como entregado',
+    })
+    if (!confirmed) return
+    setBusy(order.id, true)
+    try {
+      await api.post(`/api/orders/${order.id}/mark-delivered`)
+      showToast('✅ Orden marcada como entregada.', 'success')
+      fetchData()
+    } catch (err) {
+      showToast('❌ Error al marcar la orden como entregada', 'error')
+    } finally {
+      setBusy(order.id, false)
+    }
+  }
+
+  // ── Marcar retiro sin reparar (presupuesto rechazado) ──
+  const handleMarkPickedUpUnrepaired = async (order: Order) => {
+    if (pendingIds.has(order.id)) return
+    const confirmed = await confirmDialog({
+      title: 'Marcar como entregado sin reparar',
+      message: `Orden ${order.orderNumber} — ${order.client.name} ${order.client.lastName}. Confirma que el cliente retiró su equipo sin reparar.`,
+      confirmLabel: 'Marcar como entregado',
+    })
+    if (!confirmed) return
+    setBusy(order.id, true)
+    try {
+      await api.post(`/api/orders/${order.id}/mark-picked-up-unrepaired`)
+      showToast('✅ Orden cerrada — equipo retirado sin reparar.', 'success')
+      fetchData()
+    } catch (err) {
+      showToast('❌ Error al cerrar la orden', 'error')
+    } finally {
+      setBusy(order.id, false)
+    }
+  }
+
   const activeOrders = orders.filter(
     (o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
   )
@@ -339,6 +387,8 @@ export default function Dashboard() {
           onApproveFinalPayment={handleApproveFinalPayment}
           onRejectFinalPayment={handleRejectFinalPayment}
           onCloseZeroBudgetOrder={handleCloseZeroBudgetOrder}
+          onMarkDelivered={handleMarkDelivered}
+          onMarkPickedUpUnrepaired={handleMarkPickedUpUnrepaired}
           onDownloadReceipt={downloadReceipt}
         />
       )}
