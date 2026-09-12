@@ -25,6 +25,8 @@ router.post('/counter', authenticate, authorize('ADMIN', 'TECHNICIAN'), ordersCo
 // Enviar un abono del anticipo (pago en partes — el cliente decide monto y cuántos)
 router.post('/:id/advance-payment-installment', authenticate, authorize('CLIENT'), ordersController.submitAdvancePaymentInstallment)
 
+router.post('/:id/budget-payment-installment', authenticate, authorize('CLIENT'), ordersController.submitBudgetPaymentInstallmentHandler)
+
 // Abono adicional en orden de recepción — lo reporta el staff, no el cliente
 // (mismo endpoint de confirmación de arriba sirve para ambos casos)
 router.post('/:id/counter-payment-installment', authenticate, authorize('ADMIN', 'TECHNICIAN'), ordersController.submitCounterAdvanceInstallmentHandler)

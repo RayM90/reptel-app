@@ -546,6 +546,68 @@ export const submitAdvancePaymentInstallment = async (
   return submission
 }
 
+// ─────────────────────────────────────────────
+// CLIENTE — Anticipo del presupuesto (50% de la reparación, pagar es
+// aprobar). Base = budget - revisionAmount (la revisión ya está pagada y
+// no se vuelve a cobrar), tope = 50% de esa base. El otro 50% se cobra al
+// entregar (confirmFinalPayment, ya existente).
+// ─────────────────────────────────────────────
+
+export const submitBudgetPaymentInstallment = async (
+  orderId: string,
+  email: string,
+  paymentDetails: Record<string, string>,
+  amount: number
+) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { clientId: true },
+  })
+
+  if (!user || !user.clientId) {
+    throw new Error('Cliente no encontrado para este usuario')
+  }
+
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, clientId: user.clientId },
+    include: {
+      advancePaymentSubmissions: { where: { status: { in: ['CONFIRMED', 'PENDING'] }, kind: 'BUDGET' } },
+    },
+  })
+
+  if (!order) {
+    throw new Error('Orden no encontrada')
+  }
+
+  if (order.status !== 'WAITING_APPROVAL') {
+    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
+  }
+
+  if (amount == null || amount <= 0) {
+    throw new Error('El monto del pago debe ser mayor a cero')
+  }
+
+  const base = Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+  const total = 0.5 * base
+  const alreadyAccounted = order.advancePaymentSubmissions.reduce(
+    (sum, s) => sum + Number(s.amount),
+    0
+  )
+  const remaining = total - alreadyAccounted
+
+  if (amount > remaining + 0.009) {
+    throw new Error(
+      `El monto excede lo pendiente por pagar. Restante: $${remaining.toFixed(2)}`
+    )
+  }
+
+  const submission = await prisma.advancePaymentSubmission.create({
+    data: { orderId, amount, paymentDetails, kind: 'BUDGET' },
+  })
+
+  return submission
+}
+
 export const confirmAdvancePaymentInstallment = async (
   submissionId: string,
   approved: boolean,
