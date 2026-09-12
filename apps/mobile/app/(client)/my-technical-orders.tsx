@@ -36,6 +36,8 @@ type OrderStatus =
   | 'REPAIRING'
   | 'WAITING_PART'
   | 'READY'
+  | 'PAID_PENDING_DELIVERY'
+  | 'REJECTED_PENDING_PICKUP'
   | 'DELIVERED'
   | 'CANCELLED'
 interface StatusHistoryEntry {
@@ -93,6 +95,8 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   REPAIRING: '🔧 En reparación',
   WAITING_PART: '📦 Esperando repuesto',
   READY: '📦 Lista para entrega',
+  PAID_PENDING_DELIVERY: '💰 Pagado, pendiente de entrega',
+  REJECTED_PENDING_PICKUP: '❌ Presupuesto rechazado, pendiente de retiro',
   DELIVERED: '🚚 Entregada',
   CANCELLED: '❌ Cancelada',
 }
@@ -106,6 +110,8 @@ const STATUS_COLOR: Record<OrderStatus, string> = {
   REPAIRING: '#4B3E96',
   WAITING_PART: '#4B3E96',
   READY: '#1E7A3D',
+  PAID_PENDING_DELIVERY: '#0369a1',
+  REJECTED_PENDING_PICKUP: '#B3261E',
   DELIVERED: '#1E7A3D',
   CANCELLED: '#B3261E',
 }
@@ -119,6 +125,8 @@ const STATUS_BG: Record<OrderStatus, string> = {
   REPAIRING: '#ECEAF3',
   WAITING_PART: '#ECEAF3',
   READY: '#E3F3E9',
+  PAID_PENDING_DELIVERY: '#e0f2fe',
+  REJECTED_PENDING_PICKUP: '#FBE9E7',
   DELIVERED: '#E3F3E9',
   CANCELLED: '#FBE9E7',
 }
