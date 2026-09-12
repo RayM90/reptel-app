@@ -49,7 +49,9 @@ export default function FinalPaymentScreen() {
 
   const budgetNumber = budget ? Number(budget) : 0
   const revisionNumber = revisionAmount ? Number(revisionAmount) : 0
-  const totalNumber = Math.max(budgetNumber - revisionNumber, 0)
+  // Ahora el 50% se cobró como anticipo de presupuesto antes de reparar
+  // (budget-payment.tsx) — acá solo queda el otro 50%.
+  const totalNumber = Math.max(0.5 * (budgetNumber - revisionNumber), 0)
 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const { data: paymentSettings } = usePaymentInfo()
@@ -172,12 +174,12 @@ export default function FinalPaymentScreen() {
               <Text style={styles.summaryValue}>${budgetNumber.toFixed(2)}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Ya pagado (anticipo de revisión)</Text>
-              <Text style={styles.summaryValueNegative}>-${revisionNumber.toFixed(2)}</Text>
+              <Text style={styles.summaryLabel}>Ya pagado (revisión + anticipo del 50%)</Text>
+              <Text style={styles.summaryValueNegative}>-${(revisionNumber + totalNumber).toFixed(2)}</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabelBold}>Total a pagar ahora</Text>
+              <Text style={styles.summaryLabelBold}>Saldo final a pagar ahora (50% restante)</Text>
               <Text style={styles.summaryValueBold}>${totalNumber.toFixed(2)}</Text>
             </View>
           </View>
