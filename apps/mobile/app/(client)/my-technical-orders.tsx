@@ -487,8 +487,13 @@ export default function MyTechnicalOrdersScreen() {
                         </View>
                       )}
 
-                      {/* Decisión del cliente sobre el presupuesto */}
-                      {status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) > 0 && (
+                      {/* Decisión del cliente sobre el presupuesto — solo cuando el
+                          presupuesto supera lo ya pagado por la revisión. Si
+                          budget <= revisionAmount el 50% del anticipo da <= 0
+                          (nada que cobrar): ese caso usa la tarjeta de
+                          "diagnóstico sin costo adicional" de más abajo, igual
+                          que budget === 0 (Finding 4, revisión final). */}
+                      {status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15) && (
                         <View style={styles.decisionCard}>
                           <Text style={styles.decisionTitle}>¿Qué decides con este presupuesto?</Text>
 
@@ -502,7 +507,7 @@ export default function MyTechnicalOrdersScreen() {
                                   orderId: order.id,
                                   orderNumber: order.orderNumber,
                                   budget: String(order.budget ?? 0),
-                                  revisionAmount: String(order.revisionAmount ?? 0),
+                                  revisionAmount: String(order.revisionAmount ?? 15),
                                 },
                               })
                             }}
@@ -556,8 +561,10 @@ export default function MyTechnicalOrdersScreen() {
                         </View>
                       )}
 
-                      {/* Decisión del cliente — diagnóstico SIN costo */}
-                      {status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) === 0 && (
+                      {/* Decisión del cliente — diagnóstico SIN costo (incluye
+                          budget > 0 pero <= revisionAmount: económicamente es
+                          el mismo caso de "nada más que cobrar", ver Finding 4) */}
+                      {status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) <= Number(order.revisionAmount ?? 15) && (
                         <View style={styles.decisionCard}>
                           <Text style={styles.decisionTitle}>
                             El técnico determinó que no es necesario reparar tu equipo
@@ -635,7 +642,7 @@ export default function MyTechnicalOrdersScreen() {
                                 orderId: order.id,
                                 orderNumber: order.orderNumber,
                                 budget: String(order.budget ?? 0),
-                                revisionAmount: String(order.revisionAmount ?? 0),
+                                revisionAmount: String(order.revisionAmount ?? 15),
                               },
                             })
                           }}

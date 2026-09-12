@@ -249,6 +249,16 @@ export default function OrderDetailModal({
   // cada uno sin tener que adivinar.
   const showIntakeReceipt = order.status !== 'PENDING_PAYMENT'
   const showBudgetAdvanceReceipt = (order.advancePaymentSubmissions ?? []).some((s) => s.kind === 'BUDGET' && s.status === 'CONFIRMED')
+  // La sección de anticipo de presupuesto debe seguir visible (con su
+  // recibo) durante toda la vida de la orden una vez que hay presupuesto de
+  // por medio — igual que "Pago anticipado" — no solo mientras está en
+  // WAITING_APPROVAL (Finding 2, revisión final): se pierde el historial y
+  // el botón de recibo apenas se confirma el anticipo y la orden pasa a
+  // REPAIRING.
+  const hasBudgetSubmissions = (order.advancePaymentSubmissions ?? []).some((s) => s.kind === 'BUDGET')
+  const pastDiagnosis = order.status !== 'RECEIVED' && order.status !== 'DIAGNOSING' && order.status !== 'PENDING_PAYMENT'
+  const showBudgetAdvanceSection =
+    hasBudgetSubmissions || (pastDiagnosis && order.budget != null && Number(order.budget) > 0)
   const showPaymentReceipt = order.finalPaymentConfirmed && order.budget != null && Number(order.budget) > 0
   const showFinalReceipt = order.status === 'DELIVERED'
   const showClosureReceipt = order.status === 'CANCELLED'
@@ -295,12 +305,12 @@ export default function OrderDetailModal({
           <p><strong>Asignado:</strong> {order.technician?.name || 'Sin asignar'}</p>
           <p><strong>Diagnóstico:</strong> {order.diagnosis || '—'}</p>
           <p><strong>Presupuesto:</strong> {order.budget ? `$${order.budget}` : '—'}</p>
-          {order.status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) > 0 && (
+          {showBudgetAdvanceSection && (
             <>
               <h4 style={{ marginTop: 16 }}>Anticipo de presupuesto (50%)</h4>
               <PaymentSubmissionsView
                 submissions={(order.advancePaymentSubmissions ?? []).filter((s) => s.kind === 'BUDGET')}
-                total={String(0.5 * (Number(order.budget) - Number(order.revisionAmount ?? 15)))}
+                total={String(0.5 * (Number(order.budget ?? 0) - Number(order.revisionAmount ?? 15)))}
                 onApprove={onApproveAdvanceInstallment}
                 onReject={onRejectAdvanceInstallment}
                 pendingIds={pendingIds}
@@ -358,7 +368,9 @@ export default function OrderDetailModal({
 
         <p>
           <strong>Acciones:</strong>{' '}
-          {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') && order.budget != null && Number(order.budget) === 0 ? (
+          {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') &&
+          order.budget != null &&
+          Number(order.budget) <= Number(order.revisionAmount ?? 15) ? (
             <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onCloseZeroBudgetOrder(order)}>
               Marcar como entregada
             </button>
