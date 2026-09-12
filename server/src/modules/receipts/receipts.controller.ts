@@ -2,7 +2,7 @@ import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
 import prisma from '../../lib/prisma'
 import { getOrderById, getPartsUsedInOrder } from '../orders/orders.service'
-import { generateIntakeReceipt, generateFinalReceipt, getIntakeReceiptLabels } from './receipts.service'
+import { generateIntakeReceipt, generateFinalReceipt, generatePaymentReceipt, generateClosureReceipt, getIntakeReceiptLabels } from './receipts.service'
 
 // Cliente dueño de la orden, o ADMIN/técnico asignado — nunca otro cliente.
 const canAccessOrder = async (
@@ -74,6 +74,65 @@ export const downloadFinalReceipt = async (req: AuthRequest, res: Response): Pro
     doc.pipe(res)
   } catch (error: any) {
     console.error('ERROR GENERAR RECIBO DE ENTREGA:', error)
+    res.status(500).json({ success: false, message: error.message || 'Error al generar el recibo' })
+  }
+}
+
+export const downloadPaymentReceipt = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const order = await getOrderById(id)
+    if (!order) {
+      res.status(404).json({ success: false, message: 'Orden no encontrada' })
+      return
+    }
+    if (!order.finalPaymentConfirmed || order.budget == null || Number(order.budget) === 0) {
+      res.status(400).json({ success: false, message: 'El recibo de pago no está disponible: el presupuesto aún no ha sido pagado y confirmado' })
+      return
+    }
+    if (!(await canAccessOrder(req, order))) {
+      res.status(403).json({ success: false, message: 'No tienes permisos para esta acción' })
+      return
+    }
+
+    const movements = await getPartsUsedInOrder(id)
+    const partsUsed = movements
+      .filter((m) => !m.reversedAt)
+      .map((m) => ({ productName: m.product.name, quantity: m.quantity, unitPriceAtUse: m.unitPriceAtUse }))
+
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="recibo-pago-${order.orderNumber}.pdf"`)
+    const doc = generatePaymentReceipt({ ...order, partsUsed } as any)
+    doc.pipe(res)
+  } catch (error: any) {
+    console.error('ERROR GENERAR RECIBO DE PAGO:', error)
+    res.status(500).json({ success: false, message: error.message || 'Error al generar el recibo' })
+  }
+}
+
+export const downloadClosureReceipt = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const order = await getOrderById(id)
+    if (!order) {
+      res.status(404).json({ success: false, message: 'Orden no encontrada' })
+      return
+    }
+    if (order.status !== 'CANCELLED') {
+      res.status(400).json({ success: false, message: 'El recibo de cierre solo está disponible para órdenes canceladas' })
+      return
+    }
+    if (!(await canAccessOrder(req, order))) {
+      res.status(403).json({ success: false, message: 'No tienes permisos para esta acción' })
+      return
+    }
+
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="recibo-cierre-${order.orderNumber}.pdf"`)
+    const doc = generateClosureReceipt(order as any)
+    doc.pipe(res)
+  } catch (error: any) {
+    console.error('ERROR GENERAR RECIBO DE CIERRE:', error)
     res.status(500).json({ success: false, message: error.message || 'Error al generar el recibo' })
   }
 }

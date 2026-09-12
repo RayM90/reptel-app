@@ -58,6 +58,8 @@ router.get('/:id', authenticate, authorize('ADMIN'), ordersController.getOrder)
 // (la validación fina de "es tu orden" vive dentro del controller)
 router.get('/:id/receipt/intake', authenticate, receiptsController.downloadIntakeReceipt)
 router.get('/:id/receipt/final', authenticate, receiptsController.downloadFinalReceipt)
+router.get('/:id/receipt/payment', authenticate, receiptsController.downloadPaymentReceipt)
+router.get('/:id/receipt/closure', authenticate, receiptsController.downloadClosureReceipt)
 
 // Crear una nueva orden (uso interno/admin — no cliente) — ADMIN
 router.post('/', authenticate, authorize('ADMIN'), ordersController.createOrder)
