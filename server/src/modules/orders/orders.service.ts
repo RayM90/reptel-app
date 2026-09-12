@@ -993,6 +993,9 @@ export const approveBudget = async (id: string, email: string) => {
 // depende de cuál era el presupuesto rechazado, porque el técnico sí hizo
 // el trabajo de diagnóstico/revisión, solo que el cliente no siguió con la
 // reparación.
+// La orden queda en REJECTED_PENDING_PICKUP — el equipo todavía no salió
+// físicamente del taller. markOrderPickedUpUnrepaired (Task 4) es quien
+// marca CANCELLED cuando el cliente lo retira.
 export const rejectBudget = async (id: string, email: string, reason: string) => {
   const user = await prisma.user.findUnique({
     where: { email },
@@ -1020,13 +1023,12 @@ export const rejectBudget = async (id: string, email: string, reason: string) =>
     where: { id },
     data: {
       budgetApproved: false,
-      finalPaymentConfirmed: true,
-      finalPaymentConfirmedAt: new Date(),
+      budgetRejectionReason: reason,
       technicianCommission: commission,
-      status: 'CANCELLED',
+      status: 'REJECTED_PENDING_PICKUP',
       statusHistory: {
         create: {
-          status: 'CANCELLED',
+          status: 'REJECTED_PENDING_PICKUP',
           comment: `Cliente rechazó el presupuesto de $${order.budget}. Motivo: ${reason}. Comisión del técnico: $${commission.toFixed(2)} (delivery + 40% revisión).`,
           userId: user.id,
         },

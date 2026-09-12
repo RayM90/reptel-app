@@ -104,20 +104,21 @@ describe('orders.service — approveBudget', () => {
 })
 
 describe('orders.service — rejectBudget', () => {
-  it('rechaza una orden en WAITING_APPROVAL: CANCELLED, comisión fija, finalPaymentConfirmedAt seteado', async () => {
+  it('rechaza una orden en WAITING_APPROVAL: REJECTED_PENDING_PICKUP, comisión fija, motivo guardado', async () => {
     const order = await makeOrder({ budget: 80 })
     const result = await rejectBudget(order.id, userA.email, 'Es muy costoso')
 
-    expect(result.status).toBe('CANCELLED')
+    expect(result.status).toBe('REJECTED_PENDING_PICKUP')
     expect(Number(result.technicianCommission)).toBe(16) // 10 + 0.4*15
-    expect(result.finalPaymentConfirmedAt).not.toBeNull()
-    expect(result.finalPaymentConfirmed).toBe(true)
+    expect(result.budgetRejectionReason).toBe('Es muy costoso')
+    expect(result.finalPaymentConfirmed).toBe(false)
+    expect(result.deliveredAt).toBeNull()
 
     const techAfter = await prisma.user.findUnique({ where: { id: technician.id } })
     expect(techAfter?.activeOrderCount).toBe(0)
 
     const history = await prisma.orderStatusHistory.findFirst({
-      where: { orderId: order.id, status: 'CANCELLED' },
+      where: { orderId: order.id, status: 'REJECTED_PENDING_PICKUP' },
       orderBy: { createdAt: 'desc' },
     })
     expect(history?.comment).toContain('Es muy costoso')
