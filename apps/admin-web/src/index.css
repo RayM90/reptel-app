@@ -640,3 +640,57 @@ details.card[open] summary::before {
     background: transparent;
   }
 }
+
+.status-timeline {
+  display: flex;
+  flex-direction: column;
+}
+
+.status-timeline-item {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 16px;
+}
+
+.status-timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+.status-timeline-dot {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-top: 4px;
+  z-index: 1;
+}
+
+.status-timeline-dot-success { background: var(--color-success); }
+.status-timeline-dot-progress { background: var(--color-secondary); box-shadow: 0 0 0 4px rgba(75, 62, 150, 0.15); }
+.status-timeline-dot-info { background: #0369a1; box-shadow: 0 0 0 4px rgba(3, 105, 161, 0.15); }
+.status-timeline-dot-warning { background: #b45309; box-shadow: 0 0 0 4px rgba(180, 83, 9, 0.15); }
+.status-timeline-dot-danger { background: var(--color-danger); box-shadow: 0 0 0 4px rgba(211, 47, 47, 0.15); }
+.status-timeline-dot-neutral { background: #6B6B75; }
+
+.status-timeline-line {
+  position: absolute;
+  left: 5px;
+  top: 16px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--color-border);
+}
+
+.status-timeline-content {
+  flex: 1;
+}
+
+.status-timeline-label {
+  font-weight: 600;
+  margin: 0 0 2px 0;
+}
+
+.status-timeline-meta {
+  margin: 0;
+}
