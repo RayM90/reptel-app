@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma'
-import { submitAdvancePaymentInstallment, submitBudgetPaymentInstallment, submitCounterBudgetInstallment } from '../modules/orders/orders.service'
+import { submitAdvancePaymentInstallment, submitBudgetPaymentInstallment, submitCounterBudgetInstallment, confirmAdvancePaymentInstallment } from '../modules/orders/orders.service'
 
 let client: { id: string }
 let clientUser: { id: string; email: string }
@@ -32,6 +32,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma.advancePaymentSubmission.deleteMany({ where: { order: { clientId: client.id } } })
+  await prisma.orderStatusHistory.deleteMany({ where: { order: { clientId: client.id } } })
   await prisma.order.deleteMany({ where: { clientId: client.id } })
   await prisma.device.delete({ where: { id: device.id } }).catch(() => {})
   await prisma.user.delete({ where: { id: clientUser.id } }).catch(() => {})
@@ -91,5 +92,40 @@ describe('orders.service — submitCounterBudgetInstallment', () => {
     await expect(
       submitCounterBudgetInstallment(order.id, admin!.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '5555' }, 10)
     ).rejects.toThrow(/excede/)
+  })
+})
+
+describe('orders.service — confirmAdvancePaymentInstallment con kind BUDGET', () => {
+  it('al completar el 50%, pasa WAITING_APPROVAL -> REPAIRING', async () => {
+    const order = await makeOrder({ budget: 30, revisionAmount: 15 })
+    const submission = await submitBudgetPaymentInstallment(
+      order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '6666' }, 7.5
+    )
+    const updated = await confirmAdvancePaymentInstallment(submission.id, true, undefined, undefined)
+    expect(updated.status).toBe('REPAIRING')
+  })
+
+  it('con pago en partes, solo transiciona cuando se completa el 50% total', async () => {
+    const order = await makeOrder({ budget: 30, revisionAmount: 15 })
+    const first = await submitBudgetPaymentInstallment(
+      order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '7777' }, 4
+    )
+    const afterFirst = await confirmAdvancePaymentInstallment(first.id, true, undefined, undefined)
+    expect(afterFirst.status).toBe('WAITING_APPROVAL')
+
+    const second = await submitBudgetPaymentInstallment(
+      order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '8888' }, 3.5
+    )
+    const afterSecond = await confirmAdvancePaymentInstallment(second.id, true, undefined, undefined)
+    expect(afterSecond.status).toBe('REPAIRING')
+  })
+
+  it('un abono REVISION sigue transicionando RECEIVED -> DIAGNOSING sin cambios', async () => {
+    const order = await makeOrder({ status: 'RECEIVED', budget: undefined as any, revisionAmount: 15 })
+    const submission = await prisma.advancePaymentSubmission.create({
+      data: { orderId: order.id, amount: 15, paymentDetails: { banco: 'Bancaribe' }, kind: 'REVISION' },
+    })
+    const updated = await confirmAdvancePaymentInstallment(submission.id, true, undefined, undefined)
+    expect(updated.status).toBe('DIAGNOSING')
   })
 })

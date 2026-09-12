@@ -643,10 +643,15 @@ export const confirmAdvancePaymentInstallment = async (
   }
 
   const order = submission.order
+  const isBudgetKind = submission.kind === 'BUDGET'
+
   // Órdenes de recepción no tienen deliveryAmount (no hay que ir a buscar el
   // equipo) — su total es solo la revisión, no revisión+delivery como self-service.
-  const total =
-    order.deliveryAmount != null
+  // Para BUDGET: 50% de (budget - revisionAmount) — el otro 50% se cobra al
+  // entregar (confirmFinalPayment).
+  const total = isBudgetKind
+    ? 0.5 * (Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT))
+    : order.deliveryAmount != null
       ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
       : Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
 
@@ -662,14 +667,44 @@ export const confirmAdvancePaymentInstallment = async (
     })
 
     if (approved) {
-      const alreadyConfirmed = order.advancePaymentSubmissions.reduce(
-        (sum, s) => sum + Number(s.amount),
-        0
-      )
+      const alreadyConfirmed = order.advancePaymentSubmissions
+        .filter((s) => s.kind === submission.kind)
+        .reduce((sum, s) => sum + Number(s.amount), 0)
       const newTotalConfirmed = alreadyConfirmed + Number(submission.amount)
       const orderNowComplete = newTotalConfirmed + 0.009 >= total
 
       if (orderNowComplete) {
+        if (isBudgetKind) {
+          // 50% del presupuesto completado → pagar ES aprobar, autoriza a
+          // reparar de inmediato (reemplaza el approveBudget gratis).
+          return await tx.order.update({
+            where: { id: order.id },
+            data: {
+              budgetApproved: true,
+              status: 'REPAIRING',
+              statusHistory: {
+                create: [
+                  {
+                    status: 'APPROVED',
+                    comment: `Anticipo de presupuesto ($${total.toFixed(2)}) completado — confirmado por el administrador`,
+                    userId: actor?.id,
+                  },
+                  {
+                    status: 'REPAIRING',
+                    comment: 'Anticipo de presupuesto confirmado — técnico autorizado a iniciar la reparación',
+                  },
+                ],
+              },
+            },
+            include: {
+              client: true,
+              device: true,
+              statusHistory: { orderBy: { createdAt: 'desc' } },
+              advancePaymentSubmissions: true,
+            },
+          })
+        }
+
         // Pago completo confirmado por el admin → autoriza al técnico a
         // proceder de inmediato (revisar en recepción, o ir a buscar el
         // equipo en delivery — "revisión" incluye ese viaje en ese caso).
