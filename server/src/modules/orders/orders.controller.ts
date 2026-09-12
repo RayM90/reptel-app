@@ -268,6 +268,40 @@ export const submitAdvancePaymentInstallment = async (req: AuthRequest, res: Res
   }
 }
 
+export const submitBudgetPaymentInstallmentHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const id = String(req.params.id)
+    const { paymentDetails, amount } = req.body
+
+    if (!paymentDetails || typeof paymentDetails !== 'object') {
+      res.status(400).json({ success: false, message: 'paymentDetails es requerido' })
+      return
+    }
+
+    if (amount === undefined || amount === null || Number.isNaN(Number(amount))) {
+      res.status(400).json({ success: false, message: 'amount es requerido y debe ser numérico' })
+      return
+    }
+
+    const submission = await ordersService.submitBudgetPaymentInstallment(
+      id,
+      email,
+      paymentDetails,
+      Number(amount)
+    )
+    res.status(201).json({ success: true, data: submission })
+  } catch (error: any) {
+    console.error('ERROR SUBIR ANTICIPO DE PRESUPUESTO:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al registrar el anticipo' })
+  }
+}
+
 // ─────────────────────────────────────────────
 // ADMIN — Confirmar o rechazar un abono específico del anticipo
 // ─────────────────────────────────────────────
