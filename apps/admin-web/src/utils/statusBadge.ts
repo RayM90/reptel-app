@@ -43,16 +43,21 @@ export function badgeClassName(variant: BadgeVariant): string {
 }
 
 // Una orden "necesita tu atención" cuando tiene un anticipo reportado sin
-// confirmar, o un pago final reportado (mientras la orden sigue en
-// `activeOrders`, un `finalPaymentDetails` no nulo SIEMPRE significa
-// "esperando aprobación" — al aprobarlo el status pasa a DELIVERED y la
-// orden sale de la lista; al rechazarlo, el backend limpia
-// `finalPaymentDetails` a null. No hace falta consultar ningún otro campo.
+// confirmar, o un pago final reportado que todavía no fue aprobado. Antes,
+// mientras la orden seguía en `activeOrders`, un `finalPaymentDetails` no
+// nulo SIEMPRE significaba "esperando aprobación" porque al aprobarlo el
+// status pasaba directo a DELIVERED y la orden salía de la lista. Ahora
+// aprobar el pago final deja la orden en `PAID_PENDING_DELIVERY`, que sigue
+// en `activeOrders` con `finalPaymentDetails` todavía no nulo — por eso hace
+// falta el flag `finalPaymentConfirmed` para distinguir "pendiente" de "ya
+// aprobado, esperando entrega". Al rechazarlo, el backend limpia
+// `finalPaymentDetails` a null.
 export function hasPendingPayment(order: {
   advancePaymentSubmissions: { status: string }[]
   finalPaymentDetails: unknown
+  finalPaymentConfirmed: boolean
 }): boolean {
   const pendingAdvance = order.advancePaymentSubmissions.some((s) => s.status === 'PENDING')
-  const pendingFinal = order.finalPaymentDetails != null
+  const pendingFinal = order.finalPaymentDetails != null && !order.finalPaymentConfirmed
   return pendingAdvance || pendingFinal
 }

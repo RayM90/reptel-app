@@ -972,7 +972,12 @@ export const closeZeroBudgetOrder = async (id: string) => {
     throw new Error('Orden no encontrada')
   }
 
-  if (order.status === 'DELIVERED' || order.status === 'CANCELLED') {
+  if (
+    order.status === 'DELIVERED' ||
+    order.status === 'CANCELLED' ||
+    order.status === 'PAID_PENDING_DELIVERY' ||
+    order.status === 'REJECTED_PENDING_PICKUP'
+  ) {
     throw new Error('Esta orden ya fue cerrada')
   }
 

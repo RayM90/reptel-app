@@ -65,6 +65,7 @@ interface TechOrder {
   revisionAmount: string | null
   technicianCommission: string | null
   finalPaymentConfirmedAt: string | null
+  deliveredAt: string | null
   finalPaymentDetails: Record<string, string> | null
   finalPaymentConfirmed: boolean
   client: { name: string; lastName: string }
@@ -328,8 +329,9 @@ export default function TechnicianDashboard() {
 
   const { monday, saturday } = getWeekRange()
   const weeklyOrders = completedOrders.filter((o) => {
-    if (!o.finalPaymentConfirmedAt) return false
-    const d = new Date(o.finalPaymentConfirmedAt)
+    const dateStr = o.finalPaymentConfirmedAt ?? o.deliveredAt
+    if (!dateStr) return false
+    const d = new Date(dateStr)
     return d >= monday && d <= saturday
   })
   const weeklyCommission = weeklyOrders.reduce(
@@ -339,8 +341,9 @@ export default function TechnicianDashboard() {
 
   const { start: monthStart, end: monthEnd } = getMonthRange()
   const monthlyOrders = completedOrders.filter((o) => {
-    if (!o.finalPaymentConfirmedAt) return false
-    const d = new Date(o.finalPaymentConfirmedAt)
+    const dateStr = o.finalPaymentConfirmedAt ?? o.deliveredAt
+    if (!dateStr) return false
+    const d = new Date(dateStr)
     return d >= monthStart && d <= monthEnd
   })
   const monthlyCommission = monthlyOrders.reduce(
