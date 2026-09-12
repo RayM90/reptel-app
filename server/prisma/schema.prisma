@@ -62,6 +62,11 @@ enum PartialPaymentStatus {
   REJECTED
 }
 
+enum PartialPaymentKind {
+  REVISION
+  BUDGET
+}
+
 enum InventoryMovementType {
   IN
   OUT
@@ -305,6 +310,7 @@ model AdvancePaymentSubmission {
   rejectionReason    String?              @db.Text
   createdAt          DateTime             @default(now())
   confirmedAt        DateTime?
+  kind               PartialPaymentKind   @default(REVISION)
 
   orderId            String
   order              Order                @relation(fields: [orderId], references: [id])
