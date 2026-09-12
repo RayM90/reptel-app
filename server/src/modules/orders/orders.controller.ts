@@ -534,6 +534,48 @@ export const closeZeroBudgetOrder = async (req: AuthRequest, res: Response): Pro
 }
 
 // ─────────────────────────────────────────────
+// ADMIN — Marcar la entrega física (equipo pagado y reparado)
+// ─────────────────────────────────────────────
+
+export const markDelivered = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const order = await ordersService.markOrderDelivered(id)
+
+    broadcastOrderUpdate({
+      type: 'ORDER_STATUS_UPDATED',
+      data: order,
+    })
+
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR MARCAR ENTREGADO:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al marcar la orden como entregada' })
+  }
+}
+
+// ─────────────────────────────────────────────
+// ADMIN — Marcar retiro sin reparar (presupuesto rechazado)
+// ─────────────────────────────────────────────
+
+export const markPickedUpUnrepaired = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const order = await ordersService.markOrderPickedUpUnrepaired(id)
+
+    broadcastOrderUpdate({
+      type: 'ORDER_STATUS_UPDATED',
+      data: order,
+    })
+
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR MARCAR RETIRADO SIN REPARAR:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al cerrar la orden' })
+  }
+}
+
+// ─────────────────────────────────────────────
 // CLIENTE — Aprobar o rechazar el presupuesto (Fase 5)
 // ─────────────────────────────────────────────
 
