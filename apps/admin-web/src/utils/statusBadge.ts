@@ -1,4 +1,4 @@
-export type BadgeVariant = 'success' | 'danger' | 'progress' | 'warning' | 'neutral'
+export type BadgeVariant = 'success' | 'danger' | 'progress' | 'warning' | 'info' | 'neutral'
 
 interface StatusBadgeInfo {
   label: string
@@ -14,6 +14,8 @@ const ORDER_STATUS: Record<string, StatusBadgeInfo> = {
   REPAIRING: { label: 'En reparación', variant: 'progress' },
   WAITING_PART: { label: 'Esperando repuesto', variant: 'progress' },
   READY: { label: 'Listo para entrega', variant: 'success' },
+  PAID_PENDING_DELIVERY: { label: 'Pagado, pendiente de entrega', variant: 'info' },
+  REJECTED_PENDING_PICKUP: { label: 'Rechazado, pendiente de retiro', variant: 'danger' },
   DELIVERED: { label: 'Entregado', variant: 'success' },
   CANCELLED: { label: 'Cancelado', variant: 'danger' },
 }
