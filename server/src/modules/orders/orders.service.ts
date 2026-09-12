@@ -510,7 +510,9 @@ export const submitAdvancePaymentInstallment = async (
     include: {
       // Se cuentan CONFIRMED y PENDING para calcular lo disponible, así el
       // cliente nunca puede enviar de más aunque haya abonos sin revisar.
-      advancePaymentSubmissions: { where: { status: { in: ['CONFIRMED', 'PENDING'] } } },
+      // Filtrado por kind: REVISION — el anticipo del presupuesto (Task 3)
+      // usa su propio pool, no deben mezclarse.
+      advancePaymentSubmissions: { where: { status: { in: ['CONFIRMED', 'PENDING'] }, kind: 'REVISION' } },
     },
   })
 
@@ -538,7 +540,7 @@ export const submitAdvancePaymentInstallment = async (
   }
 
   const submission = await prisma.advancePaymentSubmission.create({
-    data: { orderId, amount, paymentDetails },
+    data: { orderId, amount, paymentDetails, kind: 'REVISION' },
   })
 
   return submission
