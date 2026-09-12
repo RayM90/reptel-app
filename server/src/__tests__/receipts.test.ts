@@ -178,4 +178,51 @@ describe('Orders — GET /:id/receipt/*', () => {
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toBe('application/pdf')
   }, 10000)
+
+  it('recibo de pago: 400 si el pago final no está confirmado', async () => {
+    await prisma.order.update({ where: { id: orderId }, data: { status: 'READY', finalPaymentConfirmed: false } })
+
+    const res = await request(app)
+      .get(`/api/orders/${orderId}/receipt/payment`)
+      .set('Authorization', `Bearer ${authToken}`)
+
+    expect(res.status).toBe(400)
+    expect(res.body.success).toBe(false)
+  }, 10000)
+
+  it('recibo de pago: 200 y PDF cuando el pago final ya está confirmado', async () => {
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { status: 'PAID_PENDING_DELIVERY', finalPaymentConfirmed: true, budget: 50 },
+    })
+
+    const res = await request(app)
+      .get(`/api/orders/${orderId}/receipt/payment`)
+      .set('Authorization', `Bearer ${authToken}`)
+
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('application/pdf')
+  }, 10000)
+
+  it('recibo de cierre: 400 si la orden no está CANCELLED', async () => {
+    await prisma.order.update({ where: { id: orderId }, data: { status: 'READY' } })
+
+    const res = await request(app)
+      .get(`/api/orders/${orderId}/receipt/closure`)
+      .set('Authorization', `Bearer ${authToken}`)
+
+    expect(res.status).toBe(400)
+    expect(res.body.success).toBe(false)
+  }, 10000)
+
+  it('recibo de cierre: 200 y PDF cuando la orden está CANCELLED', async () => {
+    await prisma.order.update({ where: { id: orderId }, data: { status: 'CANCELLED', budgetRejectionReason: 'Muy costoso' } })
+
+    const res = await request(app)
+      .get(`/api/orders/${orderId}/receipt/closure`)
+      .set('Authorization', `Bearer ${authToken}`)
+
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('application/pdf')
+  }, 10000)
 })
