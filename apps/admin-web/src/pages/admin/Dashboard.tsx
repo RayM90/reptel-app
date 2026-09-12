@@ -78,15 +78,16 @@ export default function Dashboard() {
     }
   }
 
-  const downloadReceipt = async (order: Order, type: 'intake' | 'payment' | 'final' | 'closure') => {
+  const downloadReceipt = async (order: Order, type: 'intake' | 'budget-advance' | 'payment' | 'final' | 'closure') => {
     try {
       const response = await api.get(`/api/orders/${order.id}/receipt/${type}`, { responseType: 'blob' })
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
       const link = document.createElement('a')
       link.href = url
       const pendingPickup = type === 'intake' && isIntakePendingPickup(order)
-      const filenames: Record<'intake' | 'payment' | 'final' | 'closure', string> = {
+      const filenames: Record<'intake' | 'budget-advance' | 'payment' | 'final' | 'closure', string> = {
         intake: pendingPickup ? 'anticipo' : 'recepcion',
+        'budget-advance': 'anticipo-presupuesto',
         payment: 'pago',
         final: 'entrega',
         closure: 'cierre',

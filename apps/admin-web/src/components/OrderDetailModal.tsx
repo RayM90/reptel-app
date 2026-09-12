@@ -198,7 +198,7 @@ interface OrderDetailModalProps {
   onMarkDelivered: (order: Order) => void
   onMarkPickedUpUnrepaired: (order: Order) => void
   onSubmitCounterFinalPayment: (order: Order, paymentDetails: Record<string, string>) => void
-  onDownloadReceipt: (order: Order, type: 'intake' | 'payment' | 'final' | 'closure') => void
+  onDownloadReceipt: (order: Order, type: 'intake' | 'budget-advance' | 'payment' | 'final' | 'closure') => void
 }
 
 export default function OrderDetailModal({
@@ -238,6 +238,7 @@ export default function OrderDetailModal({
   // todos juntos al final — así queda claro a qué pago/paso corresponde
   // cada uno sin tener que adivinar.
   const showIntakeReceipt = order.status !== 'PENDING_PAYMENT'
+  const showBudgetAdvanceReceipt = (order.advancePaymentSubmissions ?? []).some((s) => s.kind === 'BUDGET' && s.status === 'CONFIRMED')
   const showPaymentReceipt = order.finalPaymentConfirmed && order.budget != null && Number(order.budget) > 0
   const showFinalReceipt = order.status === 'DELIVERED'
   const showClosureReceipt = order.status === 'CANCELLED'
@@ -284,12 +285,31 @@ export default function OrderDetailModal({
           <p><strong>Asignado:</strong> {order.technician?.name || 'Sin asignar'}</p>
           <p><strong>Diagnóstico:</strong> {order.diagnosis || '—'}</p>
           <p><strong>Presupuesto:</strong> {order.budget ? `$${order.budget}` : '—'}</p>
+          {order.status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) > 0 && (
+            <>
+              <h4 style={{ marginTop: 16 }}>Anticipo de presupuesto (50%)</h4>
+              <PaymentSubmissionsView
+                submissions={(order.advancePaymentSubmissions ?? []).filter((s) => s.kind === 'BUDGET')}
+                total={String(0.5 * (Number(order.budget) - Number(order.revisionAmount ?? 15)))}
+                onApprove={onApproveAdvanceInstallment}
+                onReject={onRejectAdvanceInstallment}
+                pendingIds={pendingIds}
+              />
+              {showBudgetAdvanceReceipt && (
+                <p style={{ marginTop: 8 }}>
+                  <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'budget-advance')}>
+                    📄 Recibo de Anticipo de Presupuesto
+                  </button>
+                </p>
+              )}
+            </>
+          )}
         </div>
 
         <div className="card">
           <h4>Pago anticipado</h4>
           <PaymentSubmissionsView
-            submissions={order.advancePaymentSubmissions ?? []}
+            submissions={(order.advancePaymentSubmissions ?? []).filter((s) => s.kind === 'REVISION')}
             total={String(
               order.deliveryAmount != null
                 ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? 15)
