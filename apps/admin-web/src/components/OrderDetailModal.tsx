@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { isIntakePendingPickup, type Order, type PaymentSubmission } from '../pages/admin/dashboard.types'
+import { formatClientAddress, isIntakePendingPickup, type Order, type PaymentSubmission, type StatusHistoryEntry } from '../pages/admin/dashboard.types'
 import { getStatusBadge, badgeClassName } from '../utils/statusBadge'
 import { useConfirmDialogStore } from '../store/confirmDialog.store'
 
@@ -77,6 +77,37 @@ function PaymentSubmissionsView({
   )
 }
 
+// Historial cronológico de estados — el backend lo entrega ordenado desc
+// (más reciente primero), acá se invierte para leerlo como checklist. Cada
+// entrada muestra cuánto tiempo estuvo la orden en ese estado (diferencia
+// con la entrada siguiente, o con "ahora" para la última) — solo
+// informativo, sin umbrales ni alertas.
+function StatusTimeline({ history }: { history: StatusHistoryEntry[] }) {
+  if (history.length === 0) return null
+  const chronological = [...history].reverse()
+
+  return (
+    <div className="card">
+      <h4>Historial de estados</h4>
+      {chronological.map((entry, i) => {
+        const isLast = i === chronological.length - 1
+        const start = new Date(entry.createdAt).getTime()
+        const end = isLast ? Date.now() : new Date(chronological[i + 1].createdAt).getTime()
+        const days = Math.floor((end - start) / (1000 * 60 * 60 * 24))
+        const durationLabel = days > 0
+          ? ` — ${days} día${days === 1 ? '' : 's'}${isLast ? ' (en curso)' : ''}`
+          : isLast ? ' (recién)' : ''
+        return (
+          <p key={entry.id} className="form-hint" style={{ marginBottom: 4 }}>
+            {isLast ? '○' : '✓'} {getStatusBadge('order', entry.status).label} — {new Date(entry.createdAt).toLocaleString('es-VE')}
+            {durationLabel}
+          </p>
+        )
+      })}
+    </div>
+  )
+}
+
 interface OrderDetailModalProps {
   order: Order
   pendingIds: Set<string>
@@ -86,7 +117,9 @@ interface OrderDetailModalProps {
   onApproveFinalPayment: (order: Order) => void
   onRejectFinalPayment: (order: Order) => void
   onCloseZeroBudgetOrder: (order: Order) => void
-  onDownloadReceipt: (order: Order, type: 'intake' | 'final') => void
+  onMarkDelivered: (order: Order) => void
+  onMarkPickedUpUnrepaired: (order: Order) => void
+  onDownloadReceipt: (order: Order, type: 'intake' | 'payment' | 'final' | 'closure') => void
 }
 
 export default function OrderDetailModal({
@@ -98,6 +131,8 @@ export default function OrderDetailModal({
   onApproveFinalPayment,
   onRejectFinalPayment,
   onCloseZeroBudgetOrder,
+  onMarkDelivered,
+  onMarkPickedUpUnrepaired,
   onDownloadReceipt,
 }: OrderDetailModalProps) {
   const boxRef = useRef<HTMLDivElement>(null)
@@ -117,6 +152,22 @@ export default function OrderDetailModal({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
+  const clientAddress = formatClientAddress(order.client)
+
+  const receiptOptions: { type: 'intake' | 'payment' | 'final' | 'closure'; label: string }[] = []
+  if (order.status !== 'PENDING_PAYMENT') {
+    receiptOptions.push({ type: 'intake', label: isIntakePendingPickup(order) ? 'Anticipo' : 'Recepción' })
+  }
+  if (order.finalPaymentConfirmed && order.budget != null && Number(order.budget) > 0) {
+    receiptOptions.push({ type: 'payment', label: 'Pago' })
+  }
+  if (order.status === 'DELIVERED') {
+    receiptOptions.push({ type: 'final', label: 'Entrega' })
+  }
+  if (order.status === 'CANCELLED') {
+    receiptOptions.push({ type: 'closure', label: 'Cierre' })
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -133,8 +184,31 @@ export default function OrderDetailModal({
           <button className="btn btn-outline" onClick={onClose} aria-label="Cerrar">✕</button>
         </div>
 
-        <p><strong>Problema:</strong> {order.problem}</p>
-        <p><strong>Presupuesto:</strong> {order.budget ? `$${order.budget}` : '—'}</p>
+        <div className="card">
+          <h4>Cliente</h4>
+          <p><strong>Nombre:</strong> {order.client.name} {order.client.lastName}</p>
+          <p><strong>Cédula:</strong> {order.client.idNumber}</p>
+          <p><strong>Teléfono:</strong> {order.client.phone}</p>
+          {order.client.email && <p><strong>Email:</strong> {order.client.email}</p>}
+          {clientAddress && <p><strong>Dirección:</strong> {clientAddress}</p>}
+        </div>
+
+        <div className="card">
+          <h4>Recepción</h4>
+          <p><strong>Origen:</strong> {order.deliveryAmount != null ? '📱 App' : '🏢 Recepción'}</p>
+          <p><strong>Falla reportada:</strong> {order.problem}</p>
+          <p><strong>Accesorios entregados:</strong> {order.device.accessories || '—'}</p>
+          {order.observations && <p><strong>Observaciones:</strong> {order.observations}</p>}
+        </div>
+
+        <div className="card">
+          <h4>Técnico</h4>
+          <p><strong>Asignado:</strong> {order.technician?.name || 'Sin asignar'}</p>
+          <p><strong>Diagnóstico:</strong> {order.diagnosis || '—'}</p>
+          <p><strong>Presupuesto:</strong> {order.budget ? `$${order.budget}` : '—'}</p>
+        </div>
+
+        <StatusTimeline history={order.statusHistory} />
 
         <div className="card">
           <h4>Pago anticipado</h4>
@@ -157,14 +231,15 @@ export default function OrderDetailModal({
         </div>
 
         <p>
-          <strong>Recibo:</strong>{' '}
-          {order.status === 'PENDING_PAYMENT' ? (
-            '—'
-          ) : (
-            <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'intake')}>
-              📄 {isIntakePendingPickup(order) ? 'Anticipo' : 'Recepción'}
-            </button>
-          )}
+          <strong>Recibos:</strong>{' '}
+          {receiptOptions.length === 0 ? '—' : receiptOptions.map((opt, i) => (
+            <span key={opt.type}>
+              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, opt.type)}>
+                📄 {opt.label}
+              </button>
+              {i < receiptOptions.length - 1 && ' '}
+            </span>
+          ))}
         </p>
 
         <p>
@@ -186,6 +261,14 @@ export default function OrderDetailModal({
                 Rechazar
               </button>
             </>
+          ) : order.status === 'PAID_PENDING_DELIVERY' ? (
+            <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onMarkDelivered(order)}>
+              Marcar como entregado
+            </button>
+          ) : order.status === 'REJECTED_PENDING_PICKUP' ? (
+            <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onMarkPickedUpUnrepaired(order)}>
+              Marcar como entregado sin reparar
+            </button>
           ) : (
             '—'
           )}
