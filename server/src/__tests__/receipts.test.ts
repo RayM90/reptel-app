@@ -15,6 +15,7 @@ const fakeOrder = {
   finalPaymentDetails: { referencia: '123456' },
   finalPaymentConfirmedAt: new Date(),
   budgetAdvanceConfirmedAt: new Date(),
+  budgetAdvanceAmount: 7.5,
   budgetRejectionReason: 'Muy costoso',
   technicianCommission: 20,
   receivedAt: new Date(),
@@ -136,6 +137,7 @@ describe('Orders — GET /:id/receipt/*', () => {
   }, 20000)
 
   afterAll(async () => {
+    await prisma.advancePaymentSubmission.deleteMany({ where: { orderId } })
     await prisma.orderStatusHistory.deleteMany({ where: { orderId } })
     await prisma.order.delete({ where: { id: orderId } }).catch(() => {})
     await prisma.device.delete({ where: { id: device.id } }).catch(() => {})
@@ -226,6 +228,37 @@ describe('Orders — GET /:id/receipt/*', () => {
 
     const res = await request(app)
       .get(`/api/orders/${orderId}/receipt/closure`)
+      .set('Authorization', `Bearer ${authToken}`)
+
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('application/pdf')
+  }, 10000)
+
+  it('recibo de anticipo de presupuesto: 400 si no hay abono BUDGET confirmado', async () => {
+    await prisma.order.update({ where: { id: orderId }, data: { status: 'WAITING_APPROVAL', budget: 30 } })
+
+    const res = await request(app)
+      .get(`/api/orders/${orderId}/receipt/budget-advance`)
+      .set('Authorization', `Bearer ${authToken}`)
+
+    expect(res.status).toBe(400)
+    expect(res.body.success).toBe(false)
+  }, 10000)
+
+  it('recibo de anticipo de presupuesto: 200 y PDF cuando ya hay un abono BUDGET confirmado', async () => {
+    await prisma.advancePaymentSubmission.create({
+      data: {
+        orderId,
+        amount: 7.5,
+        paymentDetails: { banco: 'Bancaribe', telefono: '04121234567', referencia: '9999' },
+        kind: 'BUDGET',
+        status: 'CONFIRMED',
+        confirmedAt: new Date(),
+      },
+    })
+
+    const res = await request(app)
+      .get(`/api/orders/${orderId}/receipt/budget-advance`)
       .set('Authorization', `Bearer ${authToken}`)
 
     expect(res.status).toBe(200)

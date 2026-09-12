@@ -286,6 +286,21 @@ export default function Dashboard() {
     }
   }
 
+  // ── Registrar anticipo de presupuesto desde el mostrador ──
+  const handleSubmitCounterBudgetPayment = async (order: Order, paymentDetails: Record<string, string>, amount: number) => {
+    if (pendingIds.has(order.id)) return
+    setBusy(order.id, true)
+    try {
+      await api.post(`/api/orders/${order.id}/counter-budget-payment-installment`, { paymentDetails, amount })
+      showToast('✅ Anticipo registrado — pendiente de aprobación.', 'success')
+      fetchData()
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al registrar el anticipo', 'error')
+    } finally {
+      setBusy(order.id, false)
+    }
+  }
+
   const activeOrders = orders.filter(
     (o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
   )
@@ -413,6 +428,7 @@ export default function Dashboard() {
           onMarkDelivered={handleMarkDelivered}
           onMarkPickedUpUnrepaired={handleMarkPickedUpUnrepaired}
           onSubmitCounterFinalPayment={handleSubmitCounterFinalPayment}
+          onSubmitCounterBudgetPayment={handleSubmitCounterBudgetPayment}
           onDownloadReceipt={downloadReceipt}
         />
       )}

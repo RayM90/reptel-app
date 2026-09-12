@@ -196,6 +196,87 @@ function CounterFinalPaymentForm({
   )
 }
 
+// Igual que CounterFinalPaymentForm, pero para el anticipo de presupuesto —
+// a diferencia del pago final, este sí necesita un monto (el anticipo se
+// puede pagar en partes, el cliente en mostrador puede traer solo una parte
+// del 50%).
+function CounterBudgetPaymentForm({
+  suggestedAmount,
+  disabled,
+  onSubmit,
+}: {
+  suggestedAmount: number
+  disabled: boolean
+  onSubmit: (paymentDetails: Record<string, string>, amount: number) => void
+}) {
+  const [method, setMethod] = useState<'TRANSFER' | 'BINANCE'>('TRANSFER')
+  const [monto, setMonto] = useState(suggestedAmount.toFixed(2))
+  const [banco, setBanco] = useState('')
+  const [telefono, setTelefono] = useState('')
+  const [referencia, setReferencia] = useState('')
+  const [correo, setCorreo] = useState('')
+  const [uid, setUid] = useState('')
+  const [nombre, setNombre] = useState('')
+
+  const handleSubmit = () => {
+    const details: Record<string, string> = method === 'BINANCE'
+      ? { correo, uid, nombre }
+      : { banco, telefono, referencia }
+    onSubmit(details, Number(monto))
+  }
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div className="form-group">
+        <label>Monto recibido ($)</label>
+        <input type="number" min="0.01" step="0.01" value={monto} onChange={(e) => setMonto(e.target.value)} />
+        <p className="form-hint">El cliente puede pagar el anticipo en partes — este es solo lo que trajo hoy.</p>
+      </div>
+      <div className="form-group">
+        <label>Método de pago</label>
+        <select value={method} onChange={(e) => setMethod(e.target.value as 'TRANSFER' | 'BINANCE')}>
+          <option value="TRANSFER">Transferencia / Pago Móvil</option>
+          <option value="BINANCE">Binance</option>
+        </select>
+      </div>
+      {method === 'BINANCE' ? (
+        <>
+          <div className="form-group">
+            <label>Correo Binance</label>
+            <input type="email" value={correo} onChange={(e) => setCorreo(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label>UID Binance</label>
+            <input type="text" value={uid} onChange={(e) => setUid(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label>Nombre del titular</label>
+            <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="form-group">
+            <label>Banco</label>
+            <SelectWithOther value={banco} options={VENEZUELAN_BANKS.map((b) => b.name)} onChange={setBanco} />
+          </div>
+          <div className="form-group">
+            <label>Teléfono emisor</label>
+            <PhoneInput value={telefono} onChange={setTelefono} />
+          </div>
+          <div className="form-group">
+            <label>Referencia</label>
+            <input type="text" value={referencia} onChange={(e) => setReferencia(e.target.value)} />
+          </div>
+        </>
+      )}
+      <button className="btn btn-primary" disabled={disabled || !monto || Number(monto) <= 0} onClick={handleSubmit}>
+        Registrar anticipo
+      </button>
+    </div>
+  )
+}
+
 interface OrderDetailModalProps {
   order: Order
   pendingIds: Set<string>
@@ -208,6 +289,7 @@ interface OrderDetailModalProps {
   onMarkDelivered: (order: Order) => void
   onMarkPickedUpUnrepaired: (order: Order) => void
   onSubmitCounterFinalPayment: (order: Order, paymentDetails: Record<string, string>) => void
+  onSubmitCounterBudgetPayment: (order: Order, paymentDetails: Record<string, string>, amount: number) => void
   onDownloadReceipt: (order: Order, type: 'intake' | 'budget-advance' | 'payment' | 'final' | 'closure') => void
 }
 
@@ -223,6 +305,7 @@ export default function OrderDetailModal({
   onMarkDelivered,
   onMarkPickedUpUnrepaired,
   onSubmitCounterFinalPayment,
+  onSubmitCounterBudgetPayment,
   onDownloadReceipt,
 }: OrderDetailModalProps) {
   const boxRef = useRef<HTMLDivElement>(null)
@@ -264,6 +347,13 @@ export default function OrderDetailModal({
   const showClosureReceipt = order.status === 'CANCELLED'
   const canRegisterCounterFinalPayment =
     order.status === 'READY' && order.finalPaymentDetails == null && order.budget != null && Number(order.budget) > 0
+  // Mismo umbral que el backend: si budget <= revisionAmount no hay
+  // anticipo que cobrar (caso "sin costo adicional", ver Acciones).
+  const canRegisterCounterBudgetPayment =
+    order.status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15)
+  const budgetAdvanceSuggestedAmount = canRegisterCounterBudgetPayment
+    ? 0.5 * (Number(order.budget) - Number(order.revisionAmount ?? 15))
+    : 0
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -315,6 +405,13 @@ export default function OrderDetailModal({
                 onReject={onRejectAdvanceInstallment}
                 pendingIds={pendingIds}
               />
+              {canRegisterCounterBudgetPayment && (
+                <CounterBudgetPaymentForm
+                  suggestedAmount={budgetAdvanceSuggestedAmount}
+                  disabled={pendingIds.has(order.id)}
+                  onSubmit={(details, amount) => onSubmitCounterBudgetPayment(order, details, amount)}
+                />
+              )}
               {showBudgetAdvanceReceipt && (
                 <p style={{ marginTop: 8 }}>
                   <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'budget-advance')}>
