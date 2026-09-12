@@ -50,8 +50,8 @@ describe('orders.service — submitAdvancePaymentInstallment marca kind REVISION
 })
 
 describe('orders.service — submitBudgetPaymentInstallment', () => {
-  it('crea el abono con kind BUDGET, tope = 50% de (budget - revisionAmount)', async () => {
-    // budget 30, revision 15 -> base 15 -> tope anticipo 7.50
+  it('crea el abono con kind BUDGET, mínimo 50% de (budget - revisionAmount)', async () => {
+    // budget 30, revision 15 -> base 15 -> mínimo 7.50
     const order = await makeOrder({ budget: 30, revisionAmount: 15 })
     const submission = await submitBudgetPaymentInstallment(
       order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '1111' }, 7.5
@@ -60,10 +60,20 @@ describe('orders.service — submitBudgetPaymentInstallment', () => {
     expect(Number(submission.amount)).toBe(7.5)
   })
 
-  it('lanza error si el monto excede el tope del 50%', async () => {
+  it('permite pagar más del 50% hasta el 100% de la base en un solo abono', async () => {
+    // budget 30, revision 15 -> base 15 -> el cliente paga todo de una vez
+    const order = await makeOrder({ budget: 30, revisionAmount: 15 })
+    const submission = await submitBudgetPaymentInstallment(
+      order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '9012' }, 15
+    )
+    expect(submission.kind).toBe('BUDGET')
+    expect(Number(submission.amount)).toBe(15)
+  })
+
+  it('lanza error si el monto excede el 100% de la base', async () => {
     const order = await makeOrder({ budget: 30, revisionAmount: 15 })
     await expect(
-      submitBudgetPaymentInstallment(order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '2222' }, 10)
+      submitBudgetPaymentInstallment(order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '2222' }, 20)
     ).rejects.toThrow(/excede/)
   })
 
@@ -86,11 +96,11 @@ describe('orders.service — submitCounterBudgetInstallment', () => {
     expect(Number(submission.amount)).toBe(7.5)
   })
 
-  it('lanza error si el monto excede el tope del 50%', async () => {
+  it('lanza error si el monto excede el 100% de la base', async () => {
     const order = await makeOrder({ budget: 30, revisionAmount: 15 })
     const admin = await prisma.user.findFirst({ where: { role: 'ADMIN' }, select: { email: true } })
     await expect(
-      submitCounterBudgetInstallment(order.id, admin!.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '5555' }, 10)
+      submitCounterBudgetInstallment(order.id, admin!.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '5555' }, 20)
     ).rejects.toThrow(/excede/)
   })
 })

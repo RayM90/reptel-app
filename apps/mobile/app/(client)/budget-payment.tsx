@@ -49,9 +49,13 @@ export default function BudgetPaymentScreen() {
 
   const budgetNumber = budget ? Number(budget) : 0
   const revisionNumber = revisionAmount ? Number(revisionAmount) : 0
-  // Anticipo de presupuesto: 50% de (budget - revisionAmount) — el otro
-  // 50% se cobra al entregar (final-payment.tsx, sin cambios).
-  const totalNumber = Math.max(0.5 * (budgetNumber - revisionNumber), 0)
+  // Base = presupuesto - revisión (la revisión ya está pagada). El cliente
+  // debe abonar al menos el 50% de esa base para autorizar la reparación,
+  // pero puede pagar hasta el 100% de una sola vez si lo prefiere — nunca
+  // más de eso. Lo que no se pague aquí se cobra al entregar el equipo.
+  const baseNumber = Math.max(budgetNumber - revisionNumber, 0)
+  const minimumNumber = 0.5 * baseNumber
+  const totalNumber = baseNumber
 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const { data: paymentSettings } = usePaymentInfo()
@@ -59,7 +63,7 @@ export default function BudgetPaymentScreen() {
   const [banco, setBanco] = useState('')
   const [telefono, setTelefono] = useState('')
   const [referencia, setReferencia] = useState('')
-  const [monto, setMonto] = useState(String(totalNumber.toFixed(2)))
+  const [monto, setMonto] = useState(String(minimumNumber.toFixed(2)))
   const [titular, setTitular] = useState('')
   const [cedulaLetter, setCedulaLetter] = useState<'V' | 'E'>('V')
   const [cedulaNumber, setCedulaNumber] = useState('')
@@ -179,15 +183,17 @@ export default function BudgetPaymentScreen() {
               <Text style={styles.summaryValue}>${budgetNumber.toFixed(2)}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Ya pagado (anticipo de revisión)</Text>
+              <Text style={styles.summaryLabel}>- Anticipo de revisión (ya pagado)</Text>
               <Text style={styles.summaryValueNegative}>-${revisionNumber.toFixed(2)}</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabelBold}>Anticipo a pagar ahora (50%)</Text>
-              <Text style={styles.summaryValueBold}>${totalNumber.toFixed(2)}</Text>
+              <Text style={styles.summaryLabelBold}>Total a cubrir con el anticipo</Text>
+              <Text style={styles.summaryValueBold}>${baseNumber.toFixed(2)}</Text>
             </View>
-            <Text style={styles.waitNote}>El otro 50% (${totalNumber.toFixed(2)}) se cobra al entregar el equipo ya reparado.</Text>
+            <Text style={styles.waitNote}>
+              Mínimo para autorizar la reparación: ${minimumNumber.toFixed(2)} (50%). Puedes pagar hasta ${baseNumber.toFixed(2)} (100%) de una vez si lo prefieres.
+            </Text>
           </View>
 
           <View style={styles.section}>
@@ -255,7 +261,7 @@ export default function BudgetPaymentScreen() {
                       />
                     </View>
                   </View>
-                  <Field label="Número de referencia" value={referencia} onChangeText={(text) => setReferencia(onlyDigits(text))} placeholder="Referencia de la transferencia" keyboardType="number-pad" />
+                  <Field label="Últimos 4 dígitos de la referencia" value={referencia} onChangeText={(text) => setReferencia(onlyDigits(text))} placeholder="Ej. 1234" keyboardType="number-pad" maxLength={4} />
                 </>
               )}
 
@@ -269,6 +275,13 @@ export default function BudgetPaymentScreen() {
 
               <Field label="Monto enviado ($)" value={monto} onChangeText={(text) => setMonto(onlyDecimal(text))} placeholder="Ej. 35.00" keyboardType="decimal-pad" />
 
+              {faltante > 0.009 && montoNumber > 0 && montoNumber + 0.009 < minimumNumber && (
+                <View style={styles.warningCard}>
+                  <Text style={styles.warningText}>
+                    ⏳ Este abono todavía no alcanza el mínimo de ${minimumNumber.toFixed(2)} (50%) — el técnico no podrá comenzar hasta completarlo.
+                  </Text>
+                </View>
+              )}
               {faltante > 0.009 && (
                 <View style={styles.warningCard}>
                   <Text style={styles.warningText}>

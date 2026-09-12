@@ -53,11 +53,11 @@ describe('Orders — POST /api/orders/:id/counter-budget-payment-installment', (
     expect(res.status).toBe(401)
   })
 
-  it('400 si el monto excede el 50% de (budget - revisionAmount)', async () => {
+  it('400 si el monto excede el 100% de (budget - revisionAmount)', async () => {
     const res = await request(app)
       .post(`/api/orders/${orderId}/counter-budget-payment-installment`)
       .set('Authorization', `Bearer ${authToken}`)
-      .send({ paymentDetails: { banco: 'Bancaribe', telefono: '04121234567', referencia: '1111' }, amount: 10 })
+      .send({ paymentDetails: { banco: 'Bancaribe', telefono: '04121234567', referencia: '1111' }, amount: 20 })
 
     expect(res.status).toBe(400)
     expect(res.body.success).toBe(false)
