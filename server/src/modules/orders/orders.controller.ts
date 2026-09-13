@@ -918,7 +918,13 @@ export const finishRepairHandler = async (req: AuthRequest, res: Response): Prom
     const orderId = String(req.params.id)
     const { observation } = req.body
 
-    const order = await ordersService.finishRepair(orderId, actor.id, observation)
+    // `observation` es opcional, pero si viene con un tipo que no es string
+    // (número, objeto, array) se ignora en vez de interpolarse crudo en el
+    // comentario del historial — mismo criterio que addBudgetAdjustmentHandler
+    // aplica a `reason`.
+    const safeObservation = typeof observation === 'string' ? observation : undefined
+
+    const order = await ordersService.finishRepair(orderId, actor.id, safeObservation)
 
     broadcastOrderUpdate({
       type: 'ORDER_STATUS_UPDATED',
