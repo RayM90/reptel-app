@@ -8,6 +8,8 @@ const fakeOrder = {
   orderNumber: 'REP-TEST-0001',
   problem: 'Pantalla dañada',
   diagnosis: 'Cambio de pantalla necesario',
+  observations: 'Rayón en la tapa',
+  deliveryObservations: 'Se probó 24h sin fallas',
   budget: 50,
   revisionAmount: 15,
   deliveryAmount: 10,
@@ -76,6 +78,22 @@ describe('receipts.service — generación de PDF', () => {
   it('generateBudgetAdvanceReceipt produce un PDF válido', async () => {
     const buffer = await collectPdfBuffer(generateBudgetAdvanceReceipt(fakeOrder as any))
     expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
+  })
+
+  it('las 5 funciones producen un PDF válido cuando observations/deliveryObservations son null', async () => {
+    const orderSinObservaciones = { ...fakeOrder, observations: null, deliveryObservations: null }
+
+    const buffers = await Promise.all([
+      collectPdfBuffer(generateIntakeReceipt(orderSinObservaciones as any)),
+      collectPdfBuffer(generateFinalReceipt(orderSinObservaciones as any)),
+      collectPdfBuffer(generatePaymentReceipt(orderSinObservaciones as any)),
+      collectPdfBuffer(generateClosureReceipt(orderSinObservaciones as any)),
+      collectPdfBuffer(generateBudgetAdvanceReceipt(orderSinObservaciones as any)),
+    ])
+
+    for (const buffer of buffers) {
+      expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
+    }
   })
 })
 
