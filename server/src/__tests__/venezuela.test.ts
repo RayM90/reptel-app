@@ -1,4 +1,4 @@
-import { isValidVenezuelanPhone, isValidVenezuelanIdNumber } from '../lib/venezuela'
+import { isValidVenezuelanPhone, isValidVenezuelanIdNumber, isValidStaffIdNumber } from '../lib/venezuela'
 
 describe('isValidVenezuelanPhone', () => {
   it.each(['0412', '0414', '0416', '0424', '0426'])('acepta el prefijo %s + 7 dígitos', (prefix) => {
@@ -46,5 +46,35 @@ describe('isValidVenezuelanIdNumber', () => {
 
   it('rechaza más de 9 dígitos', () => {
     expect(isValidVenezuelanIdNumber('V-1234567890')).toBe(false)
+  })
+})
+
+describe('isValidStaffIdNumber', () => {
+  it('acepta V- con 7 dígitos', () => {
+    expect(isValidStaffIdNumber('V-1234567')).toBe(true)
+  })
+
+  it('acepta E- con 8 dígitos', () => {
+    expect(isValidStaffIdNumber('E-12345678')).toBe(true)
+  })
+
+  it('rechaza J- (persona jurídica, no aplica a personal)', () => {
+    expect(isValidStaffIdNumber('J-12345678')).toBe(false)
+  })
+
+  it('rechaza G- (gobierno, no aplica a personal)', () => {
+    expect(isValidStaffIdNumber('G-12345678')).toBe(false)
+  })
+
+  it('rechaza 9 dígitos (fuera del rango real de cédula)', () => {
+    expect(isValidStaffIdNumber('V-123456789')).toBe(false)
+  })
+
+  it('rechaza menos de 7 dígitos', () => {
+    expect(isValidStaffIdNumber('V-123456')).toBe(false)
+  })
+
+  it('rechaza sin prefijo', () => {
+    expect(isValidStaffIdNumber('12345678')).toBe(false)
   })
 })
