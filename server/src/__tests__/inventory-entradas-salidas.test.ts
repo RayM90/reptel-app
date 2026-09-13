@@ -1,7 +1,7 @@
 import request from 'supertest'
 import prisma from '../lib/prisma'
 import app from '../app'
-import { deriveDestination } from '../modules/products/products.service'
+import { deriveDestination, registerMerma } from '../modules/products/products.service'
 import { useProductInOrder } from '../modules/orders/orders.service'
 
 describe('deriveDestination', () => {
@@ -121,8 +121,7 @@ describe('POST /api/products/:id/restock', () => {
 
 describe('POST /api/products/:id/merma', () => {
   let adminToken: string
-  let technicianToken: string
-  let technicianEmail: string
+  let technician: { id: string; email: string }
   let product: { id: string; stock: number }
 
   beforeAll(async () => {
@@ -131,11 +130,20 @@ describe('POST /api/products/:id/merma', () => {
 
     const category = await prisma.productCategory.findFirst({ where: { isActive: true } })
     product = await prisma.product.create({ data: { name: `Producto merma ${Date.now()}`, price: 8, stock: 5, categoryId: category!.id } })
+
+    // No hay cuenta seed de TECHNICIAN con credenciales Cognito conocidas (el login real
+    // pasa por Cognito, no por comparación local de password) — se crea el fixture local y
+    // se llama registerMerma directo, igual que Task 2 llamó useProductInOrder directo.
+    const suffix = Date.now()
+    technician = await prisma.user.create({
+      data: { name: 'Tecnico', lastName: 'Merma', email: `tecnico-merma-${suffix}@test.com`, role: 'TECHNICIAN', password: 'COGNITO_MANAGED' },
+    })
   }, 20000)
 
   afterAll(async () => {
     await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
     await prisma.product.delete({ where: { id: product.id } }).catch(() => {})
+    await prisma.user.delete({ where: { id: technician.id } }).catch(() => {})
   })
 
   it('sin token retorna 401', async () => {
@@ -160,6 +168,22 @@ describe('POST /api/products/:id/merma', () => {
     expect(res.body.message).toMatch(/stock/i)
   })
 
+  it('retorna 400 si lossReason no es válido (no solo si está ausente)', async () => {
+    const res = await request(app)
+      .post(`/api/products/${product.id}/merma`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ quantity: 1, lossReason: 'ALGO_INVENTADO', reason: 'Motivo inventado' })
+    expect(res.status).toBe(400)
+  })
+
+  it('retorna 400 si falta lossReason', async () => {
+    const res = await request(app)
+      .post(`/api/products/${product.id}/merma`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ quantity: 1, reason: 'Sin motivo de merma' })
+    expect(res.status).toBe(400)
+  })
+
   it('ADMIN registra una merma: descuenta stock, crea movimiento OUT/MERMA con destino TIENDA por default', async () => {
     const res = await request(app)
       .post(`/api/products/${product.id}/merma`)
@@ -177,5 +201,34 @@ describe('POST /api/products/:id/merma', () => {
     expect(movement?.lossReason).toBe('DEFECTUOSO')
     expect(movement?.destination).toBe('TIENDA')
     expect(movement?.reason).toBe('Encontrado roto al abrir la caja')
+  })
+
+  it('un TECHNICIAN registra una merma exitosamente y el destino se auto-deriva a TALLER', async () => {
+    const { product: updated, movement } = await registerMerma(
+      product.id,
+      1,
+      technician.email,
+      'PERDIDA',
+      'Repuesto perdido por el técnico en el taller',
+    )
+
+    expect(updated.stock).toBe(2)
+    expect(movement.channel).toBe('MERMA')
+    expect(movement.destination).toBe('TALLER')
+  })
+
+  it('ADMIN puede sobreescribir destination explícitamente (no usa el default TIENDA)', async () => {
+    const res = await request(app)
+      .post(`/api/products/${product.id}/merma`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ quantity: 1, lossReason: 'OTRO', reason: 'Entregado directo a domicilio por error', destination: 'DOMICILIO_CLIENTE' })
+
+    expect(res.status).toBe(200)
+
+    const movement = await prisma.inventoryMovement.findFirst({
+      where: { productId: product.id, channel: 'MERMA' },
+      orderBy: { createdAt: 'desc' },
+    })
+    expect(movement?.destination).toBe('DOMICILIO_CLIENTE')
   })
 })
