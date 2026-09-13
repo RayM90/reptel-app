@@ -24,9 +24,7 @@ const STATUS_OPTIONS: OrderStatus[] = [
   'DIAGNOSING',
   'WAITING_APPROVAL',
   'APPROVED',
-  'REPAIRING',
   'WAITING_PART',
-  'READY',
   'DELIVERED',
   'CANCELLED',
 ]
@@ -139,6 +137,11 @@ export default function TechnicianDashboard() {
   const [commentText, setCommentText] = useState<Record<string, string>>({})
   const [statusSelection, setStatusSelection] = useState<Record<string, OrderStatus>>({})
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
+
+  // ── Finalizar reparación: ajuste de presupuesto + cierre ──
+  const [adjustmentAmountText, setAdjustmentAmountText] = useState<Record<string, string>>({})
+  const [adjustmentReasonText, setAdjustmentReasonText] = useState<Record<string, string>>({})
+  const [finishObservationText, setFinishObservationText] = useState<Record<string, string>>({})
 
   // ── Repuestos de inventario usados en la orden ──
   const [products, setProducts] = useState<{ id: string; name: string; stock: number; price: string }[]>([])
@@ -300,6 +303,60 @@ export default function TechnicianDashboard() {
       fetchData()
     } catch (err) {
       showToast('❌ Error al registrar el comentario', 'error')
+    } finally {
+      setPendingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+    }
+  }
+
+  const handleAddBudgetAdjustment = async (orderId: string) => {
+    const key = `budgetAdj:${orderId}`
+    if (pendingIds.has(key)) return
+    const amount = Number(adjustmentAmountText[orderId])
+    const reason = (adjustmentReasonText[orderId] || '').trim()
+    if (!(amount > 0) || !reason) {
+      showToast('Completa un monto mayor a 0 y un motivo antes de registrar el ajuste.', 'error')
+      return
+    }
+    setPendingIds((prev) => new Set(prev).add(key))
+    try {
+      await api.patch(`/api/orders/${orderId}/budget-adjustment`, { amount, reason })
+      showToast('✅ Ajuste al presupuesto registrado.', 'success')
+      setAdjustmentAmountText((prev) => ({ ...prev, [orderId]: '' }))
+      setAdjustmentReasonText((prev) => ({ ...prev, [orderId]: '' }))
+      fetchData()
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al registrar el ajuste al presupuesto', 'error')
+    } finally {
+      setPendingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+    }
+  }
+
+  const handleFinishRepair = async (orderId: string) => {
+    const key = `finish:${orderId}`
+    if (pendingIds.has(key)) return
+    const observation = (finishObservationText[orderId] || '').trim()
+    setPendingIds((prev) => new Set(prev).add(key))
+    try {
+      const response = await api.post(`/api/orders/${orderId}/finish-repair`, observation ? { observation } : {})
+      const updatedOrder = response.data.data
+      showToast(
+        updatedOrder.status === 'READY'
+          ? '✅ Reparación terminada — la orden queda lista, con saldo pendiente por cobrar.'
+          : '✅ Reparación terminada — no quedaba saldo pendiente, la orden pasó directo a pagada.',
+        'success'
+      )
+      setFinishObservationText((prev) => ({ ...prev, [orderId]: '' }))
+      fetchData()
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al finalizar la reparación', 'error')
     } finally {
       setPendingIds((prev) => {
         const next = new Set(prev)
@@ -515,6 +572,72 @@ export default function TechnicianDashboard() {
                         )
                       })()}
                     </div>
+
+                    {order.status === 'REPAIRING' && (
+                      <div className="card">
+                        <h4>Finalizar reparación</h4>
+                        <p className="form-hint">
+                          Si necesitás agregar un repuesto de último momento, hacelo en la sección "Repuestos" de arriba antes de finalizar.
+                        </p>
+
+                        <div className="form-group">
+                          <label>Ajuste al presupuesto (opcional)</label>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                            <div style={{ width: 120 }}>
+                              <input
+                                type="number"
+                                placeholder="Monto"
+                                value={adjustmentAmountText[order.id] || ''}
+                                onChange={(e) =>
+                                  setAdjustmentAmountText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                                }
+                              />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 160 }}>
+                              <input
+                                type="text"
+                                placeholder="Motivo del ajuste"
+                                value={adjustmentReasonText[order.id] || ''}
+                                onChange={(e) =>
+                                  setAdjustmentReasonText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                                }
+                              />
+                            </div>
+                            <button
+                              className="btn btn-secondary"
+                              disabled={
+                                pendingIds.has(`budgetAdj:${order.id}`) ||
+                                !(Number(adjustmentAmountText[order.id]) > 0) ||
+                                !(adjustmentReasonText[order.id] || '').trim()
+                              }
+                              onClick={() => handleAddBudgetAdjustment(order.id)}
+                            >
+                              Registrar ajuste
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="form-group">
+                          <label>Observación (opcional)</label>
+                          <textarea
+                            value={finishObservationText[order.id] || ''}
+                            onChange={(e) =>
+                              setFinishObservationText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                            }
+                            rows={2}
+                            placeholder="Notas finales sobre la reparación..."
+                          />
+                        </div>
+
+                        <button
+                          className="btn btn-primary"
+                          disabled={pendingIds.has(`finish:${order.id}`)}
+                          onClick={() => handleFinishRepair(order.id)}
+                        >
+                          Terminé la reparación
+                        </button>
+                      </div>
+                    )}
 
                     {needsDiagnosis && (
                       <div className="card">
