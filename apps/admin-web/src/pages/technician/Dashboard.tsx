@@ -428,9 +428,12 @@ export default function TechnicianDashboard() {
           <h1>Panel del Técnico</h1>
           <p>Hola, {user?.lastName ? `${user.name} ${user.lastName}` : user?.name}</p>
         </div>
-        <button className="btn btn-secondary" onClick={() => fetchData()}>
-          ↻ Actualizar
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link to="/inventory/merma/new" className="btn btn-secondary">🔧 Registrar merma</Link>
+          <button className="btn btn-secondary" onClick={() => fetchData()}>
+            ↻ Actualizar
+          </button>
+        </div>
       </div>
 
       {user?.role === 'TECHNICIAN' && <p><Link to="/registro">🧾 Ir a Registro (Recepción)</Link></p>}
