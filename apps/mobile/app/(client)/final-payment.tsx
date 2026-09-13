@@ -40,18 +40,32 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
 
 export default function FinalPaymentScreen() {
   const router = useRouter()
-  const { orderId, orderNumber, budget, revisionAmount } = useLocalSearchParams<{
+  const { orderId, orderNumber, budget, revisionAmount, remaining } = useLocalSearchParams<{
     orderId: string
     orderNumber: string
     budget: string
     revisionAmount: string
+    remaining?: string
   }>()
 
   const budgetNumber = budget ? Number(budget) : 0
   const revisionNumber = revisionAmount ? Number(revisionAmount) : 0
-  // Ahora el 50% se cobró como anticipo de presupuesto antes de reparar
-  // (budget-payment.tsx) — acá solo queda el otro 50%.
-  const totalNumber = Math.max(0.5 * (budgetNumber - revisionNumber), 0)
+  // El anticipo de presupuesto ya no es un 50% fijo: el cliente puede haber
+  // abonado hasta el 100% de la base, y un ajuste imprevisto
+  // (addBudgetAdjustment) puede haber reabierto saldo después. El saldo real
+  // (base − anticipos BUDGET confirmados) lo calcula la pantalla que navega
+  // hasta acá y llega como `remaining`; el 50% queda solo como fallback por si
+  // se entra sin ese parámetro.
+  const remainingNumber = remaining != null && remaining !== '' ? Number(remaining) : null
+  const totalNumber = Math.max(
+    remainingNumber != null && !Number.isNaN(remainingNumber)
+      ? remainingNumber
+      : 0.5 * (budgetNumber - revisionNumber),
+    0
+  )
+  // Todo lo que el cliente ya cubrió de esta orden: la revisión (siempre
+  // pagada por adelantado) + lo que se haya abonado del presupuesto.
+  const alreadyPaidNumber = Math.max(budgetNumber - totalNumber, 0)
 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const { data: paymentSettings } = usePaymentInfo()
@@ -174,12 +188,12 @@ export default function FinalPaymentScreen() {
               <Text style={styles.summaryValue}>${budgetNumber.toFixed(2)}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Ya pagado (revisión + anticipo del 50%)</Text>
-              <Text style={styles.summaryValueNegative}>-${(revisionNumber + totalNumber).toFixed(2)}</Text>
+              <Text style={styles.summaryLabel}>Ya pagado (revisión + anticipos)</Text>
+              <Text style={styles.summaryValueNegative}>-${alreadyPaidNumber.toFixed(2)}</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabelBold}>Saldo final a pagar ahora (50% restante)</Text>
+              <Text style={styles.summaryLabelBold}>Saldo final a pagar ahora</Text>
               <Text style={styles.summaryValueBold}>${totalNumber.toFixed(2)}</Text>
             </View>
           </View>
