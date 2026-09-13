@@ -7,6 +7,12 @@ export const PHONE_PREFIXES = ['0412', '0414', '0416', '0424', '0426'] as const
 
 export const PHONE_DIGITS_LENGTH = 7
 
+// Cédula de personal (empleados RepTel): siempre persona natural, nunca V/G — a diferencia
+// del cliente (ver IdNumberInput sin `prefixes` = V/E/J/G, usado en Registro.tsx).
+export const STAFF_ID_PREFIXES = ['V', 'E'] as const
+export const STAFF_ID_MIN_DIGITS = 7
+export const STAFF_ID_MAX_DIGITS = 8
+
 export interface Bank {
   code: string
   name: string

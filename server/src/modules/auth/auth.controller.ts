@@ -4,7 +4,8 @@ import { translateCognitoError } from './auth.errors';
 import prisma from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { formatClientAddress } from '../../lib/clientAddress';
-import { isValidVenezuelanPhone, isValidVenezuelanIdNumber } from '../../lib/venezuela';
+import { isValidVenezuelanPhone, isValidStaffIdNumber } from '../../lib/venezuela';
+import { isValidStaffEmail, isValidPersonName, STAFF_EMAIL_DOMAIN } from '../../lib/staffValidation';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -227,13 +228,23 @@ export const createStaff = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    if (!isValidVenezuelanIdNumber(idNumber)) {
-      res.status(400).json({ message: 'La cédula debe tener el formato V-12345678 o E-12345678' });
+    if (!isValidPersonName(name) || !isValidPersonName(lastName)) {
+      res.status(400).json({ message: 'El nombre y el apellido deben tener entre 2 y 50 letras, sin números ni símbolos' });
       return;
     }
 
-    if (phone && !isValidVenezuelanPhone(phone)) {
-      res.status(400).json({ message: 'El teléfono debe ser un número venezolano válido (04XX + 7 dígitos)' });
+    if (!isValidStaffIdNumber(idNumber)) {
+      res.status(400).json({ message: 'La cédula debe tener el formato V-1234567 o V-12345678 (solo V o E, 7 u 8 dígitos)' });
+      return;
+    }
+
+    if (!phone || !isValidVenezuelanPhone(phone)) {
+      res.status(400).json({ message: 'El teléfono es obligatorio y debe ser un número venezolano válido (04XX + 7 dígitos)' });
+      return;
+    }
+
+    if (!isValidStaffEmail(email)) {
+      res.status(400).json({ message: `El correo del personal debe usar el dominio institucional ${STAFF_EMAIL_DOMAIN}` });
       return;
     }
 
@@ -243,7 +254,16 @@ export const createStaff = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const result = await createStaffUser(email, name, password, role, phone, lastName, idNumber);
+    // Normalizar antes de persistir: la validación de arriba (isValidStaffEmail/
+    // isValidPersonName) prueba una vista trim/lowercase del valor, pero sin esto
+    // se reenviaba req.body sin normalizar a Cognito (Username/email) y a la BD —
+    // un correo con espacios o mayúsculas creaba una cuenta que el login nunca
+    // encuentra (busca por email exacto).
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedName = name.trim();
+    const normalizedLastName = lastName.trim();
+
+    const result = await createStaffUser(normalizedEmail, normalizedName, password, role, phone, normalizedLastName, idNumber);
     res.status(201).json(result);
   } catch (error: any) {
     res.status(400).json({ message: translateCognitoError(error) || 'Error al crear el empleado' });

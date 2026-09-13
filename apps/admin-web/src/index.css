@@ -258,6 +258,12 @@ table.styled-table--sticky-actions th:last-child {
   margin-top: 4px;
 }
 
+.form-error-text {
+  font-size: 12px;
+  color: var(--color-danger);
+  margin-top: 4px;
+}
+
 /* ─── Mensajes ───────────────────────────── */
 
 .alert-error {
