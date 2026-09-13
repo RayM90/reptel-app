@@ -1,4 +1,5 @@
 import request from 'supertest'
+import PDFDocument from 'pdfkit'
 import app from '../app'
 import prisma from '../lib/prisma'
 import { generateIntakeReceipt, generateFinalReceipt, generatePaymentReceipt, generateClosureReceipt, generateBudgetAdvanceReceipt, getIntakeReceiptLabels } from '../modules/receipts/receipts.service'
@@ -34,6 +35,27 @@ const collectPdfBuffer = (doc: PDFKit.PDFDocument): Promise<Buffer> => {
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
   })
+}
+
+// Instrumenta PDFDocument.prototype.text para registrar con qué `doc.x`
+// arrancó cada llamada — regresión de layout: addTwoColumnRow y
+// drawBoxedBlock deben restaurar doc.x al margen izquierdo al terminar, no
+// solo doc.y. Todas las llamadas de texto ocurren de forma síncrona dentro
+// de las funciones generate*Receipt (antes de doc.end()), así que no hace
+// falta esperar el buffer del PDF para inspeccionarlas.
+const captureTextXs = (renderFn: () => PDFKit.PDFDocument): { text: string; x: number }[] => {
+  const original = PDFDocument.prototype.text
+  const calls: { text: string; x: number }[] = []
+  ;(PDFDocument.prototype as any).text = function (this: PDFKit.PDFDocument, text: string, ...rest: unknown[]) {
+    calls.push({ text, x: this.x })
+    return original.apply(this, [text, ...rest] as any)
+  }
+  try {
+    renderFn()
+  } finally {
+    PDFDocument.prototype.text = original
+  }
+  return calls
 }
 
 describe('receipts.service — generación de PDF', () => {
@@ -93,6 +115,51 @@ describe('receipts.service — generación de PDF', () => {
 
     for (const buffer of buffers) {
       expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
+    }
+  })
+})
+
+describe('regresión de layout — doc.x tras addTwoColumnRow y drawBoxedBlock', () => {
+  const MARGIN = 50
+
+  it('generateIntakeReceipt: el contenido después de las filas de dos columnas arranca en el margen izquierdo, no en la columna derecha', () => {
+    // Apellido largo para forzar wrap en una columna y no en la otra —
+    // el bug de doc.x se reproduce igual sin esto, pero así cubrimos
+    // también el caso de columnas de alturas distintas.
+    const orderConNombreLargo = {
+      ...fakeOrder,
+      client: {
+        name: 'Clienta',
+        lastName: 'Con Un Apellido Sumamente Largo Para Forzar El Wrap De Texto En La Columna Izquierda',
+        phone: '04120000000',
+      },
+    }
+
+    const calls = captureTextXs(() => generateIntakeReceipt(orderConNombreLargo as any))
+
+    const fallaIndex = calls.findIndex((c) => c.text === 'Falla reportada:')
+    expect(fallaIndex).toBeGreaterThan(-1)
+
+    // Todo lo que se escribe desde 'Falla reportada:' en adelante (falla,
+    // estado del equipo al recibir, anticipo, método de pago, fecha, nota
+    // de diagnóstico, disclaimer) debe arrancar en el margen izquierdo.
+    const postTwoColumnCalls = calls.slice(fallaIndex)
+    expect(postTwoColumnCalls.length).toBeGreaterThan(0)
+    for (const call of postTwoColumnCalls) {
+      expect(call.x).toBe(MARGIN)
+    }
+  })
+
+  it('generatePaymentReceipt: el contenido después de la caja "Detalle de cobro" arranca en el margen izquierdo, no en contentX de la caja', () => {
+    const calls = captureTextXs(() => generatePaymentReceipt(fakeOrder as any))
+
+    const fechaIndex = calls.findIndex((c) => c.text === 'Fecha de pago: ')
+    expect(fechaIndex).toBeGreaterThan(-1)
+
+    const postBoxCalls = calls.slice(fechaIndex)
+    expect(postBoxCalls.length).toBeGreaterThan(0)
+    for (const call of postBoxCalls) {
+      expect(call.x).toBe(MARGIN)
     }
   })
 })
