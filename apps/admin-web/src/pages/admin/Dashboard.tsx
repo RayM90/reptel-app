@@ -301,6 +301,34 @@ export default function Dashboard() {
     }
   }
 
+  // ── Ajuste imprevisto al presupuesto (REPAIRING / READY / PAID_PENDING_DELIVERY) ──
+  // Mismo endpoint que usa la tarjeta del técnico; acá el admin puede hacerlo
+  // sobre cualquier orden, incluidas las que ya salieron de la lista de
+  // órdenes activas del técnico por estar pagadas.
+  const handleAddBudgetAdjustment = async (order: Order, amount: number, reason: string) => {
+    if (pendingIds.has(order.id)) return
+    const confirmed = await confirmDialog({
+      title: 'Registrar ajuste al presupuesto',
+      message:
+        `Orden ${order.orderNumber} — se sumarán $${amount.toFixed(2)} al presupuesto.` +
+        (order.status === 'PAID_PENDING_DELIVERY'
+          ? ' La orden volverá a "Lista" con saldo pendiente por cobrar, y se anulará el pago final ya confirmado.'
+          : ''),
+      confirmLabel: 'Registrar ajuste',
+    })
+    if (!confirmed) return
+    setBusy(order.id, true)
+    try {
+      await api.patch(`/api/orders/${order.id}/budget-adjustment`, { amount, reason })
+      showToast('✅ Ajuste al presupuesto registrado.', 'success')
+      fetchData()
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al registrar el ajuste al presupuesto', 'error')
+    } finally {
+      setBusy(order.id, false)
+    }
+  }
+
   const activeOrders = orders.filter(
     (o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
   )
@@ -429,6 +457,7 @@ export default function Dashboard() {
           onMarkPickedUpUnrepaired={handleMarkPickedUpUnrepaired}
           onSubmitCounterFinalPayment={handleSubmitCounterFinalPayment}
           onSubmitCounterBudgetPayment={handleSubmitCounterBudgetPayment}
+          onAddBudgetAdjustment={handleAddBudgetAdjustment}
           onDownloadReceipt={downloadReceipt}
         />
       )}

@@ -306,6 +306,65 @@ function CounterBudgetPaymentForm({
   )
 }
 
+// Ajuste imprevisto al presupuesto (Finding F, revisión final). El backend lo
+// permite en REPAIRING, READY y PAID_PENDING_DELIVERY, pero la única UI que lo
+// llamaba era la tarjeta del técnico, visible solo en REPAIRING — y una orden
+// en PAID_PENDING_DELIVERY ni siquiera aparece en su lista de órdenes activas.
+// El caso de negocio que motivó la función ("cobrar un imprevisto DESPUÉS de
+// que el cliente ya pagó el 100%") no se podía ejecutar desde ningún lado.
+function BudgetAdjustmentForm({
+  disabled,
+  onSubmit,
+}: {
+  disabled: boolean
+  onSubmit: (amount: number, reason: string) => void
+}) {
+  const [monto, setMonto] = useState('')
+  const [motivo, setMotivo] = useState('')
+
+  const canSubmit = !disabled && Number(monto) > 0 && motivo.trim().length > 0
+
+  return (
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
+      <h4>Ajuste al presupuesto</h4>
+      <p className="form-hint">
+        Suma un imprevisto al presupuesto de esta orden. Si la orden ya estaba pagada y pendiente de
+        entrega, vuelve a quedar lista con saldo por cobrar.
+      </p>
+      <div className="form-group">
+        <label>Monto a sumar ($)</label>
+        <input
+          type="number"
+          min="0.01"
+          step="0.01"
+          value={monto}
+          onChange={(e) => setMonto(e.target.value)}
+        />
+      </div>
+      <div className="form-group">
+        <label>Motivo</label>
+        <input
+          type="text"
+          placeholder="Ej. se detectó el conector de carga dañado"
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+        />
+      </div>
+      <button
+        className="btn btn-primary"
+        disabled={!canSubmit}
+        onClick={() => {
+          onSubmit(Number(monto), motivo.trim())
+          setMonto('')
+          setMotivo('')
+        }}
+      >
+        Registrar ajuste
+      </button>
+    </div>
+  )
+}
+
 interface OrderDetailModalProps {
   order: Order
   pendingIds: Set<string>
@@ -319,6 +378,7 @@ interface OrderDetailModalProps {
   onMarkPickedUpUnrepaired: (order: Order) => void
   onSubmitCounterFinalPayment: (order: Order, paymentDetails: Record<string, string>) => void
   onSubmitCounterBudgetPayment: (order: Order, paymentDetails: Record<string, string>, amount: number) => void
+  onAddBudgetAdjustment: (order: Order, amount: number, reason: string) => void
   onDownloadReceipt: (order: Order, type: 'intake' | 'budget-advance' | 'payment' | 'final' | 'closure') => void
 }
 
@@ -335,6 +395,7 @@ export default function OrderDetailModal({
   onMarkPickedUpUnrepaired,
   onSubmitCounterFinalPayment,
   onSubmitCounterBudgetPayment,
+  onAddBudgetAdjustment,
   onDownloadReceipt,
 }: OrderDetailModalProps) {
   const boxRef = useRef<HTMLDivElement>(null)
@@ -396,6 +457,10 @@ export default function OrderDetailModal({
   const finalRemaining = finalBase - confirmedBudget
   const finalPaidInFull =
     finalRemaining <= 0.009 && (order.status === 'PAID_PENDING_DELIVERY' || order.status === 'DELIVERED')
+
+  // Los 3 estados en los que el backend acepta un ajuste al presupuesto.
+  const canAdjustBudget =
+    order.status === 'REPAIRING' || order.status === 'READY' || order.status === 'PAID_PENDING_DELIVERY'
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -495,7 +560,11 @@ export default function OrderDetailModal({
           {order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15) && (
             <>
               <BudgetBreakdown budget={Number(order.budget)} revisionAmount={Number(order.revisionAmount ?? 15)} />
-              <p className="form-hint">Saldo pendiente al entregar: ${Math.max(finalRemaining, 0).toFixed(2)}</p>
+              {/* Con la orden pagada en su totalidad este número es siempre
+                  $0.00 y solo compite visualmente con el mensaje de abajo. */}
+              {!finalPaidInFull && (
+                <p className="form-hint">Saldo pendiente al entregar: ${Math.max(finalRemaining, 0).toFixed(2)}</p>
+              )}
             </>
           )}
           {finalPaidInFull ? (
@@ -529,6 +598,12 @@ export default function OrderDetailModal({
                 </button>
               )}
             </p>
+          )}
+          {canAdjustBudget && (
+            <BudgetAdjustmentForm
+              disabled={pendingIds.has(order.id)}
+              onSubmit={(amount, reason) => onAddBudgetAdjustment(order, amount, reason)}
+            />
           )}
         </div>
 

@@ -19,13 +19,18 @@ type OrderStatus =
   | 'DELIVERED'
   | 'CANCELLED'
 
+// REPAIRING y READY salieron de esta lista en la Tarea 4 (tienen su propio
+// camino: el anticipo de presupuesto confirmado y "Finalizar reparación").
+// DELIVERED sale por el mismo criterio (Finding G, revisión final): era una
+// ruta gratuita a "entregado" que salteaba el cobro del saldo final. La única
+// vía legítima es markOrderDelivered desde el panel admin, que exige
+// PAID_PENDING_DELIVERY — el backend también lo rechaza por esta vía.
 const STATUS_OPTIONS: OrderStatus[] = [
   'RECEIVED',
   'DIAGNOSING',
   'WAITING_APPROVAL',
   'APPROVED',
   'WAITING_PART',
-  'DELIVERED',
   'CANCELLED',
 ]
 
