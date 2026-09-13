@@ -1641,3 +1641,103 @@ export const submitCounterBudgetInstallment = async (
     data: { orderId, amount, paymentDetails, status: 'PENDING', kind: 'BUDGET' },
   })
 }
+
+// ─────────────────────────────────────────────
+// ADMIN/TECHNICIAN/TECHNICIAN_DELIVERY — Ajuste imprevisto al presupuesto
+// Permite sumar un monto adicional al presupuesto de una orden que ya está
+// en reparación, lista, o ya pagada y pendiente de entrega — un imprevisto
+// detectado por el técnico después de que el cliente ya aprobó/pagó el
+// presupuesto original. Requiere motivo.
+//
+// Caso especial PAID_PENDING_DELIVERY: el pago final ya fue confirmado
+// (confirmFinalPayment) sobre el presupuesto viejo. Si el nuevo presupuesto
+// deja un saldo (base = nuevoBudget - revisionAmount) mayor a lo que el
+// cliente ya tiene CONFIRMED en abonos BUDGET, ese ajuste reabrió deuda: la
+// orden vuelve a READY y se limpia el pago final ya confirmado (y la
+// comisión que dependía de él) para que el ciclo de pago final se repita
+// sobre el nuevo saldo.
+// ─────────────────────────────────────────────
+
+export const addBudgetAdjustment = async (
+  orderId: string,
+  actorEmail: string,
+  amount: number,
+  reason: string
+) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      advancePaymentSubmissions: { where: { status: 'CONFIRMED', kind: 'BUDGET' } },
+    },
+  })
+  if (!order) throw new Error('Orden no encontrada')
+
+  if (
+    order.status !== 'REPAIRING' &&
+    order.status !== 'READY' &&
+    order.status !== 'PAID_PENDING_DELIVERY'
+  ) {
+    throw new Error('Esta acción solo aplica a órdenes en reparación, listas o pagadas pendientes de entrega')
+  }
+
+  if (!reason || typeof reason !== 'string' || !reason.trim()) {
+    throw new Error('reason es requerido')
+  }
+
+  if (amount == null || amount <= 0) {
+    throw new Error('El monto del ajuste debe ser mayor a cero')
+  }
+
+  const newBudget = Number(order.budget ?? 0) + amount
+
+  const statusHistoryEntries: Prisma.OrderStatusHistoryUncheckedCreateWithoutOrderInput[] = [
+    {
+      status: order.status,
+      comment: `Ajuste al presupuesto: +$${amount.toFixed(2)} — motivo: ${reason}`,
+      userId: actor.id,
+    },
+  ]
+
+  // Si el ajuste ocurre con el pago final ya confirmado, recalculamos si el
+  // nuevo presupuesto reabre un saldo pendiente por encima de lo ya
+  // confirmado en abonos BUDGET.
+  let reopensBalance = false
+  if (order.status === 'PAID_PENDING_DELIVERY') {
+    const base = newBudget - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+    const confirmado = order.advancePaymentSubmissions.reduce((sum, s) => sum + Number(s.amount), 0)
+    if (base - confirmado > 0.009) {
+      reopensBalance = true
+      statusHistoryEntries.push({
+        status: 'READY',
+        comment: 'El ajuste reabrió un saldo pendiente — vuelve a esperar el pago final.',
+      })
+    }
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      budget: newBudget,
+      ...(reopensBalance
+        ? {
+            status: 'READY' as const,
+            finalPaymentConfirmed: false,
+            finalPaymentConfirmedAt: null,
+            technicianCommission: null,
+          }
+        : {}),
+      statusHistory: { create: statusHistoryEntries },
+    },
+    include: {
+      client: true,
+      device: true,
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+      advancePaymentSubmissions: true,
+    },
+  })
+
+  return updatedOrder
+}

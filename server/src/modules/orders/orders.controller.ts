@@ -858,3 +858,41 @@ export const submitCounterBudgetInstallmentHandler = async (req: AuthRequest, re
     res.status(400).json({ success: false, message: error.message || 'Error al registrar el anticipo' })
   }
 }
+
+// ─────────────────────────────────────────────
+// ADMIN/TECHNICIAN/TECHNICIAN_DELIVERY — Ajuste imprevisto al presupuesto
+// ─────────────────────────────────────────────
+
+export const addBudgetAdjustmentHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const actorEmail = req.user?.email
+    if (!actorEmail) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const orderId = String(req.params.id)
+    const { amount, reason } = req.body
+
+    if (amount === undefined || amount === null || Number.isNaN(Number(amount))) {
+      res.status(400).json({ success: false, message: 'amount es requerido y debe ser numérico' })
+      return
+    }
+    if (!reason || typeof reason !== 'string' || !reason.trim()) {
+      res.status(400).json({ success: false, message: 'reason es requerido' })
+      return
+    }
+
+    const order = await ordersService.addBudgetAdjustment(orderId, actorEmail, Number(amount), reason.trim())
+
+    broadcastOrderUpdate({
+      type: 'ORDER_STATUS_UPDATED',
+      data: order,
+    })
+
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR AJUSTE DE PRESUPUESTO:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al ajustar el presupuesto' })
+  }
+}
