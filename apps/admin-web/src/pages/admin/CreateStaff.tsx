@@ -32,7 +32,7 @@ export default function CreateStaff() {
   const isLastNameValid = NAME_REGEX.test(lastName.trim())
   const isIdNumberValid = ID_NUMBER_REGEX.test(idNumber)
   const isPhoneValid = PHONE_PREFIXES.some((p) => phone.startsWith(p)) && phone.length === 4 + PHONE_DIGITS_LENGTH
-  const isEmailLocalValid = EMAIL_LOCAL_REGEX.test(emailLocal)
+  const isEmailLocalValid = EMAIL_LOCAL_REGEX.test(emailLocal.trim())
   const isPasswordValid = password.length >= 8
   const isFormValid = isNameValid && isLastNameValid && isIdNumberValid && isPhoneValid && isEmailLocalValid && isPasswordValid
 
@@ -100,11 +100,11 @@ export default function CreateStaff() {
 
           <div className="form-group">
             <label>Cédula</label>
-            <div onBlur={() => markTouched('idNumber')}>
+            <div onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) markTouched('idNumber') }}>
               <IdNumberInput
                 value={idNumber}
                 onChange={setIdNumber}
-                prefixes={[...STAFF_ID_PREFIXES]}
+                prefixes={STAFF_ID_PREFIXES}
                 minDigits={STAFF_ID_MIN_DIGITS}
                 maxDigits={STAFF_ID_MAX_DIGITS}
               />
@@ -117,7 +117,7 @@ export default function CreateStaff() {
 
           <div className="form-group">
             <label>Teléfono</label>
-            <div onBlur={() => markTouched('phone')}>
+            <div onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) markTouched('phone') }}>
               <PhoneInput value={phone} onChange={setPhone} required />
             </div>
             {touched.phone && !isPhoneValid && (
