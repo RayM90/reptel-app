@@ -896,3 +896,38 @@ export const addBudgetAdjustmentHandler = async (req: AuthRequest, res: Response
     res.status(400).json({ success: false, message: error.message || 'Error al ajustar el presupuesto' })
   }
 }
+
+// ─────────────────────────────────────────────
+// TECHNICIAN/TECHNICIAN_DELIVERY — Terminar la reparación
+// ─────────────────────────────────────────────
+
+export const finishRepairHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const actor = await prisma.user.findUnique({ where: { email }, select: { id: true } })
+    if (!actor) {
+      res.status(401).json({ success: false, message: 'Usuario no encontrado' })
+      return
+    }
+
+    const orderId = String(req.params.id)
+    const { observation } = req.body
+
+    const order = await ordersService.finishRepair(orderId, actor.id, observation)
+
+    broadcastOrderUpdate({
+      type: 'ORDER_STATUS_UPDATED',
+      data: order,
+    })
+
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR TERMINAR REPARACIÓN:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al terminar la reparación' })
+  }
+}

@@ -78,6 +78,9 @@ router.patch('/:id/diagnosis', authenticate, authorize('TECHNICIAN_DELIVERY', 'T
 // Ajuste imprevisto al presupuesto de una orden en reparación/lista/pagada (motivo obligatorio)
 router.patch('/:id/budget-adjustment', authenticate, authorize('ADMIN', 'TECHNICIAN', 'TECHNICIAN_DELIVERY'), ordersController.addBudgetAdjustmentHandler)
 
+// Técnico marca la reparación como terminada — salta a pagada si ya no queda saldo, o pasa a lista para entregar
+router.post('/:id/finish-repair', authenticate, authorize('TECHNICIAN', 'TECHNICIAN_DELIVERY'), ordersController.finishRepairHandler)
+
 // Confirmar o rechazar un abono específico del anticipo (pago en partes — ADMIN)
 router.post('/advance-payment-installment/:submissionId/confirm', authenticate, authorize('ADMIN'), ordersController.confirmAdvancePaymentInstallment)
 

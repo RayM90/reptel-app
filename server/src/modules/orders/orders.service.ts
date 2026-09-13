@@ -1744,3 +1744,91 @@ export const addBudgetAdjustment = async (
 
   return updatedOrder
 }
+
+// ─────────────────────────────────────────────
+// TECHNICIAN/TECHNICIAN_DELIVERY — Terminar la reparación
+// Cierra REPAIRING. Si el cliente ya cubrió el 100% (o más) de la base del
+// anticipo de presupuesto vía advancePaymentSubmission (kind BUDGET,
+// CONFIRMED), no queda saldo que cobrar al entregar — saltamos directo a
+// PAID_PENDING_DELIVERY en una sola actualización, calculando la comisión
+// del técnico con la misma fórmula que confirmFinalPayment (deliveryAmount +
+// 40% × (budget - revisionAmount)). Si queda saldo, la orden pasa a READY y
+// sigue el flujo normal de pago final (confirmFinalPayment).
+// Ownership: igual que useProductInOrder/addBudgetAdjustment, solo el
+// técnico asignado a la orden puede finalizar su propia reparación.
+// ─────────────────────────────────────────────
+
+export const finishRepair = async (
+  orderId: string,
+  technicianId: string,
+  observation?: string
+) => {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      advancePaymentSubmissions: { where: { status: 'CONFIRMED', kind: 'BUDGET' } },
+    },
+  })
+
+  if (!order) {
+    throw new Error('Orden no encontrada')
+  }
+
+  if (order.status !== 'REPAIRING') {
+    throw new Error('Esta acción solo aplica a órdenes en reparación')
+  }
+
+  if (order.technicianId !== technicianId) {
+    throw new Error('Solo el técnico asignado a esta orden puede finalizar la reparación')
+  }
+
+  const base = Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+  const confirmado = order.advancePaymentSubmissions.reduce((sum, s) => sum + Number(s.amount), 0)
+  const fullyPaid = base - confirmado <= 0.009
+
+  const readyComment = observation ? `Reparación terminada. ${observation}` : 'Reparación terminada.'
+
+  if (fullyPaid) {
+    const commission =
+      Number(order.deliveryAmount ?? 0) +
+      0.4 * (Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT))
+
+    return await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: 'PAID_PENDING_DELIVERY',
+        finalPaymentConfirmed: true,
+        finalPaymentConfirmedAt: new Date(),
+        technicianCommission: commission,
+        statusHistory: {
+          create: [
+            { status: 'READY', comment: readyComment },
+            { status: 'PAID_PENDING_DELIVERY', comment: 'Pagado en su totalidad — sin cobro pendiente.' },
+          ],
+        },
+      },
+      include: {
+        client: true,
+        device: true,
+        statusHistory: { orderBy: { createdAt: 'desc' } },
+        advancePaymentSubmissions: true,
+      },
+    })
+  }
+
+  return await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      status: 'READY',
+      statusHistory: {
+        create: { status: 'READY', comment: readyComment },
+      },
+    },
+    include: {
+      client: true,
+      device: true,
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+      advancePaymentSubmissions: true,
+    },
+  })
+}
