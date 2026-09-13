@@ -81,6 +81,26 @@ enum InventoryChannel {
   MOSTRADOR
   SERVICIO_TECNICO
   AJUSTE_MANUAL
+  MERMA
+}
+
+// Motivo/categoría de una merma (channel=MERMA) — para poder filtrar y reportar sin
+// depender de parsear el texto libre de `reason`.
+enum InventoryLossReason {
+  DEFECTUOSO        // se encontró defectuoso antes de usarse
+  DANIO_INSTALACION // se dañó durante la instalación/reparación
+  PERDIDA
+  GARANTIA
+  OTRO
+}
+
+// Lugar/destino de un movimiento de salida (SERVICIO_TECNICO o MERMA). Se auto-deriva
+// del rol del actor vía deriveDestination() — ver products.service.ts.
+enum InventoryDestination {
+  TIENDA
+  DOMICILIO_CLIENTE
+  TALLER
+  OTRO
 }
 
 // ─────────────────────────────────────────────
@@ -279,6 +299,9 @@ model InventoryMovement {
   channel   InventoryChannel       @default(AJUSTE_MANUAL)
   quantity  Int
   reason    String
+  supplierName String?               // nuevo — proveedor, solo aplica a type=IN
+  destination  InventoryDestination? // nuevo — aplica a SERVICIO_TECNICO y MERMA
+  lossReason   InventoryLossReason?  // nuevo — solo aplica a channel=MERMA
   createdAt DateTime               @default(now())
 
   productId String
