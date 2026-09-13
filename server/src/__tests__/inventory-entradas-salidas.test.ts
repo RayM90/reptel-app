@@ -232,3 +232,72 @@ describe('POST /api/products/:id/merma', () => {
     expect(movement?.destination).toBe('DOMICILIO_CLIENTE')
   })
 })
+
+describe('GET /api/products/movements — filtros nuevos', () => {
+  let adminToken: string
+  let product: { id: string }
+  let technician: { id: string; email: string }
+
+  beforeAll(async () => {
+    const loginRes = await request(app).post('/api/auth/login').send({ email: 'admin@reptel.com', password: 'RepTel2024*' })
+    adminToken = loginRes.body.data.token
+
+    const category = await prisma.productCategory.findFirst({ where: { isActive: true } })
+    product = await prisma.product.create({ data: { name: `Producto filtros ${Date.now()}`, price: 3, stock: 20, categoryId: category!.id } })
+    technician = await prisma.user.create({
+      data: { name: 'Tecnico', lastName: 'Filtro', email: `tecnico-filtro-${Date.now()}@test.com`, role: 'TECHNICIAN_DELIVERY', password: 'COGNITO_MANAGED' },
+    })
+
+    // Fixture: una entrada con proveedor, una merma con destino/lossReason.
+    await prisma.inventoryMovement.create({
+      data: { productId: product.id, type: 'IN', channel: 'AJUSTE_MANUAL', quantity: 10, reason: 'Compra', supplierName: 'Proveedor Filtro Test' },
+    })
+    await prisma.inventoryMovement.create({
+      data: { productId: product.id, type: 'OUT', channel: 'MERMA', quantity: 1, reason: 'Prueba', lossReason: 'PERDIDA', destination: 'TALLER', userId: technician.id },
+    })
+  }, 20000)
+
+  afterAll(async () => {
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await prisma.product.delete({ where: { id: product.id } }).catch(() => {})
+    await prisma.user.delete({ where: { id: technician.id } }).catch(() => {})
+  })
+
+  it('filtra por type=IN', async () => {
+    const res = await request(app)
+      .get('/api/products/movements')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ productId: product.id, type: 'IN' })
+    expect(res.status).toBe(200)
+    expect(res.body.data.every((m: any) => m.type === 'IN')).toBe(true)
+    expect(res.body.data.some((m: any) => m.supplierName === 'Proveedor Filtro Test')).toBe(true)
+  })
+
+  it('filtra por destination', async () => {
+    const res = await request(app)
+      .get('/api/products/movements')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ productId: product.id, destination: 'TALLER' })
+    expect(res.status).toBe(200)
+    expect(res.body.data.every((m: any) => m.destination === 'TALLER')).toBe(true)
+  })
+
+  it('filtra por technicianRole', async () => {
+    const res = await request(app)
+      .get('/api/products/movements')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ productId: product.id, technicianRole: 'TECHNICIAN_DELIVERY' })
+    expect(res.status).toBe(200)
+    expect(res.body.data.length).toBeGreaterThan(0)
+    expect(res.body.data.every((m: any) => m.user?.role === 'TECHNICIAN_DELIVERY')).toBe(true)
+  })
+
+  it('filtra por lossReason', async () => {
+    const res = await request(app)
+      .get('/api/products/movements')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ productId: product.id, lossReason: 'PERDIDA' })
+    expect(res.status).toBe(200)
+    expect(res.body.data.every((m: any) => m.lossReason === 'PERDIDA')).toBe(true)
+  })
+})

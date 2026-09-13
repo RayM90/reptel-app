@@ -42,12 +42,17 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
  */
 export const getInventoryMovementsHandler = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { productId, channel, from, to } = req.query;
+    const { productId, channel, from, to, type, supplierName, destination, technicianRole, lossReason } = req.query;
     const movements = await getInventoryMovements({
       productId: productId ? String(productId) : undefined,
       channel: channel ? String(channel) : undefined,
       from: from ? new Date(String(from)) : undefined,
       to: to ? new Date(String(to)) : undefined,
+      type: type ? String(type) : undefined,
+      supplierName: supplierName ? String(supplierName) : undefined,
+      destination: destination ? String(destination) : undefined,
+      technicianRole: technicianRole ? String(technicianRole) : undefined,
+      lossReason: lossReason ? String(lossReason) : undefined,
     });
     res.status(200).json({ success: true, data: movements });
   } catch (error: any) {

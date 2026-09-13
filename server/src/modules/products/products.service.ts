@@ -68,11 +68,21 @@ export const getInventoryMovements = async (filters: {
   channel?: string;
   from?: Date;
   to?: Date;
+  type?: string;
+  supplierName?: string;
+  destination?: string;
+  technicianRole?: string;
+  lossReason?: string;
 }) => {
   return prisma.inventoryMovement.findMany({
     where: {
       ...(filters.productId ? { productId: filters.productId } : {}),
       ...(filters.channel ? { channel: filters.channel as any } : {}),
+      ...(filters.type ? { type: filters.type as any } : {}),
+      ...(filters.destination ? { destination: filters.destination as any } : {}),
+      ...(filters.lossReason ? { lossReason: filters.lossReason as any } : {}),
+      ...(filters.supplierName ? { supplierName: { contains: filters.supplierName } } : {}),
+      ...(filters.technicianRole ? { user: { role: filters.technicianRole as any } } : {}),
       ...(filters.from || filters.to
         ? {
             createdAt: {
@@ -84,7 +94,7 @@ export const getInventoryMovements = async (filters: {
     },
     include: {
       product: { select: { id: true, name: true } },
-      user: { select: { id: true, name: true, lastName: true } },
+      user: { select: { id: true, name: true, lastName: true, role: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
