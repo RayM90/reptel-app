@@ -7,7 +7,7 @@ interface IdNumberInputProps {
   required?: boolean
   disabled?: boolean
   /** Prefijos permitidos en el <select>. Default: V/E/J/G (caso general — cliente). */
-  prefixes?: string[]
+  prefixes?: readonly string[]
   /** Mínimo de dígitos exigido (HTML minLength). Default: sin mínimo. */
   minDigits?: number
   /** Máximo de dígitos aceptado. Default: 9 (caso más largo, RIF jurídico). */
