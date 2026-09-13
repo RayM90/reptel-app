@@ -1763,50 +1763,86 @@ export const finishRepair = async (
   technicianId: string,
   observation?: string
 ) => {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: {
-      advancePaymentSubmissions: { where: { status: 'CONFIRMED', kind: 'BUDGET' } },
-    },
-  })
-
-  if (!order) {
-    throw new Error('Orden no encontrada')
-  }
-
-  if (order.status !== 'REPAIRING') {
-    throw new Error('Esta acción solo aplica a órdenes en reparación')
-  }
-
-  if (order.technicianId !== technicianId) {
-    throw new Error('Solo el técnico asignado a esta orden puede finalizar la reparación')
-  }
-
-  const base = Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
-  const confirmado = order.advancePaymentSubmissions.reduce((sum, s) => sum + Number(s.amount), 0)
-  const fullyPaid = base - confirmado <= 0.009
-
   const readyComment = observation ? `Reparación terminada. ${observation}` : 'Reparación terminada.'
 
-  if (fullyPaid) {
-    const commission =
-      Number(order.deliveryAmount ?? 0) +
-      0.4 * (Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT))
-
-    return await prisma.order.update({
+  const { updatedOrder, fullyPaid } = await prisma.$transaction(async (tx) => {
+    // Lectura fresca dentro de la transacción — no reutilizamos ningún dato
+    // leído antes de entrar acá, para que un addBudgetAdjustment (u otra
+    // escritura) concurrente sobre esta misma orden no nos deje calculando
+    // sobre budget/deliveryAmount/confirmado obsoletos.
+    const order = await tx.order.findUnique({
       where: { id: orderId },
-      data: {
-        status: 'PAID_PENDING_DELIVERY',
-        finalPaymentConfirmed: true,
-        finalPaymentConfirmedAt: new Date(),
-        technicianCommission: commission,
-        statusHistory: {
-          create: [
-            { status: 'READY', comment: readyComment },
-            { status: 'PAID_PENDING_DELIVERY', comment: 'Pagado en su totalidad — sin cobro pendiente.' },
-          ],
-        },
+      include: {
+        advancePaymentSubmissions: { where: { status: 'CONFIRMED', kind: 'BUDGET' } },
       },
+    })
+
+    if (!order) {
+      throw new Error('Orden no encontrada')
+    }
+
+    if (order.status !== 'REPAIRING') {
+      throw new Error('Esta acción solo aplica a órdenes en reparación')
+    }
+
+    if (order.technicianId !== technicianId) {
+      throw new Error('Solo el técnico asignado a esta orden puede finalizar la reparación')
+    }
+
+    // Base/confirmado (Caso A vs B) siguen el mismo fallback que el resto del
+    // subsistema de anticipo de presupuesto (addBudgetAdjustment,
+    // submitBudgetPaymentInstallment, etc.): revisionAmount ?? 15.
+    const base = Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+    const confirmado = order.advancePaymentSubmissions.reduce((sum, s) => sum + Number(s.amount), 0)
+    const fullyPaid = base - confirmado <= 0.009
+
+    if (fullyPaid) {
+      // La comisión replica confirmFinalPayment literalmente, incluido su
+      // fallback de revisionAmount (null → 0, no 15) — a propósito distinto
+      // del fallback usado arriba para decidir Caso A/B.
+      const revisionForCommission = order.revisionAmount ? Number(order.revisionAmount) : 0
+      const commission = Number(order.deliveryAmount ?? 0) + 0.4 * (Number(order.budget ?? 0) - revisionForCommission)
+
+      // updateMany condicionado al status ya leído: si otra request ya
+      // transicionó esta orden entre la lectura de arriba y este punto, el
+      // count da 0 y abortamos en vez de duplicar la transición/el historial.
+      const { count } = await tx.order.updateMany({
+        where: { id: orderId, status: 'REPAIRING' },
+        data: {
+          status: 'PAID_PENDING_DELIVERY',
+          finalPaymentConfirmed: true,
+          finalPaymentConfirmedAt: new Date(),
+          technicianCommission: commission,
+        },
+      })
+
+      if (count === 0) {
+        throw new Error('La orden ya no está en reparación — alguien más la actualizó')
+      }
+
+      await tx.orderStatusHistory.createMany({
+        data: [
+          { orderId, status: 'READY', comment: readyComment },
+          { orderId, status: 'PAID_PENDING_DELIVERY', comment: 'Pagado en su totalidad — sin cobro pendiente.' },
+        ],
+      })
+    } else {
+      const { count } = await tx.order.updateMany({
+        where: { id: orderId, status: 'REPAIRING' },
+        data: { status: 'READY' },
+      })
+
+      if (count === 0) {
+        throw new Error('La orden ya no está en reparación — alguien más la actualizó')
+      }
+
+      await tx.orderStatusHistory.create({
+        data: { orderId, status: 'READY', comment: readyComment },
+      })
+    }
+
+    const updatedOrder = await tx.order.findUniqueOrThrow({
+      where: { id: orderId },
       include: {
         client: true,
         device: true,
@@ -1814,21 +1850,18 @@ export const finishRepair = async (
         advancePaymentSubmissions: true,
       },
     })
+
+    return { updatedOrder, fullyPaid }
+  })
+
+  // Igual que confirmFinalPayment/closeZeroBudgetOrder/rejectBudget/
+  // confirmZeroBudgetDiagnosis: al llegar a un cierre financiero terminal se
+  // libera la carga del técnico para que vuelva a recibir asignaciones
+  // automáticas. Se hace fuera de la transacción (mismo patrón que esas
+  // funciones, que tampoco la incluyen en su propia escritura).
+  if (fullyPaid && updatedOrder.technicianId) {
+    await decrementTechnicianLoad(updatedOrder.technicianId)
   }
 
-  return await prisma.order.update({
-    where: { id: orderId },
-    data: {
-      status: 'READY',
-      statusHistory: {
-        create: { status: 'READY', comment: readyComment },
-      },
-    },
-    include: {
-      client: true,
-      device: true,
-      statusHistory: { orderBy: { createdAt: 'desc' } },
-      advancePaymentSubmissions: true,
-    },
-  })
+  return updatedOrder
 }
