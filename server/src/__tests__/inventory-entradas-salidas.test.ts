@@ -48,6 +48,7 @@ describe('useProductInOrder — destination se auto-completa', () => {
   afterAll(async () => {
     await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
     await prisma.product.delete({ where: { id: product.id } }).catch(() => {})
+    await prisma.orderStatusHistory.deleteMany({ where: { orderId: order.id } })
     await prisma.order.delete({ where: { id: order.id } }).catch(() => {})
     await prisma.device.delete({ where: { id: device.id } }).catch(() => {})
     await prisma.user.delete({ where: { id: technician.id } }).catch(() => {})
