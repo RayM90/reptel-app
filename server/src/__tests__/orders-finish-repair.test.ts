@@ -1,5 +1,10 @@
 import prisma from '../lib/prisma'
-import { addBudgetAdjustment, finishRepair } from '../modules/orders/orders.service'
+import {
+  CONCURRENT_FINISH_REPAIR_ERROR,
+  addBudgetAdjustment,
+  confirmFinalPayment,
+  finishRepair,
+} from '../modules/orders/orders.service'
 
 let client: { id: string }
 let clientUser: { id: string; email: string }
@@ -18,10 +23,14 @@ const makeOrder = async (
     finalPaymentConfirmed: boolean
     finalPaymentConfirmedAt: Date
     technicianCommission: number
+    finalPaymentDetails: Record<string, string>
+    finalPaymentRejectionReason: string
   }> = {}
 ) => {
   return prisma.order.create({
     data: {
+      finalPaymentDetails: overrides.finalPaymentDetails ?? undefined,
+      finalPaymentRejectionReason: overrides.finalPaymentRejectionReason ?? null,
       orderNumber: `REP-TEST-FR-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       status: (overrides.status ?? 'REPAIRING') as any,
       problem: 'Formateo + respaldo — test finalizar reparación',
@@ -133,6 +142,75 @@ describe('orders.service — finishRepair', () => {
       'Solo el técnico asignado a esta orden puede finalizar la reparación'
     )
   })
+
+  // Guarda de concurrencia sobre `budget` (Finding C, revisión final): un
+  // addBudgetAdjustment puede subir el presupuesto SIN tocar el status, así
+  // que filtrar el updateMany solo por status no alcanzaba — la comisión y la
+  // decisión de "pagado en su totalidad" se escribían sobre datos viejos.
+  // Se interfiere el budget justo después de la lectura que hace finishRepair
+  // dentro de su transacción, envolviendo el cliente transaccional.
+  it('aborta si el budget cambia entre la lectura y la escritura', async () => {
+    // budget 35, revisión 20 → base 15, cubierta por un abono de 15: sin
+    // interferencia, esta orden saltaría a PAID_PENDING_DELIVERY con comisión 16.
+    const order = await makeOrder({ status: 'REPAIRING', budget: 35, revisionAmount: 20, deliveryAmount: 10 })
+    await prisma.advancePaymentSubmission.create({
+      data: {
+        orderId: order.id,
+        amount: 15,
+        paymentDetails: { banco: 'Bancaribe' },
+        status: 'CONFIRMED',
+        kind: 'BUDGET',
+        confirmedAt: new Date(),
+      },
+    })
+
+    const realTransaction = prisma.$transaction.bind(prisma)
+    let interfered = false
+
+    const spy = jest.spyOn(prisma, '$transaction').mockImplementation(((fn: any, options: any) => {
+      if (typeof fn !== 'function') return realTransaction(fn, options)
+      return realTransaction(async (tx: any) => {
+        const proxiedTx = new Proxy(tx, {
+          get(target, prop) {
+            if (prop !== 'order') return target[prop]
+            const orderDelegate = target.order
+            return new Proxy(orderDelegate, {
+              get(delegate, method) {
+                if (method !== 'findUnique') return delegate[method]
+                return async (...args: any[]) => {
+                  const result = await delegate.findUnique(...args)
+                  if (!interfered) {
+                    interfered = true
+                    // Escritura desde otra conexión (el cliente de fuera de la
+                    // transacción) — simula el ajuste concurrente ya commiteado.
+                    await prisma.order.update({ where: { id: order.id }, data: { budget: 45 } })
+                  }
+                  return result
+                }
+              },
+            })
+          },
+        })
+        return await fn(proxiedTx)
+      }, options)
+    }) as any)
+
+    try {
+      await expect(finishRepair(order.id, technician.id)).rejects.toThrow(CONCURRENT_FINISH_REPAIR_ERROR)
+    } finally {
+      spy.mockRestore()
+    }
+
+    expect(interfered).toBe(true)
+
+    const after = await prisma.order.findUniqueOrThrow({ where: { id: order.id } })
+    // La transición no se aplicó: sigue en reparación, sin comisión ni pago
+    // final confirmado sobre el presupuesto viejo.
+    expect(after.status).toBe('REPAIRING')
+    expect(Number(after.budget)).toBe(45)
+    expect(after.technicianCommission).toBeNull()
+    expect(after.finalPaymentConfirmed).toBe(false)
+  }, 20000)
 })
 
 describe('orders.service — addBudgetAdjustment', () => {
@@ -161,6 +239,93 @@ describe('orders.service — addBudgetAdjustment', () => {
     expect(updated.technicianCommission).toBeNull()
   })
 
+  // Finding E (revisión final): el comprobante viejo quedaba en la orden, así
+  // que "Aprobar pago final" volvía a estar a un clic sin haber cobrado el
+  // ajuste, y el formulario de mostrador (oculto si finalPaymentDetails != null)
+  // no reaparecía.
+  it('al revertir a READY limpia el comprobante y el motivo de rechazo del pago final', async () => {
+    const order = await makeOrder({
+      status: 'PAID_PENDING_DELIVERY',
+      budget: 30,
+      finalPaymentConfirmed: true,
+      finalPaymentConfirmedAt: new Date(),
+      technicianCommission: 16,
+      finalPaymentDetails: { banco: 'Banesco', referencia: '1234' },
+      finalPaymentRejectionReason: 'Motivo viejo',
+    })
+
+    await addBudgetAdjustment(order.id, adminEmail, 5, 'Imprevisto tras el pago')
+
+    const after = await prisma.order.findUniqueOrThrow({ where: { id: order.id } })
+    expect(after.status).toBe('READY')
+    expect(after.finalPaymentDetails).toBeNull()
+    expect(after.finalPaymentRejectionReason).toBeNull()
+  })
+
+  // Finding E (revisión final), 2da parte: al llegar a PAID_PENDING_DELIVERY
+  // la orden ya había liberado la carga del técnico; al reabrirse el saldo hay
+  // trabajo activo de nuevo y hay que devolvérsela.
+  it('al revertir a READY le devuelve la carga al técnico asignado', async () => {
+    const order = await makeOrder({
+      status: 'PAID_PENDING_DELIVERY',
+      budget: 30,
+      technicianId: technician.id,
+      finalPaymentConfirmed: true,
+      finalPaymentConfirmedAt: new Date(),
+      technicianCommission: 16,
+    })
+
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: technician.id } })
+    await addBudgetAdjustment(order.id, adminEmail, 5, 'Imprevisto tras el pago')
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: technician.id } })
+
+    expect(after.activeOrderCount).toBe(before.activeOrderCount + 1)
+  })
+
+  it('aborta si la orden cambia de estado mientras se procesa el ajuste', async () => {
+    const order = await makeOrder({ status: 'REPAIRING', budget: 30 })
+
+    const realTransaction = prisma.$transaction.bind(prisma)
+    let interfered = false
+
+    const spy = jest.spyOn(prisma, '$transaction').mockImplementation(((fn: any, options: any) => {
+      if (typeof fn !== 'function') return realTransaction(fn, options)
+      return realTransaction(async (tx: any) => {
+        const proxiedTx = new Proxy(tx, {
+          get(target, prop) {
+            if (prop !== 'order') return target[prop]
+            const orderDelegate = target.order
+            return new Proxy(orderDelegate, {
+              get(delegate, method) {
+                if (method !== 'findUnique') return delegate[method]
+                return async (...args: any[]) => {
+                  const result = await delegate.findUnique(...args)
+                  if (!interfered) {
+                    interfered = true
+                    await prisma.order.update({ where: { id: order.id }, data: { status: 'READY' } })
+                  }
+                  return result
+                }
+              },
+            })
+          },
+        })
+        return await fn(proxiedTx)
+      }, options)
+    }) as any)
+
+    try {
+      await expect(addBudgetAdjustment(order.id, adminEmail, 10, 'motivo')).rejects.toThrow(
+        'La orden cambió de estado mientras se procesaba el ajuste'
+      )
+    } finally {
+      spy.mockRestore()
+    }
+
+    const after = await prisma.order.findUniqueOrThrow({ where: { id: order.id } })
+    expect(Number(after.budget)).toBe(30)
+  }, 20000)
+
   it('rechaza si falta el reason', async () => {
     const order = await makeOrder({ status: 'REPAIRING' })
     await expect(addBudgetAdjustment(order.id, adminEmail, 10, '')).rejects.toThrow('reason es requerido')
@@ -178,5 +343,92 @@ describe('orders.service — addBudgetAdjustment', () => {
     await expect(
       addBudgetAdjustment(order.id, otherTechnician.email, 10, 'motivo')
     ).rejects.toThrow('Solo el técnico asignado a esta orden puede ajustar su presupuesto')
+  })
+})
+
+// Finding A (revisión final): el pago final tradicional no dejaba rastro en el
+// pool de anticipos (kind BUDGET), así que el "saldo pendiente" que calculan el
+// modal admin, la app del cliente, finishRepair y addBudgetAdjustment seguía
+// mostrando el monto completo aunque ya se hubiera cobrado.
+describe('orders.service — confirmFinalPayment registra el cobro', () => {
+  const confirmedBudgetTotal = async (orderId: string) => {
+    const submissions = await prisma.advancePaymentSubmission.findMany({
+      where: { orderId, kind: 'BUDGET', status: 'CONFIRMED' },
+    })
+    return submissions.reduce((sum, s) => sum + Number(s.amount), 0)
+  }
+
+  it('al aprobar crea un abono BUDGET CONFIRMED por el saldo que faltaba', async () => {
+    // budget 50, revisión 20 → base 30; sin anticipos previos, se cobran los 30.
+    const order = await makeOrder({
+      status: 'READY',
+      budget: 50,
+      revisionAmount: 20,
+      finalPaymentDetails: { banco: 'Banesco', referencia: '9876' },
+    })
+
+    await confirmFinalPayment(order.id, true)
+
+    const submissions = await prisma.advancePaymentSubmission.findMany({
+      where: { orderId: order.id, kind: 'BUDGET', status: 'CONFIRMED' },
+    })
+    expect(submissions).toHaveLength(1)
+    expect(Number(submissions[0].amount)).toBe(30)
+    expect(submissions[0].confirmedAt).not.toBeNull()
+    expect(submissions[0].paymentDetails).toMatchObject({ banco: 'Banesco', referencia: '9876' })
+  })
+
+  it('descuenta lo ya confirmado como anticipo, sin duplicarlo', async () => {
+    // budget 50, revisión 20 → base 30, con 18 ya abonados: solo faltaban 12.
+    const order = await makeOrder({ status: 'READY', budget: 50, revisionAmount: 20 })
+    await prisma.advancePaymentSubmission.create({
+      data: {
+        orderId: order.id,
+        amount: 18,
+        paymentDetails: { banco: 'Bancaribe' },
+        status: 'CONFIRMED',
+        kind: 'BUDGET',
+        confirmedAt: new Date(),
+      },
+    })
+
+    await confirmFinalPayment(order.id, true)
+
+    // 18 del anticipo + 12 del pago final = 30 = la base completa, sin pasarse.
+    expect(await confirmedBudgetTotal(order.id)).toBe(30)
+  })
+
+  it('no crea ningún abono si el anticipo ya cubría el 100%', async () => {
+    const order = await makeOrder({ status: 'READY', budget: 50, revisionAmount: 20 })
+    await prisma.advancePaymentSubmission.create({
+      data: {
+        orderId: order.id,
+        amount: 30,
+        paymentDetails: { banco: 'Bancaribe' },
+        status: 'CONFIRMED',
+        kind: 'BUDGET',
+        confirmedAt: new Date(),
+      },
+    })
+
+    await confirmFinalPayment(order.id, true)
+
+    const submissions = await prisma.advancePaymentSubmission.findMany({
+      where: { orderId: order.id, kind: 'BUDGET' },
+    })
+    expect(submissions).toHaveLength(1)
+  })
+
+  it('al rechazar no registra ningún cobro', async () => {
+    const order = await makeOrder({
+      status: 'READY',
+      budget: 50,
+      revisionAmount: 20,
+      finalPaymentDetails: { banco: 'Banesco', referencia: '9876' },
+    })
+
+    await confirmFinalPayment(order.id, false, 'Referencia no encontrada')
+
+    expect(await confirmedBudgetTotal(order.id)).toBe(0)
   })
 })

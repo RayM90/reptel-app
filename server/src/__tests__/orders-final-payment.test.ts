@@ -43,6 +43,9 @@ beforeAll(async () => {
 }, 20000)
 
 afterAll(async () => {
+  // confirmFinalPayment registra el cobro como AdvancePaymentSubmission
+  // (Finding A, revisión final) — hay que borrarlos antes que las órdenes.
+  await prisma.advancePaymentSubmission.deleteMany({ where: { order: { clientId: client.id } } })
   await prisma.orderStatusHistory.deleteMany({ where: { order: { clientId: client.id } } })
   await prisma.order.deleteMany({ where: { clientId: client.id } })
   await prisma.device.delete({ where: { id: device.id } }).catch(() => {})
