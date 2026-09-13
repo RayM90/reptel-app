@@ -95,8 +95,11 @@ describe('orders.service — finishRepair', () => {
   })
 
   it('con el 100% ya pagado, salta a PAID_PENDING_DELIVERY con comisión correcta', async () => {
-    // budget 30, revisionAmount 15 -> base 15. Un abono BUDGET CONFIRMED de 15 cubre toda la base.
-    const order = await makeOrder({ budget: 30, revisionAmount: 15, deliveryAmount: 10 })
+    // revisionAmount 20 (a propósito distinto de ADVANCE_REVISION_AMOUNT=15): si el código
+    // confundiera el fallback de comisión con la constante hardcodeada en vez del valor real
+    // de la orden, la comisión esperada acá (16) no coincidiría con la que daría ese bug (18).
+    // budget 35, revisionAmount 20 -> base 15. Un abono BUDGET CONFIRMED de 15 cubre toda la base.
+    const order = await makeOrder({ budget: 35, revisionAmount: 20, deliveryAmount: 10 })
     await prisma.advancePaymentSubmission.create({
       data: {
         orderId: order.id,
@@ -113,7 +116,7 @@ describe('orders.service — finishRepair', () => {
     expect(updated.status).toBe('PAID_PENDING_DELIVERY')
     expect(updated.finalPaymentConfirmed).toBe(true)
     // comisión = deliveryAmount + 0.4 * (budget - (revisionAmount ? Number(revisionAmount) : 0))
-    // = 10 + 0.4 * (30 - 15) = 16
+    // = 10 + 0.4 * (35 - 20) = 16
     expect(Number(updated.technicianCommission)).toBe(16)
   })
 
