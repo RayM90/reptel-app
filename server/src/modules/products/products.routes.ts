@@ -8,6 +8,7 @@ import {
   createProductHandler,
   updateProductHandler,
   getInventoryMovementsHandler,
+  restockProductHandler,
 } from './products.controller';
 
 const router = Router();
@@ -19,5 +20,6 @@ router.get('/', authenticate, authorize('ADMIN', 'TECHNICIAN', 'TECHNICIAN_DELIV
 router.post('/', authenticate, authorize('ADMIN'), createProductHandler);
 router.get('/:id', authenticate, authorize('ADMIN'), getProductByIdAdmin);
 router.put('/:id', authenticate, authorize('ADMIN'), updateProductHandler);
+router.post('/:id/restock', authenticate, authorize('ADMIN'), restockProductHandler);
 
 export default router;

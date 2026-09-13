@@ -8,6 +8,7 @@ import {
   createProduct,
   updateProduct,
   getInventoryMovements,
+  restockProduct,
 } from './products.service';
 
 /**
@@ -162,5 +163,32 @@ export const updateProductHandler = async (req: AuthRequest, res: Response): Pro
       return
     }
     res.status(500).json({ success: false, message: error.message || 'Error al actualizar el producto' })
+  }
+}
+
+export const restockProductHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const { quantity, supplierName, reason } = req.body
+
+    if (quantity === undefined || Number(quantity) <= 0) {
+      res.status(400).json({ success: false, message: 'La cantidad a reabastecer debe ser mayor a 0' })
+      return
+    }
+
+    const { product, movement } = await restockProduct(
+      id,
+      Number(quantity),
+      req.user!.email,
+      supplierName ? String(supplierName) : undefined,
+      reason ? String(reason) : undefined,
+    )
+    res.status(200).json({ success: true, data: { product, movement } })
+  } catch (error: any) {
+    if (error.code === 'P2025') {
+      res.status(404).json({ success: false, message: 'Producto no encontrado' })
+      return
+    }
+    res.status(500).json({ success: false, message: error.message || 'Error al reabastecer el producto' })
   }
 }

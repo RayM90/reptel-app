@@ -136,6 +136,38 @@ export const createProduct = async (data: {
   });
 };
 
+export const restockProduct = async (
+  productId: string,
+  quantity: number,
+  actorEmail: string,
+  supplierName?: string,
+  reason?: string,
+) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } });
+  if (!actor) throw new Error('Usuario no encontrado');
+
+  return prisma.$transaction(async (tx) => {
+    const product = await tx.product.update({
+      where: { id: productId },
+      data: { stock: { increment: quantity } },
+    });
+
+    const movement = await tx.inventoryMovement.create({
+      data: {
+        productId,
+        type: 'IN',
+        channel: 'AJUSTE_MANUAL',
+        quantity,
+        reason: reason?.trim() || 'Reabastecimiento de stock',
+        supplierName: supplierName?.trim() || null,
+        userId: actor.id,
+      },
+    });
+
+    return { product, movement };
+  });
+};
+
 export const updateProduct = async (
   id: string,
   data: {

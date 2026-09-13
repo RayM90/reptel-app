@@ -1,4 +1,6 @@
+import request from 'supertest'
 import prisma from '../lib/prisma'
+import app from '../app'
 import { deriveDestination } from '../modules/products/products.service'
 import { useProductInOrder } from '../modules/orders/orders.service'
 
@@ -58,5 +60,61 @@ describe('useProductInOrder — destination se auto-completa', () => {
   it('un técnico motorizado usando un repuesto deja destination=DOMICILIO_CLIENTE', async () => {
     const { movement } = await useProductInOrder(order.id, product.id, 1, technician.email)
     expect(movement.destination).toBe('DOMICILIO_CLIENTE')
+  })
+})
+
+describe('POST /api/products/:id/restock', () => {
+  let adminToken: string
+  let product: { id: string; stock: number }
+
+  beforeAll(async () => {
+    const loginRes = await request(app).post('/api/auth/login').send({ email: 'admin@reptel.com', password: 'RepTel2024*' })
+    adminToken = loginRes.body.data.token
+    const category = await prisma.productCategory.findFirst({ where: { isActive: true } })
+    product = await prisma.product.create({ data: { name: `Producto restock ${Date.now()}`, price: 5, stock: 2, categoryId: category!.id } })
+  }, 20000)
+
+  afterAll(async () => {
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await prisma.product.delete({ where: { id: product.id } }).catch(() => {})
+  })
+
+  it('sin token retorna 401', async () => {
+    const res = await request(app).post(`/api/products/${product.id}/restock`).send({ quantity: 5 })
+    expect(res.status).toBe(401)
+  })
+
+  it('incrementa el stock y crea un movimiento IN con proveedor', async () => {
+    const res = await request(app)
+      .post(`/api/products/${product.id}/restock`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ quantity: 10, supplierName: 'Distribuidora Ejemplo' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.product.stock).toBe(12)
+
+    const movement = await prisma.inventoryMovement.findFirst({
+      where: { productId: product.id, type: 'IN' },
+      orderBy: { createdAt: 'desc' },
+    })
+    expect(movement?.quantity).toBe(10)
+    expect(movement?.supplierName).toBe('Distribuidora Ejemplo')
+    expect(movement?.channel).toBe('AJUSTE_MANUAL')
+  })
+
+  it('retorna 400 si quantity no es positivo', async () => {
+    const res = await request(app)
+      .post(`/api/products/${product.id}/restock`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ quantity: 0 })
+    expect(res.status).toBe(400)
+  })
+
+  it('retorna 404 si el producto no existe', async () => {
+    const res = await request(app)
+      .post('/api/products/00000000-0000-0000-0000-000000000000/restock')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ quantity: 5 })
+    expect(res.status).toBe(404)
   })
 })
