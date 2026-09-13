@@ -65,6 +65,10 @@ interface TechOrder {
     id: string
     amount: number
     status: 'PENDING' | 'CONFIRMED' | 'REJECTED'
+    // REVISION = anticipo de recepción/delivery; BUDGET = anticipo del
+    // presupuesto de reparación (y, desde la revisión final, también el cobro
+    // del pago final tradicional). Son dos pools distintos, nunca se mezclan.
+    kind?: 'REVISION' | 'BUDGET'
     rejectionReason?: string | null
     createdAt: string
   }[]
@@ -636,6 +640,17 @@ export default function MyTechnicalOrdersScreen() {
                           style={styles.finalPaymentBtn}
                           onPress={(e) => {
                             e.stopPropagation()
+                            // Saldo real, no un 50% fijo: base (presupuesto −
+                            // revisión ya pagada) menos todo lo confirmado del
+                            // pool BUDGET. Con anticipo hasta el 100% y
+                            // ajustes imprevistos al presupuesto, el 50% dejó
+                            // de ser cierto (Finding B, revisión final).
+                            const base =
+                              Number(order.budget ?? 0) - Number(order.revisionAmount ?? 15)
+                            const confirmado = (order.advancePaymentSubmissions ?? [])
+                              .filter((s) => s.kind === 'BUDGET' && s.status === 'CONFIRMED')
+                              .reduce((sum, s) => sum + Number(s.amount), 0)
+                            const restante = Math.max(base - confirmado, 0)
                             router.push({
                               pathname: '/(client)/final-payment',
                               params: {
@@ -643,6 +658,7 @@ export default function MyTechnicalOrdersScreen() {
                                 orderNumber: order.orderNumber,
                                 budget: String(order.budget ?? 0),
                                 revisionAmount: String(order.revisionAmount ?? 15),
+                                remaining: String(restante),
                               },
                             })
                           }}
