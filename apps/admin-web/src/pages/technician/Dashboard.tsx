@@ -144,9 +144,12 @@ export default function TechnicianDashboard() {
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
 
   // ── Finalizar reparación: ajuste de presupuesto + cierre ──
+  // El ajuste es una opción que el técnico activa si la necesita — no un
+  // formulario siempre desplegado — para no distraer del cierre normal.
   const [adjustmentAmountText, setAdjustmentAmountText] = useState<Record<string, string>>({})
   const [adjustmentReasonText, setAdjustmentReasonText] = useState<Record<string, string>>({})
   const [finishObservationText, setFinishObservationText] = useState<Record<string, string>>({})
+  const [showAdjustment, setShowAdjustment] = useState<Record<string, boolean>>({})
 
   // ── Repuestos de inventario usados en la orden ──
   const [products, setProducts] = useState<{ id: string; name: string; stock: number; price: string }[]>([])
@@ -332,6 +335,7 @@ export default function TechnicianDashboard() {
       showToast('✅ Ajuste al presupuesto registrado.', 'success')
       setAdjustmentAmountText((prev) => ({ ...prev, [orderId]: '' }))
       setAdjustmentReasonText((prev) => ({ ...prev, [orderId]: '' }))
+      setShowAdjustment((prev) => ({ ...prev, [orderId]: false }))
       fetchData()
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'Error al registrar el ajuste al presupuesto', 'error')
@@ -482,23 +486,212 @@ export default function TechnicianDashboard() {
 
                 {isExpanded && (
                   <div style={{ marginTop: 12, borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
-                    <div className="card">
-                      <h4>Detalle del equipo</h4>
-                      <p><strong>Tipo:</strong> {order.device.type === 'LAPTOP' ? 'Laptop' : 'PC'}</p>
-                      <p><strong>Marca / Modelo:</strong> {order.device.brand} {order.device.model}</p>
-                      <p><strong>Color:</strong> {order.device.color}</p>
-                      <p><strong>Accesorios:</strong> {order.device.accessories || '—'}</p>
-                      {order.device.devicePassword && <p><strong>Contraseña del equipo:</strong> {order.device.devicePassword}</p>}
-                      <p><strong>Problema reportado por el cliente:</strong> {order.problem}</p>
-                    </div>
-
-                    {order.diagnosis && <p><strong>Diagnóstico:</strong> {order.diagnosis}</p>}
-                    {order.budget && <p><strong>Presupuesto:</strong> ${order.budget}</p>}
-
                     {order.finalPaymentDetails && !order.finalPaymentConfirmed && (
                       <p className="alert-success">💰 El cliente ya reportó el pago final — esperando confirmación del administrador.</p>
                     )}
 
+                    {/* ── Acción principal: una sola tarjeta destacada, según
+                        el estado — antes "Finalizar reparación" y "Agregar
+                        comentario de progreso" podían mostrarse juntas en
+                        REPAIRING; ahora es siempre una sola, la que
+                        corresponde ahora mismo. ── */}
+
+                    {needsDiagnosis ? (
+                      <div className="card card--action">
+                        <span className="card-eyebrow">Acción requerida</span>
+                        <h4>Registrar diagnóstico</h4>
+                        <div className="form-group">
+                          <label>Servicio del catálogo (si aplica — autollena el presupuesto)</label>
+                          <select
+                            value={catalogSelection[order.id] || ''}
+                            onChange={(e) => {
+                              const catalogId = e.target.value
+                              setCatalogSelection((prev) => ({ ...prev, [order.id]: catalogId }))
+                              recomputeBudget(order.id, catalogId, manualExtraText[order.id] || '')
+                            }}
+                          >
+                            <option value="">-- Ninguno / diagnóstico manual --</option>
+                            {catalog.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name} (${c.basePrice})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>Monto adicional (si el diagnóstico o parte del costo no está en el catálogo)</label>
+                          <input
+                            type="number"
+                            value={manualExtraText[order.id] || ''}
+                            onChange={(e) => {
+                              const extra = e.target.value
+                              setManualExtraText((prev) => ({ ...prev, [order.id]: extra }))
+                              recomputeBudget(order.id, catalogSelection[order.id] || '', extra)
+                            }}
+                          />
+                          <p className="form-hint">Se suma al precio del catálogo elegido arriba para formar el presupuesto total.</p>
+                        </div>
+                        <div className="form-group">
+                          <label>Diagnóstico</label>
+                          <textarea
+                            value={diagnosisText[order.id] || ''}
+                            onChange={(e) =>
+                              setDiagnosisText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                            }
+                            rows={3}
+                            placeholder="Describí el diagnóstico — si no eligió nada del catálogo, escribilo acá completo"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Presupuesto ($)</label>
+                          <input
+                            type="number"
+                            value={budgetText[order.id] || ''}
+                            onChange={(e) =>
+                              setBudgetText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                            }
+                          />
+                          <p className="form-hint">Se autollena con catálogo + monto adicional + repuestos, pero podés editarlo directo.</p>
+                        </div>
+
+                        {(() => {
+                          const catalogItem = catalog.find((c) => c.id === (catalogSelection[order.id] || ''))
+                          const extra = Number(manualExtraText[order.id] || 0)
+                          const activeParts = (partsByOrder[order.id] ?? []).filter((p) => !p.reversedAt)
+                          if (!catalogItem && !extra && activeParts.length === 0) return null
+                          return (
+                            <div className="form-hint" style={{ marginBottom: 12 }}>
+                              <strong>Desglose del presupuesto:</strong>
+                              <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
+                                {catalogItem && <li>{catalogItem.name} — ${Number(catalogItem.basePrice).toFixed(2)}</li>}
+                                {extra > 0 && <li>Monto adicional — ${extra.toFixed(2)}</li>}
+                                {activeParts.map((p) => (
+                                  <li key={p.id}>Repuesto: {p.product.name} (x{p.quantity}) — ${(p.quantity * Number(p.unitPriceAtUse ?? 0)).toFixed(2)}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )
+                        })()}
+
+                        <button className="btn btn-primary" disabled={pendingIds.has(`diag:${order.id}`)} onClick={() => handleSubmitDiagnosis(order.id)}>
+                          Enviar diagnóstico
+                        </button>
+                      </div>
+                    ) : order.status === 'REPAIRING' ? (
+                      <div className="card card--action">
+                        <span className="card-eyebrow">Acción requerida</span>
+                        <h4>Finalizar reparación</h4>
+                        {order.diagnosis && <p className="form-hint"><strong>Diagnóstico:</strong> {order.diagnosis}</p>}
+                        {order.budget && <p className="form-hint"><strong>Presupuesto:</strong> ${order.budget}</p>}
+
+                        <button
+                          type="button"
+                          className="card-toggle"
+                          onClick={() => setShowAdjustment((prev) => ({ ...prev, [order.id]: !prev[order.id] }))}
+                        >
+                          {showAdjustment[order.id] ? '▾' : '▸'} ¿Necesitás agregar algo imprevisto?
+                        </button>
+                        {showAdjustment[order.id] && (
+                          <div className="form-group">
+                            <p className="form-hint">
+                              Si es un repuesto, usá la sección "Repuestos" de abajo — este ajuste es para cualquier otro costo imprevisto.
+                            </p>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                              <div style={{ width: 120 }}>
+                                <input
+                                  type="number"
+                                  placeholder="Monto"
+                                  value={adjustmentAmountText[order.id] || ''}
+                                  onChange={(e) =>
+                                    setAdjustmentAmountText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                                  }
+                                />
+                              </div>
+                              <div style={{ flex: 1, minWidth: 160 }}>
+                                <input
+                                  type="text"
+                                  placeholder="Motivo del ajuste"
+                                  value={adjustmentReasonText[order.id] || ''}
+                                  onChange={(e) =>
+                                    setAdjustmentReasonText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                                  }
+                                />
+                              </div>
+                              <button
+                                className="btn btn-secondary"
+                                disabled={
+                                  pendingIds.has(`budgetAdj:${order.id}`) ||
+                                  !(Number(adjustmentAmountText[order.id]) > 0) ||
+                                  !(adjustmentReasonText[order.id] || '').trim()
+                                }
+                                onClick={() => handleAddBudgetAdjustment(order.id)}
+                              >
+                                Registrar ajuste
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="form-group">
+                          <label>Observación (opcional)</label>
+                          <textarea
+                            value={finishObservationText[order.id] || ''}
+                            onChange={(e) =>
+                              setFinishObservationText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                            }
+                            rows={2}
+                            placeholder="Notas finales sobre la reparación..."
+                          />
+                        </div>
+
+                        <button
+                          className="btn btn-primary"
+                          disabled={pendingIds.has(`finish:${order.id}`)}
+                          onClick={() => handleFinishRepair(order.id)}
+                        >
+                          Terminé la reparación
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="card card--action">
+                        <span className="card-eyebrow">Acción requerida</span>
+                        <h4>Agregar comentario de progreso</h4>
+                        <div className="form-group">
+                          <label>Estado</label>
+                          <select
+                            value={statusSelection[order.id] || order.status}
+                            onChange={(e) =>
+                              setStatusSelection((prev) => ({
+                                ...prev,
+                                [order.id]: e.target.value as OrderStatus,
+                              }))
+                            }
+                          >
+                            {STATUS_OPTIONS.map((s) => (
+                              <option key={s} value={s}>
+                                {getStatusBadge('order', s).label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <textarea
+                            value={commentText[order.id] || ''}
+                            onChange={(e) =>
+                              setCommentText((prev) => ({ ...prev, [order.id]: e.target.value }))
+                            }
+                            placeholder="Describe el avance del trabajo..."
+                            rows={2}
+                          />
+                        </div>
+                        <button className="btn btn-primary" disabled={pendingIds.has(`comment:${order.id}`)} onClick={() => handleSubmitComment(order.id, order.status)}>
+                          Guardar comentario
+                        </button>
+                      </div>
+                    )}
+
+                    {/* ── Repuestos: utilidad siempre accesible, no compite
+                        visualmente con la acción principal de arriba. ── */}
                     <div className="card">
                       <h4>Repuestos</h4>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -578,198 +771,27 @@ export default function TechnicianDashboard() {
                       })()}
                     </div>
 
-                    {order.status === 'REPAIRING' && (
-                      <div className="card">
-                        <h4>Finalizar reparación</h4>
-                        <p className="form-hint">
-                          Si necesitás agregar un repuesto de último momento, hacelo en la sección "Repuestos" de arriba antes de finalizar.
-                        </p>
+                    {/* ── Referencia: colapsada por defecto — no compite con
+                        la acción principal ni con Repuestos. ── */}
+                    <details className="card card--muted">
+                      <summary><h4 style={{ display: 'inline' }}>Detalle del equipo</h4></summary>
+                      <p><strong>Tipo:</strong> {order.device.type === 'LAPTOP' ? 'Laptop' : 'PC'}</p>
+                      <p><strong>Marca / Modelo:</strong> {order.device.brand} {order.device.model}</p>
+                      <p><strong>Color:</strong> {order.device.color}</p>
+                      <p><strong>Accesorios:</strong> {order.device.accessories || '—'}</p>
+                      {order.device.devicePassword && <p><strong>Contraseña del equipo:</strong> {order.device.devicePassword}</p>}
+                      <p><strong>Problema reportado por el cliente:</strong> {order.problem}</p>
+                    </details>
 
-                        <div className="form-group">
-                          <label>Ajuste al presupuesto (opcional)</label>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                            <div style={{ width: 120 }}>
-                              <input
-                                type="number"
-                                placeholder="Monto"
-                                value={adjustmentAmountText[order.id] || ''}
-                                onChange={(e) =>
-                                  setAdjustmentAmountText((prev) => ({ ...prev, [order.id]: e.target.value }))
-                                }
-                              />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 160 }}>
-                              <input
-                                type="text"
-                                placeholder="Motivo del ajuste"
-                                value={adjustmentReasonText[order.id] || ''}
-                                onChange={(e) =>
-                                  setAdjustmentReasonText((prev) => ({ ...prev, [order.id]: e.target.value }))
-                                }
-                              />
-                            </div>
-                            <button
-                              className="btn btn-secondary"
-                              disabled={
-                                pendingIds.has(`budgetAdj:${order.id}`) ||
-                                !(Number(adjustmentAmountText[order.id]) > 0) ||
-                                !(adjustmentReasonText[order.id] || '').trim()
-                              }
-                              onClick={() => handleAddBudgetAdjustment(order.id)}
-                            >
-                              Registrar ajuste
-                            </button>
-                          </div>
+                    <details className="card card--muted">
+                      <summary><h4 style={{ display: 'inline' }}>Historial</h4></summary>
+                      {order.statusHistory.map((entry) => (
+                        <div key={entry.id} className="form-hint">
+                          <strong>{getStatusBadge('order', entry.status).label}</strong> — {formatDate(entry.createdAt)}
+                          {entry.comment && <div>{entry.comment}</div>}
                         </div>
-
-                        <div className="form-group">
-                          <label>Observación (opcional)</label>
-                          <textarea
-                            value={finishObservationText[order.id] || ''}
-                            onChange={(e) =>
-                              setFinishObservationText((prev) => ({ ...prev, [order.id]: e.target.value }))
-                            }
-                            rows={2}
-                            placeholder="Notas finales sobre la reparación..."
-                          />
-                        </div>
-
-                        <button
-                          className="btn btn-primary"
-                          disabled={pendingIds.has(`finish:${order.id}`)}
-                          onClick={() => handleFinishRepair(order.id)}
-                        >
-                          Terminé la reparación
-                        </button>
-                      </div>
-                    )}
-
-                    {needsDiagnosis && (
-                      <div className="card">
-                        <h4>Registrar diagnóstico</h4>
-                        <div className="form-group">
-                          <label>Servicio del catálogo (si aplica — autollena el presupuesto)</label>
-                          <select
-                            value={catalogSelection[order.id] || ''}
-                            onChange={(e) => {
-                              const catalogId = e.target.value
-                              setCatalogSelection((prev) => ({ ...prev, [order.id]: catalogId }))
-                              recomputeBudget(order.id, catalogId, manualExtraText[order.id] || '')
-                            }}
-                          >
-                            <option value="">-- Ninguno / diagnóstico manual --</option>
-                            {catalog.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name} (${c.basePrice})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="form-group">
-                          <label>Monto adicional (si el diagnóstico o parte del costo no está en el catálogo)</label>
-                          <input
-                            type="number"
-                            value={manualExtraText[order.id] || ''}
-                            onChange={(e) => {
-                              const extra = e.target.value
-                              setManualExtraText((prev) => ({ ...prev, [order.id]: extra }))
-                              recomputeBudget(order.id, catalogSelection[order.id] || '', extra)
-                            }}
-                          />
-                          <p className="form-hint">Se suma al precio del catálogo elegido arriba para formar el presupuesto total.</p>
-                        </div>
-                        <div className="form-group">
-                          <label>Diagnóstico</label>
-                          <textarea
-                            value={diagnosisText[order.id] || ''}
-                            onChange={(e) =>
-                              setDiagnosisText((prev) => ({ ...prev, [order.id]: e.target.value }))
-                            }
-                            rows={3}
-                            placeholder="Describí el diagnóstico — si no eligió nada del catálogo, escribilo acá completo"
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label>Presupuesto ($)</label>
-                          <input
-                            type="number"
-                            value={budgetText[order.id] || ''}
-                            onChange={(e) =>
-                              setBudgetText((prev) => ({ ...prev, [order.id]: e.target.value }))
-                            }
-                          />
-                          <p className="form-hint">Se autollena con catálogo + monto adicional + repuestos, pero podés editarlo directo.</p>
-                        </div>
-
-                        {(() => {
-                          const catalogItem = catalog.find((c) => c.id === (catalogSelection[order.id] || ''))
-                          const extra = Number(manualExtraText[order.id] || 0)
-                          const activeParts = (partsByOrder[order.id] ?? []).filter((p) => !p.reversedAt)
-                          if (!catalogItem && !extra && activeParts.length === 0) return null
-                          return (
-                            <div className="form-hint" style={{ marginBottom: 12 }}>
-                              <strong>Desglose del presupuesto:</strong>
-                              <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
-                                {catalogItem && <li>{catalogItem.name} — ${Number(catalogItem.basePrice).toFixed(2)}</li>}
-                                {extra > 0 && <li>Monto adicional — ${extra.toFixed(2)}</li>}
-                                {activeParts.map((p) => (
-                                  <li key={p.id}>Repuesto: {p.product.name} (x{p.quantity}) — ${(p.quantity * Number(p.unitPriceAtUse ?? 0)).toFixed(2)}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )
-                        })()}
-
-                        <button className="btn btn-primary" disabled={pendingIds.has(`diag:${order.id}`)} onClick={() => handleSubmitDiagnosis(order.id)}>
-                          Enviar diagnóstico
-                        </button>
-                      </div>
-                    )}
-
-                    {!needsDiagnosis && (
-                    <div className="card">
-                      <h4>Agregar comentario de progreso</h4>
-                      <div className="form-group">
-                        <label>Estado</label>
-                        <select
-                          value={statusSelection[order.id] || order.status}
-                          onChange={(e) =>
-                            setStatusSelection((prev) => ({
-                              ...prev,
-                              [order.id]: e.target.value as OrderStatus,
-                            }))
-                          }
-                        >
-                          {STATUS_OPTIONS.map((s) => (
-                            <option key={s} value={s}>
-                              {getStatusBadge('order', s).label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <textarea
-                          value={commentText[order.id] || ''}
-                          onChange={(e) =>
-                            setCommentText((prev) => ({ ...prev, [order.id]: e.target.value }))
-                          }
-                          placeholder="Describe el avance del trabajo..."
-                          rows={2}
-                        />
-                      </div>
-                      <button className="btn btn-primary" disabled={pendingIds.has(`comment:${order.id}`)} onClick={() => handleSubmitComment(order.id, order.status)}>
-                        Guardar comentario
-                      </button>
-                    </div>
-                    )}
-
-                    <h4>Historial</h4>
-                    {order.statusHistory.map((entry) => (
-                      <div key={entry.id} className="form-hint">
-                        <strong>{getStatusBadge('order', entry.status).label}</strong> — {formatDate(entry.createdAt)}
-                        {entry.comment && <div>{entry.comment}</div>}
-                      </div>
-                    ))}
+                      ))}
+                    </details>
                   </div>
                 )}
               </div>
