@@ -13,11 +13,9 @@ datasource db {
 
 enum Role {
   ADMIN
-  CASHIER
   TECHNICIAN
   TECHNICIAN_DELIVERY
   CLIENT
-  MANAGER
 }
 
 enum TechnicianStatus {
