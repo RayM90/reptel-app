@@ -162,6 +162,7 @@ model Order {
   budgetApproved Boolean?
   budgetRejectionReason String? @db.Text
   observations   String?     @db.Text
+  deliveryObservations String? @db.Text
   receivedAt     DateTime    @default(now())
   deliveredAt    DateTime?
   updatedAt      DateTime    @updatedAt

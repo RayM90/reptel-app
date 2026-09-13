@@ -2019,6 +2019,7 @@ export const finishRepair = async (
           finalPaymentConfirmed: true,
           finalPaymentConfirmedAt: new Date(),
           technicianCommission: commission,
+          deliveryObservations: observation || null,
         },
       })
 
@@ -2035,7 +2036,7 @@ export const finishRepair = async (
     } else {
       const { count } = await tx.order.updateMany({
         where: { id: orderId, status: 'REPAIRING', budget: order.budget },
-        data: { status: 'READY' },
+        data: { status: 'READY', deliveryObservations: observation || null },
       })
 
       if (count === 0) {
