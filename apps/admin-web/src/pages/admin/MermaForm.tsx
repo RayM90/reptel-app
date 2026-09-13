@@ -46,7 +46,9 @@ export default function MermaForm() {
   const [success, setSuccess] = useState('')
 
   useEffect(() => {
-    api.get('/api/products').then((res) => setProducts(res.data.data)).catch(() => {})
+    // includeInactive: un producto descontinuado puede tener stock residual y
+    // alguien debe poder registrar una merma sobre él (ver Task 6 del plan).
+    api.get('/api/products', { params: { includeInactive: true } }).then((res) => setProducts(res.data.data)).catch(() => {})
   }, [])
 
   const selectedProduct = products.find((p) => p.id === productId)

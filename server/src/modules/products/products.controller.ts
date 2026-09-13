@@ -18,7 +18,8 @@ import {
  */
 export const getProducts = async (req: Request, res: Response): Promise<void> => {
   try {
-    const products = await getAllProducts();
+    const includeInactive = req.query.includeInactive === 'true';
+    const products = await getAllProducts(includeInactive);
     res.status(200).json({ success: true, data: products });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Error al obtener productos' });
@@ -43,6 +44,14 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
 export const getInventoryMovementsHandler = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { productId, channel, from, to, type, supplierName, destination, technicianRole, lossReason } = req.query;
+    if (from !== undefined && isNaN(Date.parse(String(from)))) {
+      res.status(400).json({ success: false, message: 'Rango de fechas inválido' });
+      return;
+    }
+    if (to !== undefined && isNaN(Date.parse(String(to)))) {
+      res.status(400).json({ success: false, message: 'Rango de fechas inválido' });
+      return;
+    }
     // "to" es el fin del rango (ej. "Hasta: 2026-09-13" de un <input type="date">).
     // new Date("2026-09-13") parsea a medianoche UTC de ese día, lo que excluiría
     // casi todos los movimientos reales de ese día. Se ajusta al final del día
@@ -185,14 +194,15 @@ export const restockProductHandler = async (req: AuthRequest, res: Response): Pr
     const id = String(req.params.id)
     const { quantity, supplierName, reason } = req.body
 
-    if (quantity === undefined || Number(quantity) <= 0) {
+    const parsedQuantity = Number(quantity)
+    if (quantity === undefined || !Number.isInteger(parsedQuantity) || parsedQuantity <= 0) {
       res.status(400).json({ success: false, message: 'La cantidad a reabastecer debe ser mayor a 0' })
       return
     }
 
     const { product, movement } = await restockProduct(
       id,
-      Number(quantity),
+      parsedQuantity,
       req.user!.email,
       supplierName ? String(supplierName) : undefined,
       reason ? String(reason) : undefined,
@@ -215,7 +225,8 @@ export const registerMermaHandler = async (req: AuthRequest, res: Response): Pro
     const id = String(req.params.id)
     const { quantity, lossReason, reason, destination, orderId } = req.body
 
-    if (quantity === undefined || Number(quantity) <= 0) {
+    const parsedQuantity = Number(quantity)
+    if (quantity === undefined || !Number.isInteger(parsedQuantity) || parsedQuantity <= 0) {
       res.status(400).json({ success: false, message: 'La cantidad debe ser mayor a 0' })
       return
     }
@@ -234,7 +245,7 @@ export const registerMermaHandler = async (req: AuthRequest, res: Response): Pro
 
     const { product, movement } = await registerMerma(
       id,
-      Number(quantity),
+      parsedQuantity,
       req.user!.email,
       String(lossReason),
       reason.trim(),

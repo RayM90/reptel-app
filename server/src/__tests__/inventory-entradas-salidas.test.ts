@@ -110,6 +110,22 @@ describe('POST /api/products/:id/restock', () => {
     expect(res.status).toBe(400)
   })
 
+  it('retorna 400 si quantity no es numérico', async () => {
+    const res = await request(app)
+      .post(`/api/products/${product.id}/restock`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ quantity: 'abc' })
+    expect(res.status).toBe(400)
+  })
+
+  it('retorna 400 si quantity no es un entero', async () => {
+    const res = await request(app)
+      .post(`/api/products/${product.id}/restock`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ quantity: 1.5 })
+    expect(res.status).toBe(400)
+  })
+
   it('retorna 404 si el producto no existe', async () => {
     const res = await request(app)
       .post('/api/products/00000000-0000-0000-0000-000000000000/restock')
@@ -156,6 +172,22 @@ describe('POST /api/products/:id/merma', () => {
       .post(`/api/products/${product.id}/merma`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ quantity: 1, lossReason: 'PERDIDA' })
+    expect(res.status).toBe(400)
+  })
+
+  it('retorna 400 si quantity no es numérico', async () => {
+    const res = await request(app)
+      .post(`/api/products/${product.id}/merma`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ quantity: 'abc', lossReason: 'PERDIDA', reason: 'Cantidad inválida' })
+    expect(res.status).toBe(400)
+  })
+
+  it('retorna 400 si quantity no es un entero', async () => {
+    const res = await request(app)
+      .post(`/api/products/${product.id}/merma`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ quantity: 1.5, lossReason: 'PERDIDA', reason: 'Cantidad no entera' })
     expect(res.status).toBe(400)
   })
 
@@ -299,6 +331,22 @@ describe('GET /api/products/movements — filtros nuevos', () => {
       .query({ productId: product.id, lossReason: 'PERDIDA' })
     expect(res.status).toBe(200)
     expect(res.body.data.every((m: any) => m.lossReason === 'PERDIDA')).toBe(true)
+  })
+
+  it('retorna 400 si "from" no es una fecha válida', async () => {
+    const res = await request(app)
+      .get('/api/products/movements')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ from: 'not-a-date' })
+    expect(res.status).toBe(400)
+  })
+
+  it('retorna 400 si "to" no es una fecha válida', async () => {
+    const res = await request(app)
+      .get('/api/products/movements')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ to: 'garbage' })
+    expect(res.status).toBe(400)
   })
 
   it('filtro "to" incluye movimientos del mismo día (no solo hasta medianoche UTC)', async () => {

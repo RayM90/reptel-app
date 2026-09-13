@@ -155,6 +155,21 @@ describe('Products — PUT /:id editar producto (admin)', () => {
     const found = res.body.data.find((p: any) => p.id === createdProductId)
     expect(found).toBeDefined()
   }, 10000)
+
+  // El producto desactivado en las pruebas anteriores conserva su stock inicial (5)
+  // — es el caso real de un producto descontinuado que aún tiene stock residual y
+  // debe poder seleccionarse para registrar una merma (Task 6 del plan).
+  it('el producto desactivado con stock > 0 SI debe aparecer en GET /api/products?includeInactive=true', async () => {
+    if (!createdProductId) return
+    const res = await request(app)
+      .get('/api/products')
+      .query({ includeInactive: 'true' })
+      .set('Authorization', `Bearer ${adminToken}`)
+    expect(res.status).toBe(200)
+    const found = res.body.data.find((p: any) => p.id === createdProductId)
+    expect(found).toBeDefined()
+    expect(found.stock).toBeGreaterThan(0)
+  }, 10000)
 })
 
 describe('Products — authorize() rechaza rol CLIENT (unitario, sin credenciales sembradas de CLIENT/TECHNICIAN)', () => {

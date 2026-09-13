@@ -43,11 +43,14 @@ export const getProductsWithCategories = async () => {
 };
 
 /**
- * Obtiene todos los productos activos sin filtro de categoría
+ * Obtiene todos los productos sin filtro de categoría.
+ * Por default solo los activos; includeInactive=true también trae los inactivos
+ * (necesario para registrar una merma sobre un producto descontinuado que aún
+ * tiene stock residual).
  */
-export const getAllProducts = async () => {
+export const getAllProducts = async (includeInactive = false) => {
   const products = await prisma.product.findMany({
-    where: { isActive: true },
+    where: includeInactive ? {} : { isActive: true },
     include: {
       category: {
         select: { id: true, name: true },
@@ -97,6 +100,7 @@ export const getInventoryMovements = async (filters: {
       user: { select: { id: true, name: true, lastName: true, role: true } },
     },
     orderBy: { createdAt: 'desc' },
+    take: 500,
   });
 };
 
