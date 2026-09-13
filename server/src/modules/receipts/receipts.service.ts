@@ -66,14 +66,21 @@ const addTwoColumnRow = (
   const colWidth = (contentWidth - gap) / 2
   const leftX = doc.page.margins.left
   const rightX = leftX + colWidth + gap
-  const y = doc.y
+  const startY = doc.y
 
-  doc.font('Helvetica-Bold').fontSize(11).text(`${leftLabel}: `, leftX, y, { continued: true, width: colWidth })
+  doc.font('Helvetica-Bold').fontSize(11).text(`${leftLabel}: `, leftX, startY, { continued: true, width: colWidth })
   doc.font('Helvetica').text(leftValue, { width: colWidth })
+  const leftEndY = doc.y
 
-  doc.font('Helvetica-Bold').fontSize(11).text(`${rightLabel}: `, rightX, y, { continued: true, width: colWidth })
+  doc.font('Helvetica-Bold').fontSize(11).text(`${rightLabel}: `, rightX, startY, { continued: true, width: colWidth })
   doc.font('Helvetica').text(rightValue, { width: colWidth })
+  const rightEndY = doc.y
 
+  // Si una columna hace wrap a más líneas que la otra (nombres largos de
+  // cliente, comunes en Venezuela), el cursor debe quedar en la que terminó
+  // más abajo — de lo contrario el siguiente contenido se solapa con la
+  // columna que todavía no terminó de escribirse.
+  doc.y = Math.max(leftEndY, rightEndY)
   doc.moveDown(0.3)
 }
 
@@ -231,18 +238,53 @@ export const generateIntakeReceipt = (order: OrderForReceipt): PDFKit.PDFDocumen
 // "Detalle de cobro" y del total de cierre).
 const BOX_PADDING = 10
 
+// Mide cuánto alto va a ocupar el contenido de una caja, ejecutando
+// `renderContent` sobre un documento descartable (mismo ancho/márgenes que
+// el recibo real, pero con una altura de página enorme para que pdfkit
+// nunca dispare un salto de página mientras medimos). Nunca se pipea ni se
+// escribe a disco — solo nos interesa dónde queda `doc.y` al terminar.
+const measureBoxedBlockHeight = (
+  doc: PDFKit.PDFDocument,
+  renderContent: (target: PDFKit.PDFDocument, contentX: number, contentWidth: number) => void,
+  contentWidth: number
+): number => {
+  const measureDoc = new PDFDocument({ margin: doc.page.margins.left, size: [doc.page.width, 5000] })
+  const contentX = measureDoc.page.margins.left + BOX_PADDING
+  const startY = measureDoc.y
+  renderContent(measureDoc, contentX, contentWidth)
+  return measureDoc.y - startY
+}
+
 // Dibuja un rectángulo alrededor de lo que `renderContent` escriba, con
-// padding interno consistente. `renderContent` recibe la x/ancho de
-// contenido ya descontado el padding, para no salirse del recuadro.
-const drawBoxedBlock = (doc: PDFKit.PDFDocument, renderContent: (contentX: number, contentWidth: number) => void) => {
-  const boxX = doc.page.margins.left
+// padding interno consistente. `renderContent` recibe el documento sobre el
+// que debe dibujar (el real o, durante la medición, uno descartable) más la
+// x/ancho de contenido ya descontado el padding, para no salirse del
+// recuadro.
+//
+// Antes de dibujar nada medimos el bloque completo y, si no entra en el
+// espacio que queda hasta el margen inferior de la página actual, forzamos
+// un salto de página ANTES de empezar — así la caja nunca queda partida a
+// mitad de camino por el salto de página automático de pdfkit (que resetea
+// doc.y a los márgenes de la página nueva sin avisar).
+const drawBoxedBlock = (
+  doc: PDFKit.PDFDocument,
+  renderContent: (target: PDFKit.PDFDocument, contentX: number, contentWidth: number) => void
+) => {
   const boxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right
-  const contentX = boxX + BOX_PADDING
   const contentWidth = boxWidth - BOX_PADDING * 2
+
+  const estimatedHeight = measureBoxedBlockHeight(doc, renderContent, contentWidth)
+  const availableSpace = doc.page.height - doc.page.margins.bottom - doc.y
+  if (estimatedHeight + BOX_PADDING * 2 > availableSpace) {
+    doc.addPage()
+  }
+
+  const boxX = doc.page.margins.left
+  const contentX = boxX + BOX_PADDING
   const boxTop = doc.y
 
   doc.y = boxTop + BOX_PADDING
-  renderContent(contentX, contentWidth)
+  renderContent(doc, contentX, contentWidth)
 
   const boxBottom = doc.y + BOX_PADDING
   doc.rect(boxX, boxTop, boxWidth, boxBottom - boxTop).stroke()
@@ -265,34 +307,34 @@ const addBoxRow = (doc: PDFKit.PDFDocument, label: string, value: string, x: num
 // producción. Envuelto en un rectángulo tipo caja de factura, con el Total
 // resaltado en negrita y alineado a la derecha al final.
 const addCostBreakdown = (doc: PDFKit.PDFDocument, order: OrderForReceipt, paymentMethodLabel: string) => {
-  drawBoxedBlock(doc, (contentX, contentWidth) => {
-    doc.font('Helvetica-Bold').fontSize(12).text('Detalle de cobro', contentX, doc.y, { width: contentWidth })
-    doc.moveDown(0.3)
+  drawBoxedBlock(doc, (target, contentX, contentWidth) => {
+    target.font('Helvetica-Bold').fontSize(12).text('Detalle de cobro', contentX, target.y, { width: contentWidth })
+    target.moveDown(0.3)
 
-    addBoxRow(doc, 'Subtotal (revisión)', formatMoney(order.revisionAmount), contentX, contentWidth)
+    addBoxRow(target, 'Subtotal (revisión)', formatMoney(order.revisionAmount), contentX, contentWidth)
     if (order.deliveryAmount !== null && order.deliveryAmount !== undefined) {
-      addBoxRow(doc, 'Subtotal (delivery)', formatMoney(order.deliveryAmount), contentX, contentWidth)
+      addBoxRow(target, 'Subtotal (delivery)', formatMoney(order.deliveryAmount), contentX, contentWidth)
     }
     if (order.partsUsed && order.partsUsed.length > 0) {
-      doc.moveDown(0.2)
-      doc.font('Helvetica-Bold').fontSize(11).text('Repuestos usados:', contentX, doc.y, { width: contentWidth })
+      target.moveDown(0.2)
+      target.font('Helvetica-Bold').fontSize(11).text('Repuestos usados:', contentX, target.y, { width: contentWidth })
       for (const part of order.partsUsed) {
         const lineTotal = part.quantity * Number(part.unitPriceAtUse ?? 0)
-        addBoxRow(doc, `  ${part.productName} (x${part.quantity})`, `$${lineTotal.toFixed(2)}`, contentX, contentWidth)
+        addBoxRow(target, `  ${part.productName} (x${part.quantity})`, `$${lineTotal.toFixed(2)}`, contentX, contentWidth)
       }
     }
     if (order.finalPaymentDetails) {
       const methodEntries = Object.entries(order.finalPaymentDetails)
         .map(([key, value]) => `${key}: ${value}`)
         .join(' — ')
-      if (methodEntries) addBoxRow(doc, paymentMethodLabel, methodEntries, contentX, contentWidth)
+      if (methodEntries) addBoxRow(target, paymentMethodLabel, methodEntries, contentX, contentWidth)
     }
 
-    doc.moveDown(0.2)
-    doc
+    target.moveDown(0.2)
+    target
       .font('Helvetica-Bold')
       .fontSize(12)
-      .text(`Total: ${formatMoney(order.budget)}`, contentX, doc.y, { width: contentWidth, align: 'right' })
+      .text(`Total: ${formatMoney(order.budget)}`, contentX, target.y, { width: contentWidth, align: 'right' })
   })
 }
 
@@ -371,23 +413,23 @@ export const generateClosureReceipt = (order: OrderForReceipt): PDFKit.PDFDocume
   doc.moveDown(0.5)
 
   const totalCobrado = Number(order.revisionAmount ?? 0) + Number(order.deliveryAmount ?? 0)
-  drawBoxedBlock(doc, (contentX, contentWidth) => {
-    doc
+  drawBoxedBlock(doc, (target, contentX, contentWidth) => {
+    target
       .font('Helvetica-Bold')
       .fontSize(12)
-      .text('Total cobrado (revisión, sin reparación)', contentX, doc.y, { width: contentWidth })
-    doc.moveDown(0.3)
+      .text('Total cobrado (revisión, sin reparación)', contentX, target.y, { width: contentWidth })
+    target.moveDown(0.3)
 
-    addBoxRow(doc, 'Subtotal (revisión)', formatMoney(order.revisionAmount), contentX, contentWidth)
+    addBoxRow(target, 'Subtotal (revisión)', formatMoney(order.revisionAmount), contentX, contentWidth)
     if (order.deliveryAmount !== null && order.deliveryAmount !== undefined) {
-      addBoxRow(doc, 'Subtotal (delivery)', formatMoney(order.deliveryAmount), contentX, contentWidth)
+      addBoxRow(target, 'Subtotal (delivery)', formatMoney(order.deliveryAmount), contentX, contentWidth)
     }
 
-    doc.moveDown(0.2)
-    doc
+    target.moveDown(0.2)
+    target
       .font('Helvetica-Bold')
       .fontSize(12)
-      .text(`Total: $${totalCobrado.toFixed(2)}`, contentX, doc.y, { width: contentWidth, align: 'right' })
+      .text(`Total: $${totalCobrado.toFixed(2)}`, contentX, target.y, { width: contentWidth, align: 'right' })
   })
 
   addRow(doc, 'Fecha de retiro', formatDate(order.deliveredAt))
