@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client'
 import prisma from '../../lib/prisma'
-import { InsufficientStockError } from '../products/products.service'
+import { InsufficientStockError, deriveDestination } from '../products/products.service'
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -1581,6 +1581,7 @@ export const useProductInOrder = async (
         userId: actor.id,
         orderId,
         unitPriceAtUse: product.price,
+        destination: deriveDestination(actor.role),
       },
     })
 

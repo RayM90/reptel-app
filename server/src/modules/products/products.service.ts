@@ -6,6 +6,16 @@ export class InsufficientStockError extends Error {
   }
 }
 
+// Deriva el destino de un movimiento de salida a partir del rol de quien lo genera.
+// TECHNICIAN_DELIVERY (motorizado) sale a domicilio del cliente; TECHNICIAN (mostrador)
+// trabaja en el taller/tienda; cualquier otro rol (ADMIN registrando una merma encontrada
+// en el almacén, por ejemplo) cae en TIENDA como default seguro.
+export const deriveDestination = (role: string): 'TIENDA' | 'DOMICILIO_CLIENTE' | 'TALLER' => {
+  if (role === 'TECHNICIAN_DELIVERY') return 'DOMICILIO_CLIENTE';
+  if (role === 'TECHNICIAN') return 'TALLER';
+  return 'TIENDA';
+};
+
 /**
  * Obtiene todas las categorías con sus productos activos
  */
