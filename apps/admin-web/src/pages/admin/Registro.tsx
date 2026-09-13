@@ -35,6 +35,7 @@ const emptyOrderForm = {
   color: '',
   accessories: '',
   devicePassword: '',
+  observations: '',
   problem: '',
   serviceCatalogId: '',
   advancePaymentMethod: 'PAGO_MOVIL',
@@ -243,6 +244,7 @@ export default function Registro() {
           devicePassword: orderForm.devicePassword || undefined,
         },
         problem: orderForm.problem,
+        observations: orderForm.observations || undefined,
         advancePaymentMethod: orderForm.advancePaymentMethod,
         paymentDetails: details,
         amount: amountNumber,
@@ -514,6 +516,15 @@ export default function Registro() {
               />
               Sin contraseña
             </label>
+          </div>
+          <div className="form-group">
+            <label>Observaciones (estado del equipo al recibir)</label>
+            <textarea
+              spellCheck
+              value={orderForm.observations}
+              onChange={(e) => setOrderForm({ ...orderForm, observations: e.target.value })}
+              placeholder="Ej: rayón en la tapa, sin batería..."
+            />
           </div>
           <div className="form-group">
             <label>Servicio del catálogo (opcional, solo referencia)</label>

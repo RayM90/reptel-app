@@ -406,6 +406,7 @@ export const createCounterOrder = async (data: {
     devicePassword?: string
   }
   problem: string
+  observations?: string
   advancePaymentMethod: string // ya mapeado al enum PaymentMethod de Prisma
   paymentDetails: Record<string, string>
   amount?: number // permite abonar por partes — default: el total de la revisión
@@ -437,6 +438,7 @@ export const createCounterOrder = async (data: {
         clientId: data.clientId,
         deviceId: device.id,
         problem: data.problem,
+        observations: data.observations,
         technicianId: resolvedTechnicianId,
         status: 'RECEIVED',
         revisionAmount: ADVANCE_REVISION_AMOUNT,

@@ -161,7 +161,7 @@ export const createCounterOrder = async (req: AuthRequest, res: Response): Promi
       return
     }
 
-    const { clientId, device, problem, advancePaymentMethod, paymentDetails, amount, serviceCatalogId } = req.body
+    const { clientId, device, problem, observations, advancePaymentMethod, paymentDetails, amount, serviceCatalogId } = req.body
 
     if (!clientId) {
       res.status(400).json({ success: false, message: 'El cliente es requerido' })
@@ -210,6 +210,7 @@ export const createCounterOrder = async (req: AuthRequest, res: Response): Promi
       clientId,
       device,
       problem,
+      observations,
       advancePaymentMethod: mappedMethod,
       paymentDetails,
       amount: amount !== undefined ? Number(amount) : undefined,
