@@ -19,8 +19,8 @@ beforeAll(async () => {
   })
   staffUser = await prisma.user.create({
     data: {
-      name: 'Cajera Prueba', email: `cajera-${suffix}@test.com`,
-      role: 'CASHIER', password: 'COGNITO_MANAGED',
+      name: 'Staff Prueba', email: `staff-actor-${suffix}@test.com`,
+      role: 'ADMIN', password: 'COGNITO_MANAGED',
     },
   })
   order = await prisma.order.create({
