@@ -278,6 +278,50 @@ table.styled-table--sticky-actions th:last-child {
   font-size: 14px;
 }
 
+/* ─── Jerarquía de tarjetas de acción (panel del técnico) ───────────────
+   `.card--action` destaca "lo que hay que hacer ahora" (diagnóstico,
+   finalizar reparación, comentario de progreso) del resto de tarjetas
+   neutras. `.card--muted` marca información de referencia (detalle del
+   equipo, historial) que no compite por atención — se usa junto con
+   `<details className="card">`, ya establecido en Reports.tsx, para que
+   además arranquen colapsadas. */
+
+.card--action {
+  border-left: 4px solid var(--color-secondary);
+  background: #f8f7fc;
+}
+
+.card-eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-secondary);
+  margin-bottom: 4px;
+}
+
+.card--muted {
+  background: var(--color-bg-2);
+  box-shadow: none;
+}
+
+.card-toggle {
+  display: inline-block;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: 10px;
+  color: var(--color-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.card-toggle:hover {
+  text-decoration: underline;
+}
+
 /* ─── Badge de estado ────────────────────── */
 
 .badge {
