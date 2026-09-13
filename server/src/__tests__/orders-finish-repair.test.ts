@@ -135,6 +135,7 @@ describe('orders.service — finishRepair', () => {
 
     expect(updated.status).toBe('PAID_PENDING_DELIVERY')
     expect(updated.finalPaymentConfirmed).toBe(true)
+    expect(updated.deliveryObservations).toBe('Listo, probado')
     // comisión = deliveryAmount + 0.4 * (budget - (revisionAmount ? Number(revisionAmount) : 0))
     // = 10 + 0.4 * (35 - 20) = 16
     expect(Number(updated.technicianCommission)).toBe(16)
