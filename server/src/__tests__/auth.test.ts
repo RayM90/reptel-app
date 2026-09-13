@@ -1,6 +1,11 @@
 import request from 'supertest'
 import app from '../app'
 import prisma from '../lib/prisma'
+import {
+  CognitoIdentityProviderClient,
+  AdminCreateUserCommand,
+  AdminAddUserToGroupCommand,
+} from '@aws-sdk/client-cognito-identity-provider'
 
 describe('Auth — POST /api/auth/login', () => {
 
@@ -205,4 +210,52 @@ describe('Auth — POST /api/auth/staff', () => {
     expect(res.status).toBe(400)
     expect(res.body.message).toMatch(/reptel\.com/i)
   })
+
+  it('normaliza email/nombre/apellido (trim + lowercase el email) antes de persistir', async () => {
+    // Este sandbox no tiene credenciales IAM configuradas (solo AWS_REGION +
+    // config de Cognito app-client), así que las llamadas Admin* de Cognito
+    // (que sí requieren firma SigV4/IAM, a diferencia de InitiateAuth usado
+    // en /login, que es una operación no autenticada) no pueden completarse
+    // aquí de verdad. Se interceptan solo esas dos llamadas para poder probar
+    // el resto del flujo real (validación, normalización y persistencia en
+    // Prisma) de punta a punta vía HTTP; todo lo demás (incluido el login real
+    // del beforeAll de este describe) sigue golpeando Cognito sin mockear.
+    const originalSend = CognitoIdentityProviderClient.prototype.send
+    const sendSpy = jest
+      .spyOn(CognitoIdentityProviderClient.prototype, 'send')
+      .mockImplementation(function (this: any, command: any, ...rest: any[]) {
+        if (command instanceof AdminCreateUserCommand || command instanceof AdminAddUserToGroupCommand) {
+          return Promise.resolve({} as any)
+        }
+        return (originalSend as any).call(this, command, ...rest)
+      })
+
+    try {
+      const idNumber = `V-${String(Date.now()).slice(-7)}`
+      const res = await request(app)
+        .post('/api/auth/staff')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          email: ' Normaliza@Reptel.com ',
+          password: 'Passw0rd!',
+          name: ' Juan ',
+          lastName: ' Perez ',
+          idNumber,
+          phone: '04121234567',
+          role: 'TECHNICIAN',
+        })
+
+      expect(res.status).toBe(201)
+
+      const created = await prisma.user.findUnique({ where: { email: 'normaliza@reptel.com' } })
+      expect(created).not.toBeNull()
+      expect(created?.email).toBe('normaliza@reptel.com')
+      expect(created?.name).toBe('Juan')
+      expect(created?.lastName).toBe('Perez')
+
+      await prisma.user.delete({ where: { id: created!.id } }).catch(() => {})
+    } finally {
+      sendSpy.mockRestore()
+    }
+  }, 20000)
 })

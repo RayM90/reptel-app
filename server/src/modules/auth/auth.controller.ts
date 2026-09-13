@@ -254,7 +254,16 @@ export const createStaff = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const result = await createStaffUser(email, name, password, role, phone, lastName, idNumber);
+    // Normalizar antes de persistir: la validación de arriba (isValidStaffEmail/
+    // isValidPersonName) prueba una vista trim/lowercase del valor, pero sin esto
+    // se reenviaba req.body sin normalizar a Cognito (Username/email) y a la BD —
+    // un correo con espacios o mayúsculas creaba una cuenta que el login nunca
+    // encuentra (busca por email exacto).
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedName = name.trim();
+    const normalizedLastName = lastName.trim();
+
+    const result = await createStaffUser(normalizedEmail, normalizedName, password, role, phone, normalizedLastName, idNumber);
     res.status(201).json(result);
   } catch (error: any) {
     res.status(400).json({ message: translateCognitoError(error) || 'Error al crear el empleado' });
