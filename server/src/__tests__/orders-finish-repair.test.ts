@@ -104,6 +104,16 @@ describe('orders.service — finishRepair', () => {
     expect(updated.finalPaymentConfirmed).toBe(false)
   })
 
+  it('guarda la observación del técnico en deliveryObservations, y queda null si no se pasó ninguna', async () => {
+    const orderConObservacion = await makeOrder({ budget: 30, revisionAmount: 15 })
+    const actualizadaConObservacion = await finishRepair(orderConObservacion.id, technician.id, 'Se reemplazó la pantalla')
+    expect(actualizadaConObservacion.deliveryObservations).toBe('Se reemplazó la pantalla')
+
+    const orderSinObservacion = await makeOrder({ budget: 30, revisionAmount: 15 })
+    const actualizadaSinObservacion = await finishRepair(orderSinObservacion.id, technician.id)
+    expect(actualizadaSinObservacion.deliveryObservations).toBeNull()
+  })
+
   it('con el 100% ya pagado, salta a PAID_PENDING_DELIVERY con comisión correcta', async () => {
     // revisionAmount 20 (a propósito distinto de ADVANCE_REVISION_AMOUNT=15): si el código
     // confundiera el fallback de comisión con la constante hardcodeada en vez del valor real
