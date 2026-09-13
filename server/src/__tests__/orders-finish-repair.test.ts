@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma'
 import {
+  CONCURRENT_FINAL_PAYMENT_ERROR,
   CONCURRENT_FINISH_REPAIR_ERROR,
   addBudgetAdjustment,
   confirmFinalPayment,
@@ -282,6 +283,44 @@ describe('orders.service — addBudgetAdjustment', () => {
     expect(after.activeOrderCount).toBe(before.activeOrderCount + 1)
   })
 
+  // Finding 1 (re-revisión): el comprobante viejo también puede estar cargado
+  // con la orden en READY (el cliente ya pagó el monto anterior y espera la
+  // aprobación del admin). Ajustar el presupuesto ahí lo invalida: si no se
+  // limpia, "Aprobar pago final" sigue habilitado y cobraría de menos.
+  it('en READY con comprobante cargado lo limpia sin cambiar el status', async () => {
+    const order = await makeOrder({
+      status: 'READY',
+      budget: 30,
+      finalPaymentDetails: { banco: 'Banesco', referencia: '5555' },
+      finalPaymentRejectionReason: 'Motivo viejo',
+    })
+
+    const updated = await addBudgetAdjustment(order.id, adminEmail, 5, 'Repuesto extra antes de entregar')
+
+    expect(updated.status).toBe('READY')
+    expect(Number(updated.budget)).toBe(35)
+
+    const after = await prisma.order.findUniqueOrThrow({ where: { id: order.id } })
+    expect(after.finalPaymentDetails).toBeNull()
+    expect(after.finalPaymentRejectionReason).toBeNull()
+
+    const history = await prisma.orderStatusHistory.findMany({ where: { orderId: order.id } })
+    expect(
+      history.some((h) => (h.comment ?? '').includes('invalidó el comprobante de pago final pendiente'))
+    ).toBe(true)
+  })
+
+  it('en READY sin comprobante cargado no agrega la entrada de invalidación', async () => {
+    const order = await makeOrder({ status: 'READY', budget: 30 })
+
+    await addBudgetAdjustment(order.id, adminEmail, 5, 'Repuesto extra antes de entregar')
+
+    const history = await prisma.orderStatusHistory.findMany({ where: { orderId: order.id } })
+    expect(
+      history.some((h) => (h.comment ?? '').includes('invalidó el comprobante de pago final pendiente'))
+    ).toBe(false)
+  })
+
   it('aborta si la orden cambia de estado mientras se procesa el ajuste', async () => {
     const order = await makeOrder({ status: 'REPAIRING', budget: 30 })
 
@@ -429,6 +468,75 @@ describe('orders.service — confirmFinalPayment registra el cobro', () => {
 
     await confirmFinalPayment(order.id, false, 'Referencia no encontrada')
 
+    expect(await confirmedBudgetTotal(order.id)).toBe(0)
+  })
+
+  // Finding 2 (re-revisión): la lectura vivía fuera de la transacción y el
+  // update no verificaba nada, así que un ajuste al presupuesto concurrente
+  // dejaba la comisión y el abono registrado calculados sobre el budget viejo.
+  // Se interfiere el budget justo después de la lectura que hace la función
+  // dentro de su transacción, envolviendo el cliente transaccional.
+  it('aborta si el budget cambia entre la lectura y la escritura', async () => {
+    const order = await makeOrder({
+      status: 'READY',
+      budget: 50,
+      revisionAmount: 20,
+      deliveryAmount: 10,
+      finalPaymentDetails: { banco: 'Banesco', referencia: '9876' },
+    })
+
+    const realTransaction = prisma.$transaction.bind(prisma)
+    let interfered = false
+
+    const spy = jest.spyOn(prisma, '$transaction').mockImplementation(((fn: any, options: any) => {
+      if (typeof fn !== 'function') return realTransaction(fn, options)
+      return realTransaction(async (tx: any) => {
+        const proxiedTx = new Proxy(tx, {
+          get(target, prop) {
+            if (prop !== 'order') return target[prop]
+            const orderDelegate = target.order
+            return new Proxy(orderDelegate, {
+              get(delegate, method) {
+                if (method !== 'findUnique') return delegate[method]
+                return async (...args: any[]) => {
+                  const result = await delegate.findUnique(...args)
+                  if (!interfered) {
+                    interfered = true
+                    // Ajuste al presupuesto ya commiteado desde otra conexión.
+                    await prisma.order.update({ where: { id: order.id }, data: { budget: 70 } })
+                  }
+                  return result
+                }
+              },
+            })
+          },
+        })
+        return await fn(proxiedTx)
+      }, options)
+    }) as any)
+
+    try {
+      await expect(confirmFinalPayment(order.id, true)).rejects.toThrow(CONCURRENT_FINAL_PAYMENT_ERROR)
+    } finally {
+      spy.mockRestore()
+    }
+
+    expect(interfered).toBe(true)
+
+    const after = await prisma.order.findUniqueOrThrow({ where: { id: order.id } })
+    // Nada se escribió sobre el presupuesto viejo: ni transición, ni comisión,
+    // ni el abono que registra el cobro.
+    expect(after.status).toBe('READY')
+    expect(Number(after.budget)).toBe(70)
+    expect(after.finalPaymentConfirmed).toBe(false)
+    expect(after.technicianCommission).toBeNull()
+    expect(await confirmedBudgetTotal(order.id)).toBe(0)
+  }, 20000)
+
+  it('aborta si la orden ya no está en READY', async () => {
+    const order = await makeOrder({ status: 'PAID_PENDING_DELIVERY', budget: 50, revisionAmount: 20 })
+
+    await expect(confirmFinalPayment(order.id, true)).rejects.toThrow(CONCURRENT_FINAL_PAYMENT_ERROR)
     expect(await confirmedBudgetTotal(order.id)).toBe(0)
   })
 })
