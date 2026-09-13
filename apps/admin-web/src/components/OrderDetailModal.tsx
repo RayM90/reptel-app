@@ -384,6 +384,19 @@ export default function OrderDetailModal({
     ? 0.5 * (Number(order.budget) - Number(order.revisionAmount ?? 15))
     : 0
 
+  // Saldo real de "Pago final": ya no es un 50% fijo — se calcula contra lo
+  // que efectivamente se confirmó como anticipo de presupuesto. Si da $0 (o
+  // menos) y la orden ya avanzó a PAID_PENDING_DELIVERY/DELIVERED, es porque
+  // pasó por finishRepair con saldo $0 (salto directo), no por el formulario
+  // tradicional — no hay nada que cobrar.
+  const finalBase = Number(order.budget ?? 0) - Number(order.revisionAmount ?? 15)
+  const confirmedBudget = (order.advancePaymentSubmissions ?? [])
+    .filter((s) => s.kind === 'BUDGET' && s.status === 'CONFIRMED')
+    .reduce((sum, s) => sum + Number(s.amount), 0)
+  const finalRemaining = finalBase - confirmedBudget
+  const finalPaidInFull =
+    finalRemaining <= 0.009 && (order.status === 'PAID_PENDING_DELIVERY' || order.status === 'DELIVERED')
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -479,18 +492,42 @@ export default function OrderDetailModal({
 
         <div className="card">
           <h4>Pago final</h4>
-          <PaymentDetailsView details={order.finalPaymentDetails} />
-          {canRegisterCounterFinalPayment && (
-            <CounterFinalPaymentForm
-              disabled={pendingIds.has(order.id)}
-              onSubmit={(details) => onSubmitCounterFinalPayment(order, details)}
-            />
+          {order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15) && (
+            <>
+              <BudgetBreakdown budget={Number(order.budget)} revisionAmount={Number(order.revisionAmount ?? 15)} />
+              <p className="form-hint">Saldo pendiente al entregar: ${Math.max(finalRemaining, 0).toFixed(2)}</p>
+            </>
           )}
-          {showPaymentReceipt && (
-            <p style={{ marginTop: 8 }}>
-              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'payment')}>
-                📄 Recibo de Pago
-              </button>
+          {finalPaidInFull ? (
+            <p>✅ Pagado en su totalidad — sin cobro pendiente.</p>
+          ) : (
+            <>
+              <PaymentDetailsView details={order.finalPaymentDetails} />
+              {canRegisterCounterFinalPayment && (
+                <CounterFinalPaymentForm
+                  disabled={pendingIds.has(order.id)}
+                  onSubmit={(details) => onSubmitCounterFinalPayment(order, details)}
+                />
+              )}
+            </>
+          )}
+          {(showPaymentReceipt || order.status === 'PAID_PENDING_DELIVERY' || showFinalReceipt) && (
+            <p style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {showPaymentReceipt && (
+                <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'payment')}>
+                  📄 Recibo de Pago
+                </button>
+              )}
+              {order.status === 'PAID_PENDING_DELIVERY' && (
+                <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onMarkDelivered(order)}>
+                  Marcar como entregado
+                </button>
+              )}
+              {showFinalReceipt && (
+                <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'final')}>
+                  📄 Recibo de Entrega
+                </button>
+              )}
             </p>
           )}
         </div>
@@ -516,24 +553,12 @@ export default function OrderDetailModal({
                 Rechazar
               </button>
             </>
-          ) : order.status === 'PAID_PENDING_DELIVERY' ? (
-            <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onMarkDelivered(order)}>
-              Marcar como entregado
-            </button>
           ) : order.status === 'REJECTED_PENDING_PICKUP' ? (
             <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onMarkPickedUpUnrepaired(order)}>
               Marcar como entregado sin reparar
             </button>
           ) : (
             '—'
-          )}
-          {showFinalReceipt && (
-            <>
-              {' '}
-              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'final')}>
-                📄 Recibo de Entrega
-              </button>
-            </>
           )}
           {showClosureReceipt && (
             <>
