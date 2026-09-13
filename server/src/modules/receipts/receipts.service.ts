@@ -81,6 +81,11 @@ const addTwoColumnRow = (
   // más abajo — de lo contrario el siguiente contenido se solapa con la
   // columna que todavía no terminó de escribirse.
   doc.y = Math.max(leftEndY, rightEndY)
+  // pdfkit deja doc.x en rightX tras el último text() de la columna derecha
+  // (no lo restaura solo). Sin esto, todo el contenido que sigue a la
+  // última fila de dos columnas arranca a mitad de página en vez del
+  // margen izquierdo.
+  doc.x = doc.page.margins.left
   doc.moveDown(0.3)
 }
 
@@ -289,6 +294,11 @@ const drawBoxedBlock = (
   const boxBottom = doc.y + BOX_PADDING
   doc.rect(boxX, boxTop, boxWidth, boxBottom - boxTop).stroke()
   doc.y = boxBottom
+  // Mismo defecto que en addTwoColumnRow: doc.x queda en contentX (margen +
+  // padding interno de la caja) tras el último text() de renderContent. Sin
+  // esto, todo lo que se escribe después de la caja queda indentado 10pt de
+  // más respecto al resto del recibo.
+  doc.x = doc.page.margins.left
   doc.moveDown(0.8)
 }
 
