@@ -100,27 +100,29 @@ export default function CreateStaff() {
 
           <div className="form-group">
             <label>Cédula</label>
-            <IdNumberInput
-              value={idNumber}
-              onChange={setIdNumber}
-              prefixes={[...STAFF_ID_PREFIXES]}
-              minDigits={STAFF_ID_MIN_DIGITS}
-              maxDigits={STAFF_ID_MAX_DIGITS}
-            />
+            <div onBlur={() => markTouched('idNumber')}>
+              <IdNumberInput
+                value={idNumber}
+                onChange={setIdNumber}
+                prefixes={[...STAFF_ID_PREFIXES]}
+                minDigits={STAFF_ID_MIN_DIGITS}
+                maxDigits={STAFF_ID_MAX_DIGITS}
+              />
+            </div>
             <p className="form-hint">Solo persona natural (V/E), 7 u 8 dígitos.</p>
             {touched.idNumber && !isIdNumberValid && (
               <p className="form-error-text">Cédula incompleta o con formato inválido.</p>
             )}
-            <input type="hidden" onBlur={() => markTouched('idNumber')} tabIndex={-1} />
           </div>
 
           <div className="form-group">
             <label>Teléfono</label>
-            <PhoneInput value={phone} onChange={setPhone} required />
+            <div onBlur={() => markTouched('phone')}>
+              <PhoneInput value={phone} onChange={setPhone} required />
+            </div>
             {touched.phone && !isPhoneValid && (
               <p className="form-error-text">Selecciona el prefijo y completa los 7 dígitos.</p>
             )}
-            <input type="hidden" onBlur={() => markTouched('phone')} tabIndex={-1} />
           </div>
 
           <span className="card-eyebrow">Acceso</span>
