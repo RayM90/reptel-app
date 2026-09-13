@@ -1038,41 +1038,72 @@ export const submitCounterFinalPayment = async (
 // —base menos lo ya confirmado como anticipo, para no duplicar— como un
 // AdvancePaymentSubmission CONFIRMED de kind BUDGET, dentro de la misma
 // transacción que la actualización de la orden.
+//
+// CONCURRENCIA (Finding 2, re-revisión): toda la lectura vive dentro de la
+// transacción y la transición se escribe con updateMany condicionado a
+// status READY (y, al aprobar, al budget recién leído), igual que finishRepair.
 // ─────────────────────────────────────────────
+
+// Mensaje único para la guarda de concurrencia del pago final — viaja en la
+// respuesta 400 del controller para que el admin sepa que debe recargar y
+// reintentar en vez de asumir que el cobro quedó registrado.
+export const CONCURRENT_FINAL_PAYMENT_ERROR =
+  'La orden cambió mientras se procesaba el pago final (estado o presupuesto) — recarga e intenta de nuevo'
 
 export const confirmFinalPayment = async (
   id: string,
   approved: boolean,
   rejectionReason?: string
 ) => {
-  const order = await prisma.order.findUnique({
-    where: { id },
-  })
+  const { updatedOrder, technicianId } = await prisma.$transaction(async (tx) => {
+    // Finding 2 (re-revisión): la lectura que alimenta la comisión y el
+    // registro del cobro ocurre DENTRO de la transacción (mismo patrón que
+    // finishRepair, Finding C). Antes se leía con findUnique fuera de la tx y
+    // el update final no verificaba nada: un addBudgetAdjustment concurrente
+    // dejaba la comisión y el AdvancePaymentSubmission calculados sobre un
+    // budget viejo.
+    const order = await tx.order.findUnique({
+      where: { id },
+      include: {
+        advancePaymentSubmissions: { where: { kind: 'BUDGET', status: 'CONFIRMED' } },
+      },
+    })
 
-  if (!order) {
-    throw new Error('Orden no encontrada')
-  }
+    if (!order) {
+      throw new Error('Orden no encontrada')
+    }
 
-  let commission: number | null = null
-  if (approved) {
-    const budget = order.budget ? Number(order.budget) : 0
-    const deliveryAmount = order.deliveryAmount ? Number(order.deliveryAmount) : 0
-    const revisionAmount = order.revisionAmount ? Number(order.revisionAmount) : 0
-    const laborCommission = 0.4 * (budget - revisionAmount)
-    commission = deliveryAmount + laborCommission
-  }
-
-  const updatedOrder = await prisma.$transaction(async (tx) => {
     if (approved) {
-      const confirmedBudgetSubmissions = await tx.advancePaymentSubmission.findMany({
-        where: { orderId: id, kind: 'BUDGET', status: 'CONFIRMED' },
-        select: { amount: true },
+      const budget = order.budget ? Number(order.budget) : 0
+      const deliveryAmount = order.deliveryAmount ? Number(order.deliveryAmount) : 0
+      const revisionAmount = order.revisionAmount ? Number(order.revisionAmount) : 0
+      const commission = deliveryAmount + 0.4 * (budget - revisionAmount)
+
+      // updateMany condicionado al status Y al budget recién leídos: si otra
+      // request transicionó la orden —o le sumó un ajuste al presupuesto sin
+      // tocar el status (addBudgetAdjustment en READY)— entre la lectura de
+      // arriba y este punto, count da 0 y abortamos en vez de cobrar/comisionar
+      // sobre datos viejos.
+      const { count } = await tx.order.updateMany({
+        where: { id, status: 'READY', budget: order.budget },
+        data: {
+          finalPaymentConfirmed: true,
+          finalPaymentConfirmedAt: new Date(),
+          finalPaymentRejectionReason: null,
+          technicianCommission: commission,
+          status: 'PAID_PENDING_DELIVERY',
+        },
       })
-      const alreadyConfirmedBudget = confirmedBudgetSubmissions.reduce(
+
+      if (count === 0) {
+        throw new Error(CONCURRENT_FINAL_PAYMENT_ERROR)
+      }
+
+      const alreadyConfirmedBudget = order.advancePaymentSubmissions.reduce(
         (sum, s) => sum + Number(s.amount),
         0
       )
-      const base = Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
+      const base = budget - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
       const charged = base - alreadyConfirmedBudget
 
       // charged <= 0 → no queda nada por registrar (el anticipo ya cubría el
@@ -1094,28 +1125,45 @@ export const confirmFinalPayment = async (
           },
         })
       }
+
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: id,
+          status: 'PAID_PENDING_DELIVERY',
+          comment: `Pago final confirmado por el administrador. Comisión del técnico: $${commission.toFixed(2)}`,
+        },
+      })
+    } else {
+      // El rechazo no depende del budget (no cobra ni comisiona), así que la
+      // guarda es solo por status — pero pasa por el mismo updateMany para que
+      // no se limpie el comprobante de una orden que ya salió de READY.
+      const { count } = await tx.order.updateMany({
+        where: { id, status: 'READY' },
+        data: {
+          finalPaymentConfirmed: false,
+          finalPaymentConfirmedAt: null,
+          finalPaymentRejectionReason: rejectionReason ?? null,
+          technicianCommission: null,
+          finalPaymentDetails: Prisma.JsonNull,
+          status: 'READY',
+        },
+      })
+
+      if (count === 0) {
+        throw new Error(CONCURRENT_FINAL_PAYMENT_ERROR)
+      }
+
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: id,
+          status: 'READY',
+          comment: `Pago final rechazado: ${rejectionReason}`,
+        },
+      })
     }
 
-    return await tx.order.update({
+    const updatedOrder = await tx.order.findUniqueOrThrow({
       where: { id },
-      data: {
-        finalPaymentConfirmed: approved,
-        finalPaymentConfirmedAt: approved ? new Date() : null,
-        finalPaymentRejectionReason: approved ? null : rejectionReason,
-        technicianCommission: approved ? commission : null,
-        ...(approved
-          ? {}
-          : { finalPaymentDetails: Prisma.JsonNull }),
-        status: approved ? 'PAID_PENDING_DELIVERY' : 'READY',
-        statusHistory: {
-          create: {
-            status: approved ? 'PAID_PENDING_DELIVERY' : 'READY',
-            comment: approved
-              ? `Pago final confirmado por el administrador. Comisión del técnico: $${commission?.toFixed(2)}`
-              : `Pago final rechazado: ${rejectionReason}`,
-          },
-        },
-      },
       include: {
         client: true,
         device: true,
@@ -1123,10 +1171,12 @@ export const confirmFinalPayment = async (
         statusHistory: { orderBy: { createdAt: 'desc' } },
       },
     })
+
+    return { updatedOrder, technicianId: order.technicianId }
   })
 
-  if (approved && order.technicianId) {
-    await decrementTechnicianLoad(order.technicianId)
+  if (approved && technicianId) {
+    await decrementTechnicianLoad(technicianId)
   }
 
   return updatedOrder
@@ -1795,10 +1845,26 @@ export const addBudgetAdjustment = async (
 
     const reopensBalance = order.status === 'PAID_PENDING_DELIVERY'
 
+    // Finding 1 (re-revisión): el mismo comprobante viejo puede estar cargado
+    // sin que la orden haya llegado a PAID_PENDING_DELIVERY — el cliente (o el
+    // mostrador) ya subió su pago del monto anterior y la orden sigue en READY
+    // esperando la aprobación del admin. Ajustar el presupuesto ahí invalida
+    // ese comprobante: si no se limpia, "Aprobar pago final" sigue habilitado
+    // y cobraría de menos (el ajuste nunca se recibió). No se toca el status
+    // —la orden sigue en READY— ni la carga del técnico (que en READY nunca se
+    // liberó), eso es exclusivo del caso reopensBalance.
+    const invalidatesPendingProof = order.status === 'READY' && order.finalPaymentDetails != null
+
     const { count } = await tx.order.updateMany({
       where: { id: orderId, status: order.status },
       data: {
         budget: { increment: amount },
+        ...(invalidatesPendingProof
+          ? {
+              finalPaymentDetails: Prisma.JsonNull,
+              finalPaymentRejectionReason: null,
+            }
+          : {}),
         ...(reopensBalance
           ? {
               status: 'READY' as const,
@@ -1835,6 +1901,14 @@ export const addBudgetAdjustment = async (
         orderId,
         status: 'READY',
         comment: 'El ajuste reabrió un saldo pendiente — vuelve a esperar el pago final.',
+      })
+    }
+    if (invalidatesPendingProof) {
+      statusHistoryEntries.push({
+        orderId,
+        status: 'READY',
+        comment:
+          'El ajuste al presupuesto invalidó el comprobante de pago final pendiente — el cliente debe reenviarlo.',
       })
     }
 
