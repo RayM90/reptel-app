@@ -43,11 +43,19 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
 export const getInventoryMovementsHandler = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { productId, channel, from, to, type, supplierName, destination, technicianRole, lossReason } = req.query;
+    // "to" es el fin del rango (ej. "Hasta: 2026-09-13" de un <input type="date">).
+    // new Date("2026-09-13") parsea a medianoche UTC de ese día, lo que excluiría
+    // casi todos los movimientos reales de ese día. Se ajusta al final del día
+    // (23:59:59.999 UTC) para incluir el día completo. "from" sí debe quedar en
+    // medianoche-inicio, que es el comportamiento correcto para el inicio del rango.
+    const toDate = to
+      ? new Date(new Date(String(to)).setUTCHours(23, 59, 59, 999))
+      : undefined;
     const movements = await getInventoryMovements({
       productId: productId ? String(productId) : undefined,
       channel: channel ? String(channel) : undefined,
       from: from ? new Date(String(from)) : undefined,
-      to: to ? new Date(String(to)) : undefined,
+      to: toDate,
       type: type ? String(type) : undefined,
       supplierName: supplierName ? String(supplierName) : undefined,
       destination: destination ? String(destination) : undefined,

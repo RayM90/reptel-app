@@ -300,4 +300,19 @@ describe('GET /api/products/movements — filtros nuevos', () => {
     expect(res.status).toBe(200)
     expect(res.body.data.every((m: any) => m.lossReason === 'PERDIDA')).toBe(true)
   })
+
+  it('filtro "to" incluye movimientos del mismo día (no solo hasta medianoche UTC)', async () => {
+    const todayStr = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+
+    const res = await request(app)
+      .get('/api/products/movements')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ productId: product.id, to: todayStr })
+
+    expect(res.status).toBe(200)
+    // El fixture del beforeAll (entrada IN + merma OUT) fue creado "hoy" (más tarde
+    // que medianoche UTC en la enorme mayoría de zonas horarias reales); con to=hoy
+    // debe seguir apareciendo, no ser excluido por interpretar "to" como medianoche.
+    expect(res.body.data.some((m: any) => m.supplierName === 'Proveedor Filtro Test')).toBe(true)
+  })
 })
