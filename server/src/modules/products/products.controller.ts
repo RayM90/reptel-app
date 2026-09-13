@@ -9,6 +9,7 @@ import {
   updateProduct,
   getInventoryMovements,
   restockProduct,
+  registerMerma,
 } from './products.service';
 
 /**
@@ -190,5 +191,53 @@ export const restockProductHandler = async (req: AuthRequest, res: Response): Pr
       return
     }
     res.status(500).json({ success: false, message: error.message || 'Error al reabastecer el producto' })
+  }
+}
+
+const VALID_LOSS_REASONS = ['DEFECTUOSO', 'DANIO_INSTALACION', 'PERDIDA', 'GARANTIA', 'OTRO']
+const VALID_DESTINATIONS = ['TIENDA', 'DOMICILIO_CLIENTE', 'TALLER', 'OTRO']
+
+export const registerMermaHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const { quantity, lossReason, reason, destination, orderId } = req.body
+
+    if (quantity === undefined || Number(quantity) <= 0) {
+      res.status(400).json({ success: false, message: 'La cantidad debe ser mayor a 0' })
+      return
+    }
+    if (!lossReason || !VALID_LOSS_REASONS.includes(String(lossReason))) {
+      res.status(400).json({ success: false, message: 'El motivo de la merma no es válido' })
+      return
+    }
+    if (!reason || typeof reason !== 'string' || !reason.trim()) {
+      res.status(400).json({ success: false, message: 'Debes detallar qué pasó con el producto' })
+      return
+    }
+    if (destination !== undefined && !VALID_DESTINATIONS.includes(String(destination))) {
+      res.status(400).json({ success: false, message: 'El destino no es válido' })
+      return
+    }
+
+    const { product, movement } = await registerMerma(
+      id,
+      Number(quantity),
+      req.user!.email,
+      String(lossReason),
+      reason.trim(),
+      destination ? String(destination) : undefined,
+      orderId ? String(orderId) : undefined,
+    )
+    res.status(200).json({ success: true, data: { product, movement } })
+  } catch (error: any) {
+    if (error.constructor?.name === 'InsufficientStockError') {
+      res.status(400).json({ success: false, message: 'No hay suficiente stock disponible para registrar esta merma' })
+      return
+    }
+    if (error.code === 'P2025') {
+      res.status(404).json({ success: false, message: 'Producto no encontrado' })
+      return
+    }
+    res.status(500).json({ success: false, message: error.message || 'Error al registrar la merma' })
   }
 }

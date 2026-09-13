@@ -168,6 +168,47 @@ export const restockProduct = async (
   });
 };
 
+export const registerMerma = async (
+  productId: string,
+  quantity: number,
+  actorEmail: string,
+  lossReason: string,
+  reason: string,
+  destination?: string,
+  orderId?: string,
+) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } });
+  if (!actor) throw new Error('Usuario no encontrado');
+
+  return prisma.$transaction(async (tx) => {
+    const product = await tx.product.findUniqueOrThrow({ where: { id: productId } });
+    if (product.stock < quantity) {
+      throw new InsufficientStockError();
+    }
+
+    const updated = await tx.product.update({
+      where: { id: productId },
+      data: { stock: { decrement: quantity } },
+    });
+
+    const movement = await tx.inventoryMovement.create({
+      data: {
+        productId,
+        type: 'OUT',
+        channel: 'MERMA',
+        quantity,
+        reason,
+        lossReason: lossReason as any,
+        destination: (destination as any) ?? deriveDestination(actor.role),
+        userId: actor.id,
+        orderId: orderId ?? null,
+      },
+    });
+
+    return { product: updated, movement };
+  });
+};
+
 export const updateProduct = async (
   id: string,
   data: {

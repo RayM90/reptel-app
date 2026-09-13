@@ -118,3 +118,64 @@ describe('POST /api/products/:id/restock', () => {
     expect(res.status).toBe(404)
   })
 })
+
+describe('POST /api/products/:id/merma', () => {
+  let adminToken: string
+  let technicianToken: string
+  let technicianEmail: string
+  let product: { id: string; stock: number }
+
+  beforeAll(async () => {
+    const loginRes = await request(app).post('/api/auth/login').send({ email: 'admin@reptel.com', password: 'RepTel2024*' })
+    adminToken = loginRes.body.data.token
+
+    const category = await prisma.productCategory.findFirst({ where: { isActive: true } })
+    product = await prisma.product.create({ data: { name: `Producto merma ${Date.now()}`, price: 8, stock: 5, categoryId: category!.id } })
+  }, 20000)
+
+  afterAll(async () => {
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await prisma.product.delete({ where: { id: product.id } }).catch(() => {})
+  })
+
+  it('sin token retorna 401', async () => {
+    const res = await request(app).post(`/api/products/${product.id}/merma`).send({ quantity: 1, lossReason: 'PERDIDA', reason: 'x' })
+    expect(res.status).toBe(401)
+  })
+
+  it('retorna 400 si falta reason (obligatorio)', async () => {
+    const res = await request(app)
+      .post(`/api/products/${product.id}/merma`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ quantity: 1, lossReason: 'PERDIDA' })
+    expect(res.status).toBe(400)
+  })
+
+  it('retorna 400 si la cantidad excede el stock disponible', async () => {
+    const res = await request(app)
+      .post(`/api/products/${product.id}/merma`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ quantity: 999, lossReason: 'PERDIDA', reason: 'Prueba de stock insuficiente' })
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/stock/i)
+  })
+
+  it('ADMIN registra una merma: descuenta stock, crea movimiento OUT/MERMA con destino TIENDA por default', async () => {
+    const res = await request(app)
+      .post(`/api/products/${product.id}/merma`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ quantity: 2, lossReason: 'DEFECTUOSO', reason: 'Encontrado roto al abrir la caja' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.product.stock).toBe(3)
+
+    const movement = await prisma.inventoryMovement.findFirst({
+      where: { productId: product.id, channel: 'MERMA' },
+      orderBy: { createdAt: 'desc' },
+    })
+    expect(movement?.type).toBe('OUT')
+    expect(movement?.lossReason).toBe('DEFECTUOSO')
+    expect(movement?.destination).toBe('TIENDA')
+    expect(movement?.reason).toBe('Encontrado roto al abrir la caja')
+  })
+})
