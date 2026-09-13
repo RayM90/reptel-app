@@ -17,3 +17,10 @@ export const ID_NUMBER_PREFIXES = ['V', 'E', 'J', 'G'];
 export const isValidVenezuelanIdNumber = (idNumber: string): boolean => {
   return /^[VEJG]-\d{7,9}$/.test(idNumber);
 };
+
+// El personal de RepTel es siempre persona natural (nunca jurídico/gobierno) y la cédula
+// venezolana real tiene 7 u 8 dígitos — más estricto que isValidVenezuelanIdNumber de arriba,
+// que sigue aceptando J/G y hasta 9 dígitos para Client (puede ser cliente jurídico).
+export const isValidStaffIdNumber = (idNumber: string): boolean => {
+  return /^[VE]-\d{7,8}$/.test(idNumber);
+};
