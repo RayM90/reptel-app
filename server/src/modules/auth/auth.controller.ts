@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { registerUser, loginUser, refreshUserToken, completeNewPasswordChallenge, createStaffUser } from './auth.service';
+import { registerUser, loginUser, refreshUserToken, completeNewPasswordChallenge, createStaffUser, setTemporaryPassword } from './auth.service';
 import { translateCognitoError } from './auth.errors';
 import prisma from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
@@ -270,5 +270,49 @@ export const requestPasswordReset = async (req: Request, res: Response): Promise
     res.status(200).json({ success: true, message: GENERIC_RESET_MESSAGE });
   } catch (error: any) {
     res.status(500).json({ message: 'Error al procesar la solicitud' });
+  }
+};
+
+export const listPasswordResetRequests = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const requests = await prisma.passwordResetRequest.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.status(200).json({ success: true, data: requests });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Error al obtener las solicitudes' });
+  }
+};
+
+export const resolvePasswordReset = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id);
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 8) {
+      res.status(400).json({ message: 'La contraseña temporal debe tener al menos 8 caracteres' });
+      return;
+    }
+
+    const resetRequest = await prisma.passwordResetRequest.findUnique({ where: { id } });
+    if (!resetRequest || resetRequest.status !== 'PENDING') {
+      res.status(404).json({ message: 'Solicitud no encontrada o ya resuelta' });
+      return;
+    }
+
+    await setTemporaryPassword(resetRequest.email, newPassword);
+
+    const adminEmail = (req as any).user?.email;
+    const admin = adminEmail ? await prisma.user.findUnique({ where: { email: adminEmail } }) : null;
+
+    await prisma.passwordResetRequest.update({
+      where: { id },
+      data: { status: 'RESOLVED', resolvedAt: new Date(), resolvedByUserId: admin?.id },
+    });
+
+    res.status(200).json({ success: true, message: 'Contraseña temporal establecida' });
+  } catch (error: any) {
+    res.status(400).json({ message: translateCognitoError(error) || 'Error al resolver la solicitud' });
   }
 };
