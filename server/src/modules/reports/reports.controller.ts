@@ -62,3 +62,28 @@ export const getSummary = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ success: false, message: 'Error al generar el reporte' })
   }
 }
+
+export const getAudit = async (req: AuthRequest, res: Response) => {
+  try {
+    const range = parseDateRange(req, res)
+    if (!range) return
+
+    const channel = parseChannel(req, res)
+    if (channel === null) return
+
+    const { status, technicianId, clientId } = req.query
+
+    const audit = await reportsService.getAuditReport({
+      from: range.from,
+      to: range.to,
+      status: status ? String(status) : undefined,
+      technicianId: technicianId ? String(technicianId) : undefined,
+      clientId: clientId ? String(clientId) : undefined,
+      channel,
+    })
+
+    res.json({ success: true, data: audit })
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error al generar la auditoría' })
+  }
+}
