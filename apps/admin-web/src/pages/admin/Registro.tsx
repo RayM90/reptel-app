@@ -353,6 +353,7 @@ export default function Registro() {
       </div>
       {role === 'ADMIN' && <p><Link to="/admin">← Volver al Panel de Administrador</Link></p>}
       {role === 'TECHNICIAN' && <p><Link to="/technician">🔧 Ver reparaciones asignadas</Link></p>}
+      <p className="form-hint">{step === 'client' ? 'Paso 1 de 2 · Datos del cliente' : 'Paso 2 de 2 · Orden de servicio'}</p>
 
       {step === 'client' && (
         <div className="card" style={{ maxWidth: 480 }}>
@@ -432,6 +433,9 @@ export default function Registro() {
                 <input type="email" value={form.email} disabled={!!clientExists && !isEditingClient}
                   onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
+              <div style={{ marginTop: 20, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
+                <span className="card-eyebrow">Dirección (opcional)</span>
+              </div>
               <div className="form-group">
                 <label>Estado</label>
                 <input type="text" value={form.addressState} disabled={!!clientExists && !isEditingClient}
@@ -475,11 +479,14 @@ export default function Registro() {
       )}
 
       {step === 'sale' && activeClient && (
+        <>
         <div className="card" style={{ maxWidth: 600 }}>
           <p><strong>Cliente:</strong> {formatFullName(activeClient.name, activeClient.lastName)} — {activeClient.phone}</p>
           <p><button className="btn btn-outline" onClick={resetAll}>← Buscar otro cliente</button></p>
+        </div>
 
-          <h2>Orden de servicio técnico</h2>
+        <div className="card" style={{ maxWidth: 600 }}>
+          <h3>Información del equipo</h3>
           <div className="form-group">
             <label>Tipo de equipo</label>
             <select value={orderForm.deviceType} onChange={(e) => setOrderForm({ ...orderForm, deviceType: e.target.value })}>
@@ -571,6 +578,10 @@ export default function Registro() {
               placeholder="Ej: rayón en la tapa, sin batería..."
             />
           </div>
+        </div>
+
+        <div className="card" style={{ maxWidth: 600 }}>
+          <h3>Detalles del servicio</h3>
           <div className="form-group">
             <label>Servicio del catálogo (opcional, solo referencia)</label>
             <select value={orderForm.serviceCatalogId} onChange={(e) => setOrderForm({ ...orderForm, serviceCatalogId: e.target.value })}>
@@ -584,6 +595,10 @@ export default function Registro() {
             <label>Descripción del problema</label>
             <textarea spellCheck value={orderForm.problem} onChange={(e) => setOrderForm({ ...orderForm, problem: e.target.value })} />
           </div>
+        </div>
+
+        <div className="card" style={{ maxWidth: 600 }}>
+          <h3>Pago de la revisión</h3>
           <div className="form-group">
             <label>Método de pago de la revisión ($15)</label>
             <select value={orderForm.advancePaymentMethod} onChange={(e) => setOrderForm({ ...orderForm, advancePaymentMethod: e.target.value })}>
@@ -593,7 +608,7 @@ export default function Registro() {
             </select>
           </div>
 
-          <h3>Confirmar datos del pago (verificado en persona)</h3>
+          <h4>Confirmar datos del pago (verificado en persona)</h4>
           <p className="form-hint">
             Concepto: <strong>Revisión del equipo — $15.00</strong> (el catálogo elegido arriba es solo
             referencia del diagnóstico, no cambia este monto)
@@ -664,6 +679,7 @@ export default function Registro() {
           <button className="btn btn-primary" onClick={handleCreateOrder} disabled={creatingOrder || !!pendingAbono}>
             {creatingOrder ? 'Creando…' : 'Registrar orden'}
           </button>
+        </div>
 
           {pendingAbono && (
             <div className="card" style={{ marginTop: 16 }}>
@@ -722,7 +738,7 @@ export default function Registro() {
               Finalizar — buscar otro cliente
             </button>
           </p>
-        </div>
+        </>
       )}
     </div>
   )
