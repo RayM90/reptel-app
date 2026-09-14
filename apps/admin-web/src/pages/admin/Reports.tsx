@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 import { formatFullName } from '../../utils/formatName'
@@ -21,16 +21,19 @@ interface ClientSearchResult {
   id: string
   name: string
   lastName: string
+  idNumber: string
 }
 
 interface ServicioOrderRow {
   orderId: string
   orderNumber: string
   clientName: string
+  clientIdNumber: string
   technicianName: string
   deliveredAt: string | null
   budget: number
   technicianCommission: number
+  channel: 'WEB' | 'APK'
 }
 
 interface ReportSummary {
@@ -42,12 +45,53 @@ interface ReportSummary {
     byClient: ServicioClientRow[]
     orders: ServicioOrderRow[]
   }
+  mermas: { total: number; count: number }
 }
 
 interface Technician {
   id: string
   name: string
+  idNumber: string | null
 }
+
+interface AuditOrderRow {
+  orderId: string
+  orderNumber: string
+  receivedAt: string
+  deliveredAt: string | null
+  status: string
+  channel: 'WEB' | 'APK'
+  clientName: string
+  clientIdNumber: string
+  technicianName: string
+  technicianCommission: number
+  diagnosis: string | null
+  totalAmount: number
+  partsUsed: { productName: string; quantity: number }[]
+}
+
+interface ClientHistory {
+  client: { id: string; name: string; lastName: string; idNumber: string; phone: string; email: string | null }
+  devicesIngresados: number
+  totalPaid: number
+  activeOrders: { orderId: string; orderNumber: string; status: string; deviceId: string }[]
+  possibleWarrantyCases: { orderId: string; orderNumber: string }[]
+  history: {
+    orderId: string
+    orderNumber: string
+    receivedAt: string
+    deliveredAt: string | null
+    status: string
+    deviceLabel: string
+    totalAmount: number
+  }[]
+}
+
+const ORDER_STATUSES = [
+  'PENDING_PAYMENT', 'RECEIVED', 'DIAGNOSING', 'WAITING_APPROVAL', 'APPROVED',
+  'REPAIRING', 'WAITING_PART', 'READY', 'PAID_PENDING_DELIVERY',
+  'REJECTED_PENDING_PICKUP', 'DELIVERED', 'CANCELLED',
+]
 
 function toInputDate(date: Date) {
   return date.toISOString().slice(0, 10)
@@ -80,18 +124,29 @@ export default function Reports() {
   const today = new Date()
   const [from, setFrom] = useState(toInputDate(today))
   const [to, setTo] = useState(toInputDate(today))
-  const [technicianId, setTechnicianId] = useState('')
+  const [status, setStatus] = useState('')
+  const [channel, setChannel] = useState<'' | 'WEB' | 'APK'>('')
+
   const [technicians, setTechnicians] = useState<Technician[]>([])
+  const [technicianQuery, setTechnicianQuery] = useState('')
+  const [technicianId, setTechnicianId] = useState('')
+  const [selectedTechnicianName, setSelectedTechnicianName] = useState('')
+
   const [clientQuery, setClientQuery] = useState('')
   const [clientResults, setClientResults] = useState<ClientSearchResult[]>([])
   const [clientId, setClientId] = useState('')
   const [selectedClientName, setSelectedClientName] = useState('')
+  const [selectedClientIdNumber, setSelectedClientIdNumber] = useState('')
+
   const [data, setData] = useState<ReportSummary | null>(null)
+  const [auditOrders, setAuditOrders] = useState<AuditOrderRow[]>([])
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null)
+  const [clientHistory, setClientHistory] = useState<ClientHistory | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.get('/api/orders/technicians').then((res) => setTechnicians(res.data.data))
+    api.get('/api/reports/technicians').then((res) => setTechnicians(res.data.data))
   }, [])
 
   useEffect(() => {
@@ -106,9 +161,27 @@ export default function Reports() {
     return () => clearTimeout(timeout)
   }, [clientQuery])
 
+  useEffect(() => {
+    if (!selectedClientIdNumber) {
+      setClientHistory(null)
+      return
+    }
+    api.get(`/api/reports/client-history/${encodeURIComponent(selectedClientIdNumber)}`)
+      .then((res) => setClientHistory(res.data.data))
+      .catch(() => setClientHistory(null))
+  }, [selectedClientIdNumber])
+
+  const technicianResults = technicianQuery.trim().length >= 2
+    ? technicians.filter((t) =>
+        t.name.toLowerCase().includes(technicianQuery.toLowerCase()) ||
+        (t.idNumber ?? '').toLowerCase().includes(technicianQuery.toLowerCase())
+      ).slice(0, 10)
+    : []
+
   const selectClient = (client: ClientSearchResult) => {
     setClientId(client.id)
     setSelectedClientName(formatFullName(client.name, client.lastName))
+    setSelectedClientIdNumber(client.idNumber)
     setClientQuery('')
     setClientResults([])
   }
@@ -116,36 +189,53 @@ export default function Reports() {
   const clearClient = () => {
     setClientId('')
     setSelectedClientName('')
+    setSelectedClientIdNumber('')
+    setClientHistory(null)
   }
 
-  const fetchReport = async (fromDate: string, toDate: string, tech: string, client: string) => {
+  const selectTechnician = (t: Technician) => {
+    setTechnicianId(t.id)
+    setSelectedTechnicianName(t.name)
+    setTechnicianQuery('')
+  }
+
+  const clearTechnician = () => {
+    setTechnicianId('')
+    setSelectedTechnicianName('')
+  }
+
+  const fetchReports = async (
+    fromDate: string, toDate: string, tech: string, client: string, st: string, ch: string
+  ) => {
     setLoading(true)
     setError('')
     try {
-      const res = await api.get('/api/reports/summary', {
-        params: { from: fromDate, to: toDate, technicianId: tech || undefined, clientId: client || undefined },
-      })
-      setData(res.data.data)
+      const [summaryRes, auditRes] = await Promise.all([
+        api.get('/api/reports/summary', {
+          params: { from: fromDate, to: toDate, technicianId: tech || undefined, clientId: client || undefined, channel: ch || undefined },
+        }),
+        api.get('/api/reports/audit', {
+          params: { from: fromDate, to: toDate, technicianId: tech || undefined, clientId: client || undefined, status: st || undefined, channel: ch || undefined },
+        }),
+      ])
+      setData(summaryRes.data.data)
+      setAuditOrders(auditRes.data.data)
     } catch {
       setError('No se pudo generar el reporte')
       setData(null)
+      setAuditOrders([])
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchReport(from, to, technicianId, clientId)
+    fetchReports(from, to, technicianId, clientId, status, channel)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Forzar que los <details className="card"> (Detalle de órdenes/pedidos) se muestren
-  // expandidos al exportar a PDF, sin importar su estado en pantalla. Una regla CSS
-  // (`details.card:not([open]) > *:not(summary) { display: block !important }`) NO funciona:
-  // Chromium oculta el contenido de un <details> cerrado mediante un wrapper interno de
-  // shadow DOM (user-agent), no mediante una regla CSS común, así que ningún selector de
-  // un stylesheet de autor puede alcanzarlo. La única forma real de revelar el contenido es
-  // forzar el atributo `open` de verdad, antes de imprimir, y restaurarlo después.
+  // Forzar que los <details className="card"> se muestren expandidos al
+  // exportar a PDF — ver comentario original conservado, misma técnica.
   useEffect(() => {
     const detailsToRestore: HTMLDetailsElement[] = []
     const handleBeforePrint = () => {
@@ -179,10 +269,10 @@ export default function Reports() {
     const newTo = toInputDate(range.to)
     setFrom(newFrom)
     setTo(newTo)
-    fetchReport(newFrom, newTo, technicianId, clientId)
+    fetchReports(newFrom, newTo, technicianId, clientId, status, channel)
   }
 
-  const handleFilter = () => fetchReport(from, to, technicianId, clientId)
+  const handleFilter = () => fetchReports(from, to, technicianId, clientId, status, channel)
 
   const downloadReceipt = async (order: ServicioOrderRow, type: 'intake' | 'final') => {
     try {
@@ -222,17 +312,35 @@ export default function Reports() {
             <label>Hasta</label>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </div>
-          <div className="form-group">
-            <label>Técnico</label>
-            <select value={technicianId} onChange={(e) => setTechnicianId(e.target.value)}>
-              <option value="">Todos</option>
-              {technicians.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
+          <div className="form-group" style={{ position: 'relative' }}>
+            <label>Técnico (cédula o nombre)</label>
+            {selectedTechnicianName ? (
+              <div>
+                {selectedTechnicianName}{' '}
+                <button className="btn btn-outline" onClick={clearTechnician}>✕</button>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre o cédula…"
+                  value={technicianQuery}
+                  onChange={(e) => setTechnicianQuery(e.target.value)}
+                />
+                {technicianResults.length > 0 && (
+                  <ul className="autocomplete-list">
+                    {technicianResults.map((t) => (
+                      <li key={t.id} onClick={() => selectTechnician(t)}>
+                        {t.name}{t.idNumber ? ` — ${t.idNumber}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
           </div>
           <div className="form-group" style={{ position: 'relative' }}>
-            <label>Cliente</label>
+            <label>Cliente (cédula/RIF o nombre)</label>
             {selectedClientName ? (
               <div>
                 {selectedClientName}{' '}
@@ -242,7 +350,7 @@ export default function Reports() {
               <>
                 <input
                   type="text"
-                  placeholder="Buscar por nombre o cédula…"
+                  placeholder="Buscar por nombre o cédula/RIF…"
                   value={clientQuery}
                   onChange={(e) => setClientQuery(e.target.value)}
                 />
@@ -250,13 +358,30 @@ export default function Reports() {
                   <ul className="autocomplete-list">
                     {clientResults.map((c) => (
                       <li key={c.id} onClick={() => selectClient(c)}>
-                        {formatFullName(c.name, c.lastName)}
+                        {formatFullName(c.name, c.lastName)} — {c.idNumber}
                       </li>
                     ))}
                   </ul>
                 )}
               </>
             )}
+          </div>
+          <div className="form-group">
+            <label>Estado (auditoría)</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">Todos</option>
+              {ORDER_STATUSES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Canal</label>
+            <select value={channel} onChange={(e) => setChannel(e.target.value as '' | 'WEB' | 'APK')}>
+              <option value="">Todos</option>
+              <option value="WEB">Web</option>
+              <option value="APK">APK</option>
+            </select>
           </div>
           <button className="btn btn-primary" onClick={handleFilter}>Filtrar</button>
           <button className="btn btn-accent" onClick={() => window.print()}>🖨️ Exportar PDF</button>
@@ -271,18 +396,66 @@ export default function Reports() {
           <h2>Servicio Técnico</h2>
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
             <div className="card">
-              <h3>Órdenes completadas</h3>
-              <p>{data.servicio.ordersCount}</p>
-            </div>
-            <div className="card">
-              <h3>Presupuesto total</h3>
+              <h3>Ingresos</h3>
               <p>${data.servicio.totalBudget.toFixed(2)}</p>
             </div>
             <div className="card">
-              <h3>Comisión de técnicos</h3>
+              <h3>Reparaciones</h3>
+              <p>{data.servicio.ordersCount}</p>
+            </div>
+            <div className="card">
+              <h3>Comisiones</h3>
               <p>${data.servicio.totalTechnicianCommission.toFixed(2)}</p>
             </div>
+            <div className="card">
+              <h3>Mermas</h3>
+              <p>${data.mermas.total.toFixed(2)} <span className="form-hint">({data.mermas.count} mov.)</span></p>
+            </div>
           </div>
+
+          {clientHistory && (
+            <section className="card">
+              <h3>Expediente de Cliente</h3>
+              <p>
+                <strong>{formatFullName(clientHistory.client.name, clientHistory.client.lastName)}</strong>
+                {' — '}{clientHistory.client.idNumber} · {clientHistory.client.phone}
+              </p>
+              <p>
+                Equipos ingresados: <strong>{clientHistory.devicesIngresados}</strong>
+                {' · '}Total pagado: <strong>${clientHistory.totalPaid.toFixed(2)}</strong>
+                {' · '}Casos de garantía: <strong>{clientHistory.possibleWarrantyCases.length}</strong>
+              </p>
+              {clientHistory.activeOrders.length > 0 && (
+                <p>
+                  Equipos con orden activa: {clientHistory.activeOrders.map((o) => o.orderNumber).join(', ')}
+                </p>
+              )}
+              <details className="card">
+                <summary><h4 style={{ display: 'inline' }}>Historial completo</h4></summary>
+                <div className="table-wrapper">
+                  <table className="styled-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Orden</th><th scope="col">Fecha</th><th scope="col">Equipo</th>
+                        <th scope="col">Estado</th><th scope="col" className="money">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientHistory.history.map((h) => (
+                        <tr key={h.orderId}>
+                          <td data-label="Orden">{h.orderNumber}</td>
+                          <td data-label="Fecha">{formatDate(h.receivedAt)}</td>
+                          <td data-label="Equipo">{h.deviceLabel}</td>
+                          <td data-label="Estado">{h.status}</td>
+                          <td className="money" data-label="Monto">${h.totalAmount.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            </section>
+          )}
 
           <section className="card">
             <h3>Por técnico</h3>
@@ -333,7 +506,7 @@ export default function Reports() {
           </section>
 
           <details className="card">
-            <summary><h3 style={{ display: 'inline' }}>Detalle de órdenes</h3></summary>
+            <summary><h3 style={{ display: 'inline' }}>Recibos de órdenes entregadas</h3></summary>
             {data.servicio.orders.length === 0 ? (
               <p>No hay datos en este período</p>
             ) : (
@@ -342,6 +515,7 @@ export default function Reports() {
                   <thead>
                     <tr>
                       <th scope="col">Orden</th><th scope="col">Cliente</th><th scope="col">Técnico</th>
+                      <th scope="col">Canal</th>
                       <th scope="col" className="money">Presupuesto</th><th scope="col" className="money">Comisión</th><th scope="col">Entregado</th>
                       <th scope="col" className="no-print">Recibos</th>
                     </tr>
@@ -350,8 +524,9 @@ export default function Reports() {
                     {data.servicio.orders.map((o) => (
                       <tr key={o.orderNumber}>
                         <td data-label="Orden">{o.orderNumber}</td>
-                        <td data-label="Cliente">{o.clientName}</td>
+                        <td data-label="Cliente">{o.clientName} — {o.clientIdNumber}</td>
                         <td data-label="Técnico">{o.technicianName}</td>
+                        <td data-label="Canal">{o.channel}</td>
                         <td className="money" data-label="Presupuesto">${o.budget.toFixed(2)}</td>
                         <td className="money" data-label="Comisión">${o.technicianCommission.toFixed(2)}</td>
                         <td data-label="Entregado">{formatDate(o.deliveredAt)}</td>
@@ -360,6 +535,67 @@ export default function Reports() {
                           <button className="btn btn-outline" onClick={() => downloadReceipt(o, 'final')}>📄 Entrega</button>
                         </td>
                       </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </details>
+
+          <details className="card">
+            <summary><h3 style={{ display: 'inline' }}>Tabla de Auditoría</h3></summary>
+            {auditOrders.length === 0 ? (
+              <p>No hay datos en este período</p>
+            ) : (
+              <div className="table-wrapper">
+                <table className="styled-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Folio</th><th scope="col">Creación</th><th scope="col">Entrega</th>
+                      <th scope="col">Cliente</th><th scope="col">Técnico</th><th scope="col">Estado</th>
+                      <th scope="col">Canal</th><th scope="col" className="money">Monto</th><th scope="col" className="no-print">Detalle</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditOrders.map((o) => (
+                      <Fragment key={o.orderId}>
+                        <tr>
+                          <td data-label="Folio">{o.orderNumber}</td>
+                          <td data-label="Creación">{formatDate(o.receivedAt)}</td>
+                          <td data-label="Entrega">{formatDate(o.deliveredAt)}</td>
+                          <td data-label="Cliente">{o.clientName} — {o.clientIdNumber}</td>
+                          <td data-label="Técnico">{o.technicianName}</td>
+                          <td data-label="Estado">{o.status}</td>
+                          <td data-label="Canal">{o.channel}</td>
+                          <td className="money" data-label="Monto">${o.totalAmount.toFixed(2)}</td>
+                          <td data-label="Detalle" className="no-print">
+                            <button
+                              className="btn btn-outline"
+                              onClick={() => setExpandedOrderId(expandedOrderId === o.orderId ? null : o.orderId)}
+                            >
+                              {expandedOrderId === o.orderId ? '▲' : '▶'}
+                            </button>
+                          </td>
+                        </tr>
+                        {expandedOrderId === o.orderId && (
+                          <tr>
+                            <td colSpan={9}>
+                              <p><strong>Diagnóstico:</strong> {o.diagnosis || '—'}</p>
+                              <p><strong>Comisión del técnico:</strong> ${o.technicianCommission.toFixed(2)}</p>
+                              <p><strong>Repuestos usados:</strong></p>
+                              {o.partsUsed.length === 0 ? (
+                                <p>Sin repuestos registrados</p>
+                              ) : (
+                                <ul>
+                                  {o.partsUsed.map((p, i) => (
+                                    <li key={i}>{p.productName} × {p.quantity}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>

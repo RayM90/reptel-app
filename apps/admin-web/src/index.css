@@ -761,3 +761,13 @@ details.card[open] summary::before {
   color: var(--color-danger);
   margin-top: 4px;
 }
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-primary);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+}
