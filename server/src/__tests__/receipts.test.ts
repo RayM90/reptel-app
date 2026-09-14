@@ -395,3 +395,21 @@ describe('addLetterhead — grid corporativo (logo izq, datos del negocio a la d
     expect(calls[ordenIndex].x).toBe(MARGIN)
   })
 })
+
+describe('addFooterDisclaimer — nota adicional exclusiva del Recibo de Recepción', () => {
+  it('generateIntakeReceipt incluye la nota legal del anticipo en el footer', () => {
+    const calls = captureTextXs(() => generateIntakeReceipt(fakeOrder as any))
+    const texts = calls.map((c) => c.text)
+    expect(texts).toContain(
+      'El monto abonado por diagnóstico/revisión será descontado del costo total del servicio si la reparación es aprobada.'
+    )
+  })
+
+  it('generateFinalReceipt NO incluye la nota del anticipo (es exclusiva de Recepción)', () => {
+    const calls = captureTextXs(() => generateFinalReceipt(fakeOrder as any))
+    const texts = calls.map((c) => c.text)
+    expect(texts).not.toContain(
+      'El monto abonado por diagnóstico/revisión será descontado del costo total del servicio si la reparación es aprobada.'
+    )
+  })
+})
