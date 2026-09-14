@@ -1,4 +1,5 @@
 import prisma from '../../lib/prisma'
+import { formatFullName } from '../../lib/format'
 import * as clientsService from '../clients/clients.service'
 
 interface ReportFilters {
@@ -64,7 +65,7 @@ export const getReportSummary = async ({ from, to, technicianId, clientId, chann
   for (const o of orders) {
     const entry = servicioByClientMap.get(o.client.id) ?? {
       clientId: o.client.id,
-      clientName: `${o.client.name} ${o.client.lastName}`,
+      clientName: formatFullName(o.client.name, o.client.lastName),
       ordersCount: 0,
       totalBudget: 0,
     }
@@ -82,7 +83,7 @@ export const getReportSummary = async ({ from, to, technicianId, clientId, chann
     orders: orders.map((o) => ({
       orderId: o.id,
       orderNumber: o.orderNumber,
-      clientName: `${o.client.name} ${o.client.lastName}`,
+      clientName: formatFullName(o.client.name, o.client.lastName),
       clientIdNumber: o.client.idNumber,
       technicianName: o.technician?.name ?? 'Sin asignar',
       deliveredAt: o.deliveredAt,
@@ -144,7 +145,7 @@ export const getAuditReport = async ({ from, to, status, channel, technicianId, 
     deliveredAt: o.deliveredAt,
     status: o.status,
     channel: getOrderChannel(o),
-    clientName: `${o.client.name} ${o.client.lastName}`,
+    clientName: formatFullName(o.client.name, o.client.lastName),
     clientIdNumber: o.client.idNumber,
     technicianName: o.technician?.name ?? 'Sin asignar',
     technicianCommission: Number(o.technicianCommission ?? 0),

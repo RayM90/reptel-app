@@ -6,6 +6,7 @@ import { api } from '../services/api'
 import PhoneInput from './PhoneInput'
 import SelectWithOther from './SelectWithOther'
 import { VENEZUELAN_BANKS } from '../constants/venezuela'
+import { formatFullName } from '../utils/formatName'
 
 // Repuesto de servicio técnico usado en la orden — viene de GET /api/orders/:id/parts
 // (ya existía para el panel del técnico, acá lo reutilizamos tal cual).
@@ -574,7 +575,7 @@ export default function OrderDetailModal({
 
         <OrderPhase number={1} title="Recepción" state={phaseState(1, true)}>
           <h4>Cliente</h4>
-          <p><strong>Nombre:</strong> {order.client.name} {order.client.lastName}</p>
+          <p><strong>Nombre:</strong> {formatFullName(order.client.name, order.client.lastName)}</p>
           <p><strong>Cédula:</strong> {order.client.idNumber}</p>
           <p><strong>Teléfono:</strong> {order.client.phone}</p>
           {order.client.email && <p><strong>Email:</strong> {order.client.email}</p>}

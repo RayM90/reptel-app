@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit'
 import path from 'path'
+import { formatFullName } from '../../lib/format'
 
 const LOGO_PATH = path.join(process.cwd(), 'assets', 'logo-reptel.png')
 
@@ -12,6 +13,12 @@ const BUSINESS_ADDRESS = 'Av. Urdaneta, Caracas, Venezuela'
 const BUSINESS_PHONE = '0424-2440004'
 
 const FOOTER_DISCLAIMER_TEXT = 'Este documento es un recibo interno de pago — no constituye factura fiscal.'
+
+// Nota legal exclusiva del Recibo de Recepción — el anticipo de
+// diagnóstico/revisión no es un cobro aparte, se descuenta del presupuesto
+// final si el cliente aprueba la reparación.
+const INTAKE_FOOTER_NOTE =
+  'El monto abonado por diagnóstico/revisión será descontado del costo total del servicio si la reparación es aprobada.'
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   CASH: 'Efectivo',
@@ -114,18 +121,32 @@ const addObservationsBlock = (doc: PDFKit.PDFDocument, subtitle: string, text: s
 // teléfono y RIF centrados, una línea horizontal, y debajo el título del
 // recibo (mayúsculas) + número de orden. Reemplaza a la vieja addHeader.
 const addLetterhead = (doc: PDFKit.PDFDocument, title: string, orderNumber: string) => {
+  const startY = doc.y
+  const textX = doc.page.margins.left + 70
+  const textWidth = doc.page.width - doc.page.margins.right - textX
+  let logoBottom = startY
+
   try {
-    doc.image(LOGO_PATH, doc.page.width / 2 - 40, doc.y, { width: 80 })
-    doc.moveDown(3.5)
+    doc.image(LOGO_PATH, doc.page.margins.left, startY, { width: 60 })
+    logoBottom = startY + 60
   } catch {
     // Si el logo no está disponible, el recibo se genera igual sin imagen.
   }
 
-  doc.font('Helvetica-Bold').fontSize(14).text(BUSINESS_NAME, { align: 'center' })
+  doc.font('Helvetica-Bold').fontSize(14).text(BUSINESS_NAME, textX, startY, { width: textWidth })
   doc.font('Helvetica').fontSize(8)
-  doc.text(BUSINESS_ADDRESS, { align: 'center' })
-  doc.text(`Tel: ${BUSINESS_PHONE}`, { align: 'center' })
-  doc.text(`RIF: ${BUSINESS_RIF}`, { align: 'center' })
+  doc.text(BUSINESS_ADDRESS, textX, doc.y, { width: textWidth })
+  doc.text(`Tel: ${BUSINESS_PHONE}`, textX, doc.y, { width: textWidth })
+  doc.text(`RIF: ${BUSINESS_RIF}`, textX, doc.y, { width: textWidth })
+
+  // El logo y el bloque de texto corren en paralelo (misma startY) — el
+  // cursor debe quedar debajo de lo que termine más abajo, igual que en
+  // addTwoColumnRow con columnas de alturas distintas.
+  doc.y = Math.max(doc.y, logoBottom)
+  // pdfkit deja doc.x en textX tras el último text() del bloque de datos del
+  // negocio (no lo restaura solo) — sin este reset, la línea horizontal y el
+  // título quedarían indentados en vez de ocupar el ancho completo/centrados.
+  doc.x = doc.page.margins.left
   doc.moveDown(0.6)
 
   const lineY = doc.y
@@ -143,7 +164,7 @@ const addLetterhead = (doc: PDFKit.PDFDocument, title: string, orderNumber: stri
 // Disclaimer legal al pie de los 5 recibos — nunca se llama la palabra
 // "Factura" ni se menciona IVA/crédito fiscal en ningún recibo (regla legal
 // no negociable, ver brief de la tarea).
-const addFooterDisclaimer = (doc: PDFKit.PDFDocument) => {
+const addFooterDisclaimer = (doc: PDFKit.PDFDocument, extraNote?: string) => {
   doc.moveDown(1)
   const lineY = doc.y
   doc
@@ -151,6 +172,10 @@ const addFooterDisclaimer = (doc: PDFKit.PDFDocument) => {
     .lineTo(doc.page.width - doc.page.margins.right, lineY)
     .stroke()
   doc.moveDown(0.5)
+  if (extraNote) {
+    doc.font('Helvetica-Bold').fontSize(8).text(extraNote, { align: 'center' })
+    doc.moveDown(0.3)
+  }
   doc.font('Helvetica').fontSize(8).text(FOOTER_DISCLAIMER_TEXT, { align: 'center' })
 }
 
@@ -176,6 +201,12 @@ interface OrderForReceipt {
   technician: { name: string } | null
   device: { type: string; brand: string; model: string; color: string | null; serialNumber: string | null }
   partsUsed?: { productName: string; quantity: number; unitPriceAtUse: unknown }[]
+  advancePaymentSubmissions?: {
+    kind: string
+    amount: unknown
+    paymentDetails: Record<string, string> | null
+    confirmedAt: Date | string | null
+  }[]
 }
 
 // Self-service + delivery: RECEIVED se dispara al confirmar el anticipo, no cuando
@@ -201,7 +232,7 @@ export const generateIntakeReceipt = (order: OrderForReceipt): PDFKit.PDFDocumen
 
   addLetterhead(doc, title, order.orderNumber)
 
-  addTwoColumnRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`, 'Teléf', order.client.phone)
+  addTwoColumnRow(doc, 'Cliente', formatFullName(order.client.name, order.client.lastName), 'Teléf', order.client.phone)
   addTwoColumnRow(
     doc,
     'Equipo/Marca',
@@ -234,7 +265,7 @@ export const generateIntakeReceipt = (order: OrderForReceipt): PDFKit.PDFDocumen
     .fontSize(10)
     .text('El equipo queda sujeto a diagnóstico y presupuesto por parte del técnico.', { align: 'center' })
 
-  addFooterDisclaimer(doc)
+  addFooterDisclaimer(doc, INTAKE_FOOTER_NOTE)
   doc.end()
   return doc
 }
@@ -348,12 +379,104 @@ const addCostBreakdown = (doc: PDFKit.PDFDocument, order: OrderForReceipt, payme
   })
 }
 
+// Tabla financiera del Recibo Pago de Presupuesto — Monto Total / Monto
+// Abonado / Saldo Pendiente. El estado del pago vive aquí, no en el título
+// del recibo (decisión de negocio: el título es siempre "Recibo Pago de
+// Presupuesto").
+const addBudgetPaymentTable = (
+  doc: PDFKit.PDFDocument,
+  order: Pick<OrderForReceipt, 'budget' | 'budgetAdvanceAmount'>
+) => {
+  const saldoPendiente = Number(order.budget ?? 0) - Number(order.budgetAdvanceAmount ?? 0)
+  drawBoxedBlock(doc, (target, contentX, contentWidth) => {
+    addBoxRow(target, 'Monto Total', formatMoney(order.budget), contentX, contentWidth)
+    addBoxRow(target, 'Monto Abonado', formatMoney(order.budgetAdvanceAmount), contentX, contentWidth)
+    target.moveDown(0.2)
+    target
+      .font('Helvetica-Bold')
+      .fontSize(12)
+      .text(`Saldo Pendiente: ${formatMoney(saldoPendiente)}`, contentX, target.y, { width: contentWidth, align: 'right' })
+  })
+}
+
+const PARTIAL_PAYMENT_KIND_LABELS: Record<string, string> = {
+  REVISION: 'Anticipo de revisión',
+  BUDGET: 'Anticipo de presupuesto',
+}
+
+// Historial completo de pagos del Recibo de Entrega — a diferencia de
+// addCostBreakdown (que solo muestra el desglose de UN cobro puntual), este
+// bloque lista cada AdvancePaymentSubmission confirmado (revisión y/o
+// presupuesto, puede haber varios si el cliente abonó por partes) más el
+// pago final, y cierra siempre en $0.00: la entrega solo ocurre con el
+// presupuesto pagado en su totalidad (regla de negocio existente).
+const addPaymentHistory = (doc: PDFKit.PDFDocument, order: OrderForReceipt) => {
+  drawBoxedBlock(doc, (target, contentX, contentWidth) => {
+    target.font('Helvetica-Bold').fontSize(12).text('Historial de pagos', contentX, target.y, { width: contentWidth })
+    target.moveDown(0.3)
+
+    for (const submission of order.advancePaymentSubmissions ?? []) {
+      const label = PARTIAL_PAYMENT_KIND_LABELS[submission.kind] ?? submission.kind
+      const methodEntries = submission.paymentDetails
+        ? Object.entries(submission.paymentDetails)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join(' — ')
+        : ''
+      const value = methodEntries
+        ? `${formatMoney(submission.amount)} (${methodEntries}) — ${formatDate(submission.confirmedAt)}`
+        : `${formatMoney(submission.amount)} — ${formatDate(submission.confirmedAt)}`
+      addBoxRow(target, label, value, contentX, contentWidth)
+    }
+
+    if (order.partsUsed && order.partsUsed.length > 0) {
+      target.moveDown(0.2)
+      target.font('Helvetica-Bold').fontSize(11).text('Repuestos usados:', contentX, target.y, { width: contentWidth })
+      for (const part of order.partsUsed) {
+        const lineTotal = part.quantity * Number(part.unitPriceAtUse ?? 0)
+        addBoxRow(target, `  ${part.productName} (x${part.quantity})`, `$${lineTotal.toFixed(2)}`, contentX, contentWidth)
+      }
+    }
+
+    if (order.finalPaymentDetails) {
+      const methodEntries = Object.entries(order.finalPaymentDetails)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(' — ')
+      if (methodEntries) addBoxRow(target, 'Pago final', methodEntries, contentX, contentWidth)
+    }
+
+    target.moveDown(0.2)
+    target
+      .font('Helvetica-Bold')
+      .fontSize(12)
+      .text(`Total: ${formatMoney(order.budget)}`, contentX, target.y, { width: contentWidth })
+    target.moveDown(0.1)
+    target
+      .font('Helvetica-Bold')
+      .fontSize(12)
+      .text('Saldo pendiente: $0.00', contentX, target.y, { width: contentWidth, align: 'right' })
+  })
+}
+
+// Sección de firma del cliente al final del Recibo de Entrega — resguardo
+// legal de que el cliente recibió el equipo. Va antes del disclaimer legal
+// (que es texto boilerplate, no parte de la interacción con el cliente).
+const addSignatureSection = (doc: PDFKit.PDFDocument, deliveredAt: Date | string | null | undefined) => {
+  doc.moveDown(2)
+  const lineY = doc.y
+  const lineWidth = 220
+  const lineX = doc.page.width / 2 - lineWidth / 2
+  doc.moveTo(lineX, lineY).lineTo(lineX + lineWidth, lineY).stroke()
+  doc.moveDown(0.3)
+  doc.font('Helvetica').fontSize(9).text('Firma del cliente', { align: 'center' })
+  doc.font('Helvetica').fontSize(8).text(formatDate(deliveredAt), { align: 'center' })
+}
+
 export const generateFinalReceipt = (order: OrderForReceipt): PDFKit.PDFDocument => {
   const doc = new PDFDocument({ margin: 50 })
 
   addLetterhead(doc, 'Recibo de Entrega', order.orderNumber)
 
-  addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
+  addRow(doc, 'Cliente', formatFullName(order.client.name, order.client.lastName))
   addRow(doc, 'Técnico asignado', order.technician?.name ?? 'Sin asignar')
   doc.moveDown(0.5)
 
@@ -361,13 +484,15 @@ export const generateFinalReceipt = (order: OrderForReceipt): PDFKit.PDFDocument
   addRow(doc, 'Diagnóstico', order.diagnosis ?? '—')
   doc.moveDown(0.5)
 
-  addCostBreakdown(doc, order, 'Forma de pago final')
+  addPaymentHistory(doc, order)
 
   if (order.deliveryObservations && order.deliveryObservations.trim() !== '') {
-    addObservationsBlock(doc, 'Estado del equipo al entregar', order.deliveryObservations)
+    addObservationsBlock(doc, 'Estado final, pruebas y observaciones', order.deliveryObservations)
   }
 
   addRow(doc, 'Fecha de entrega', formatDate(order.deliveredAt))
+
+  addSignatureSection(doc, order.deliveredAt)
 
   addFooterDisclaimer(doc)
   doc.end()
@@ -385,7 +510,7 @@ export const generatePaymentReceipt = (order: OrderForReceipt): PDFKit.PDFDocume
 
   addLetterhead(doc, 'Recibo de Pago', order.orderNumber)
 
-  addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
+  addRow(doc, 'Cliente', formatFullName(order.client.name, order.client.lastName))
   addRow(doc, 'Técnico asignado', order.technician?.name ?? 'Sin asignar')
   doc.moveDown(0.5)
 
@@ -413,7 +538,7 @@ export const generateClosureReceipt = (order: OrderForReceipt): PDFKit.PDFDocume
 
   addLetterhead(doc, 'Recibo de Cierre', order.orderNumber)
 
-  addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
+  addRow(doc, 'Cliente', formatFullName(order.client.name, order.client.lastName))
   doc.moveDown(0.5)
 
   addRow(doc, 'Falla reportada', order.problem)
@@ -457,9 +582,9 @@ export const generateClosureReceipt = (order: OrderForReceipt): PDFKit.PDFDocume
 export const generateBudgetAdvanceReceipt = (order: OrderForReceipt): PDFKit.PDFDocument => {
   const doc = new PDFDocument({ margin: 50 })
 
-  addLetterhead(doc, 'Recibo de Anticipo de Presupuesto', order.orderNumber)
+  addLetterhead(doc, 'Recibo Pago de Presupuesto', order.orderNumber)
 
-  addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
+  addRow(doc, 'Cliente', formatFullName(order.client.name, order.client.lastName))
   addRow(doc, 'Técnico asignado', order.technician?.name ?? 'Sin asignar')
   doc.moveDown(0.5)
 
@@ -467,8 +592,14 @@ export const generateBudgetAdvanceReceipt = (order: OrderForReceipt): PDFKit.PDF
   addRow(doc, 'Diagnóstico', order.diagnosis ?? '—')
   doc.moveDown(0.5)
 
-  addCostBreakdown(doc, order, 'Forma de pago')
+  addBudgetPaymentTable(doc, order)
 
+  if (order.finalPaymentDetails) {
+    const methodEntries = Object.entries(order.finalPaymentDetails)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(' — ')
+    if (methodEntries) addRow(doc, 'Forma de pago', methodEntries)
+  }
   addRow(doc, 'Anticipo pagado', formatMoney(order.budgetAdvanceAmount))
   addRow(doc, 'Fecha de anticipo', formatDate(order.budgetAdvanceConfirmedAt))
 

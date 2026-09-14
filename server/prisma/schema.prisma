@@ -122,6 +122,7 @@ model Client {
   idNumber  String   @unique
   phone     String
   email     String?
+  contactPerson       String?
   addressState        String?
   addressCity         String?
   addressNeighborhood String?

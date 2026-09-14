@@ -150,6 +150,18 @@ describe('regresión de layout — doc.x tras addTwoColumnRow y drawBoxedBlock',
     }
   })
 
+  it('generateIntakeReceipt: cliente empresa sin apellido no deja un espacio colgante en el nombre', () => {
+    const orderEmpresa = {
+      ...fakeOrder,
+      client: { name: 'Constructora ABC, C.A.', lastName: '', phone: '04120000000' },
+    }
+
+    const calls = captureTextXs(() => generateIntakeReceipt(orderEmpresa as any))
+
+    expect(calls.some((c) => c.text === 'Constructora ABC, C.A.')).toBe(true)
+    expect(calls.some((c) => c.text === 'Constructora ABC, C.A. ')).toBe(false)
+  })
+
   it('generatePaymentReceipt: el contenido después de la caja "Detalle de cobro" arranca en el margen izquierdo, no en contentX de la caja', () => {
     const calls = captureTextXs(() => generatePaymentReceipt(fakeOrder as any))
 
@@ -349,4 +361,153 @@ describe('Orders — GET /:id/receipt/*', () => {
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toBe('application/pdf')
   }, 10000)
+})
+
+describe('addLetterhead — grid corporativo (logo izq, datos del negocio a la derecha)', () => {
+  const MARGIN = 50
+
+  it('el bloque de datos del negocio (dirección, teléfono, RIF) arranca a la derecha del logo, no centrado', () => {
+    // captureTextXs registra doc.x ANTES de que pdfkit procese cada llamada,
+    // así que la primera línea (nombre) no puede probarse así: su x propio
+    // (120) recién queda reflejado en doc.x para la SIGUIENTE llamada. Las
+    // 3 líneas siguientes sí heredan correctamente ese x explícito.
+    const calls = captureTextXs(() => generateIntakeReceipt(fakeOrder as any))
+    const textX = MARGIN + 70
+
+    const direccionCall = calls.find((c) => c.text === 'Av. Urdaneta, Caracas, Venezuela')
+    const telefonoCall = calls.find((c) => c.text === 'Tel: 0424-2440004')
+    const rifCall = calls.find((c) => c.text === 'RIF: J-40587644')
+
+    expect(direccionCall?.x).toBe(textX)
+    expect(telefonoCall?.x).toBe(textX)
+    expect(rifCall?.x).toBe(textX)
+  })
+
+  it('el título y el número de orden siguen arrancando en el margen izquierdo tras el nuevo membrete (doc.x restaurado)', () => {
+    const calls = captureTextXs(() => generateIntakeReceipt(fakeOrder as any))
+
+    const tituloIndex = calls.findIndex((c) => c.text === 'RECIBO DE RECEPCIÓN')
+    expect(tituloIndex).toBeGreaterThan(-1)
+    expect(calls[tituloIndex].x).toBe(MARGIN)
+
+    const ordenIndex = calls.findIndex((c) => c.text === `Orden ${fakeOrder.orderNumber}`)
+    expect(ordenIndex).toBeGreaterThan(-1)
+    expect(calls[ordenIndex].x).toBe(MARGIN)
+  })
+})
+
+describe('addFooterDisclaimer — nota adicional exclusiva del Recibo de Recepción', () => {
+  it('generateIntakeReceipt incluye la nota legal del anticipo en el footer', () => {
+    const calls = captureTextXs(() => generateIntakeReceipt(fakeOrder as any))
+    const texts = calls.map((c) => c.text)
+    expect(texts).toContain(
+      'El monto abonado por diagnóstico/revisión será descontado del costo total del servicio si la reparación es aprobada.'
+    )
+  })
+
+  it('generateFinalReceipt NO incluye la nota del anticipo (es exclusiva de Recepción)', () => {
+    const calls = captureTextXs(() => generateFinalReceipt(fakeOrder as any))
+    const texts = calls.map((c) => c.text)
+    expect(texts).not.toContain(
+      'El monto abonado por diagnóstico/revisión será descontado del costo total del servicio si la reparación es aprobada.'
+    )
+  })
+})
+
+describe('generateBudgetAdvanceReceipt — título estricto y tabla financiera', () => {
+  it('el título es "RECIBO PAGO DE PRESUPUESTO" (ya no "de Anticipo")', () => {
+    const calls = captureTextXs(() => generateBudgetAdvanceReceipt(fakeOrder as any))
+    const texts = calls.map((c) => c.text)
+    expect(texts).toContain('RECIBO PAGO DE PRESUPUESTO')
+    expect(texts).not.toContain('RECIBO DE ANTICIPO DE PRESUPUESTO')
+  })
+
+  it('la tabla muestra Monto Total, Monto Abonado y Saldo Pendiente calculado', () => {
+    // fakeOrder: budget 50, budgetAdvanceAmount 7.5 → saldo 42.5
+    const calls = captureTextXs(() => generateBudgetAdvanceReceipt(fakeOrder as any))
+    const texts = calls.map((c) => c.text)
+
+    expect(texts).toContain('Monto Total: ')
+    expect(texts.some((t) => t.startsWith('$50.00'))).toBe(true)
+    expect(texts).toContain('Monto Abonado: ')
+    expect(texts.some((t) => t.startsWith('$7.50'))).toBe(true)
+    expect(texts).toContain('Saldo Pendiente: $42.50')
+  })
+})
+
+describe('generateFinalReceipt — relabel de observaciones de entrega', () => {
+  it('usa el subtítulo "Estado final, pruebas y observaciones" en vez de "Estado del equipo al entregar"', () => {
+    const calls = captureTextXs(() => generateFinalReceipt(fakeOrder as any))
+    const texts = calls.map((c) => c.text)
+    expect(texts).toContain('Estado final, pruebas y observaciones:')
+    expect(texts).not.toContain('Estado del equipo al entregar:')
+  })
+})
+
+const orderConHistorialDePagos = {
+  ...fakeOrder,
+  advancePaymentSubmissions: [
+    {
+      kind: 'REVISION',
+      amount: 15,
+      paymentDetails: { banco: 'Bancaribe', referencia: '1111' },
+      confirmedAt: new Date('2026-01-01T10:00:00Z'),
+    },
+    {
+      kind: 'BUDGET',
+      amount: 25,
+      paymentDetails: { banco: 'Bancaribe', referencia: '2222' },
+      confirmedAt: new Date('2026-01-05T10:00:00Z'),
+    },
+  ],
+}
+
+describe('generateFinalReceipt — historial de pagos y saldo $0.00', () => {
+  const MARGIN = 50
+
+  it('lista cada abono confirmado (revisión y presupuesto) con monto, método y fecha', () => {
+    const calls = captureTextXs(() => generateFinalReceipt(orderConHistorialDePagos as any))
+    const texts = calls.map((c) => c.text)
+
+    expect(texts).toContain('Anticipo de revisión: ')
+    expect(texts.some((t) => t.includes('$15.00') && t.includes('banco: Bancaribe'))).toBe(true)
+    expect(texts).toContain('Anticipo de presupuesto: ')
+    expect(texts.some((t) => t.includes('$25.00') && t.includes('referencia: 2222'))).toBe(true)
+  })
+
+  it('cierra siempre con "Saldo pendiente: $0.00", sin importar los montos abonados', () => {
+    const calls = captureTextXs(() => generateFinalReceipt(orderConHistorialDePagos as any))
+    const texts = calls.map((c) => c.text)
+    expect(texts).toContain('Saldo pendiente: $0.00')
+  })
+
+  it('no falla cuando no hay advancePaymentSubmissions (orden sin abonos previos registrados)', async () => {
+    const orderSinHistorial = { ...fakeOrder, advancePaymentSubmissions: undefined }
+    const buffer = await collectPdfBuffer(generateFinalReceipt(orderSinHistorial as any))
+    expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
+  })
+
+  it('el contenido después de la caja de historial de pagos arranca en el margen izquierdo', () => {
+    const calls = captureTextXs(() => generateFinalReceipt(orderConHistorialDePagos as any))
+    const fechaIndex = calls.findIndex((c) => c.text === 'Fecha de entrega: ')
+    expect(fechaIndex).toBeGreaterThan(-1)
+    const postBoxCalls = calls.slice(fechaIndex)
+    expect(postBoxCalls.length).toBeGreaterThan(0)
+    for (const call of postBoxCalls) {
+      expect(call.x).toBe(MARGIN)
+    }
+  })
+})
+
+describe('generateFinalReceipt — firma del cliente', () => {
+  it('incluye la línea de firma y la fecha de entrega antes del disclaimer legal', () => {
+    const calls = captureTextXs(() => generateFinalReceipt(fakeOrder as any))
+    const texts = calls.map((c) => c.text)
+
+    const firmaIndex = texts.indexOf('Firma del cliente')
+    const disclaimerIndex = texts.indexOf('Este documento es un recibo interno de pago — no constituye factura fiscal.')
+    expect(firmaIndex).toBeGreaterThan(-1)
+    expect(disclaimerIndex).toBeGreaterThan(-1)
+    expect(firmaIndex).toBeLessThan(disclaimerIndex)
+  })
 })

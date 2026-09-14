@@ -5,6 +5,7 @@ import { useAuthStore } from '../../store/auth.store'
 import { useToastStore } from '../../store/toast.store'
 import { POLL_INTERVAL_MS } from '../../config/constants'
 import { getStatusBadge, badgeClassName } from '../../utils/statusBadge'
+import { formatFullName } from '../../utils/formatName'
 
 type OrderStatus =
   | 'PENDING_PAYMENT'
@@ -475,7 +476,7 @@ export default function TechnicianDashboard() {
                   onClick={() => toggleExpand(order.id)}
                 >
                   <div className="accordion-card-header__summary">
-                    <strong>{order.orderNumber}</strong> — {order.client.name} {order.client.lastName}
+                    <strong>{order.orderNumber}</strong> — {formatFullName(order.client.name, order.client.lastName)}
                     {isNew && <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>}
                     <br />
                     {order.device.brand} {order.device.model} ·{' '}
@@ -497,7 +498,7 @@ export default function TechnicianDashboard() {
 
                     {/* ── Top View: lo esencial de la orden, sin scroll ── */}
                     <div className="card" style={{ marginBottom: 12 }}>
-                      <p><strong>Cliente:</strong> {order.client.name} {order.client.lastName}{' '}
+                      <p><strong>Cliente:</strong> {formatFullName(order.client.name, order.client.lastName)}{' '}
                         &nbsp;·&nbsp; <strong>Equipo:</strong> {order.device.brand} {order.device.model} · Serial: {order.device.serialNumber ?? '—'}</p>
                       <p><strong>Falla reportada:</strong> {order.problem}</p>
                       <p><strong>Estado de recepción:</strong> Accesorios: {order.device.accessories || '—'} · Observaciones: {order.observations || '—'}</p>
@@ -873,7 +874,7 @@ export default function TechnicianDashboard() {
                   <tr key={order.id}>
                     <td data-label="Fecha">{formatDate(order.finalPaymentConfirmedAt ?? order.deliveredAt ?? '')}</td>
                     <td data-label="Cliente/Equipo">
-                      {order.client.name} {order.client.lastName} — {order.device.brand} {order.device.model}
+                      {formatFullName(order.client.name, order.client.lastName)} — {order.device.brand} {order.device.model}
                     </td>
                     <td data-label="Trabajo realizado">{order.diagnosis || '—'}</td>
                     <td data-label="Repuestos usados">

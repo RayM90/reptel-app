@@ -4,8 +4,9 @@ import { api } from '../../services/api'
 import { useToastStore } from '../../store/toast.store'
 import { useAuthStore } from '../../store/auth.store'
 import PhoneInput from '../../components/PhoneInput'
-import IdNumberInput from '../../components/IdNumberInput'
+import IdNumberInput, { isCompanyIdPrefix } from '../../components/IdNumberInput'
 import SelectWithOther from '../../components/SelectWithOther'
+import { formatFullName } from '../../utils/formatName'
 import { DEVICE_BRANDS, BRAND_MODELS, DEVICE_COLORS, VENEZUELAN_BANKS } from '../../constants/venezuela'
 
 interface Client {
@@ -15,6 +16,7 @@ interface Client {
   idNumber: string
   phone: string
   email: string | null
+  contactPerson: string | null
   addressState: string | null
   addressCity: string | null
   addressNeighborhood: string | null
@@ -46,6 +48,7 @@ const emptyForm = {
   lastName: '',
   phone: '',
   email: '',
+  contactPerson: '',
   addressState: '',
   addressCity: '',
   addressNeighborhood: '',
@@ -68,7 +71,16 @@ export default function Registro() {
   const [form, setForm] = useState(emptyForm)
   const [savingClient, setSavingClient] = useState(false)
   const [clientError, setClientError] = useState('')
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const [submitAttempted, setSubmitAttempted] = useState(false)
   const [activeClient, setActiveClient] = useState<Client | null>(null)
+  const isCompany = isCompanyIdPrefix(idNumber)
+  const idDigits = idNumber.includes('-') ? idNumber.split('-')[1] ?? '' : ''
+  const idDigitsIncomplete = idDigits.length > 0 && idDigits.length < 7
+  const canSearch = idDigits.length >= 7 && idDigits.length <= 9
+  const nameError = !form.name.trim() ? (isCompany ? 'La razón social es requerida' : 'El nombre es requerido') : ''
+  const lastNameError = !isCompany && !form.lastName.trim() ? 'El apellido es requerido' : ''
+  const phoneError = !form.phone ? 'El teléfono es requerido' : ''
 
   // ── Paso 2: orden de servicio técnico ──
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
@@ -109,6 +121,8 @@ export default function Registro() {
     setForm(emptyForm)
     setClientError('')
     setActiveClient(null)
+    setTouched({})
+    setSubmitAttempted(false)
     setOrderForm(emptyOrderForm)
     setOrderError('')
     setNoAccessories(false)
@@ -119,6 +133,14 @@ export default function Registro() {
     setPaymentAmount('15')
     setPendingAbono(null)
     setAbonoAmount('')
+  }
+
+  const clientRequiredFieldsError = (): string | null => {
+    const missingName = !form.name.trim()
+    const missingLastName = !isCompany && !form.lastName.trim()
+    const missingPhone = !form.phone
+    if (!missingName && !missingLastName && !missingPhone) return null
+    return isCompany ? 'Razón social y teléfono son requeridos' : 'Nombre, apellido y teléfono son requeridos'
   }
 
   const handleSearch = async () => {
@@ -135,6 +157,7 @@ export default function Registro() {
         lastName: client.lastName,
         phone: client.phone,
         email: client.email || '',
+        contactPerson: client.contactPerson || '',
         addressState: client.addressState || '',
         addressCity: client.addressCity || '',
         addressNeighborhood: client.addressNeighborhood || '',
@@ -156,13 +179,15 @@ export default function Registro() {
   }
 
   const handleContinue = async () => {
+    setSubmitAttempted(true)
     if (clientExists) {
       if (!isEditingClient) {
         setStep('sale')
         return
       }
-      if (!form.name || !form.lastName || !form.phone) {
-        setClientError('Nombre, apellido y teléfono son requeridos')
+      const requiredError = clientRequiredFieldsError()
+      if (requiredError) {
+        setClientError(requiredError)
         return
       }
       setSavingClient(true)
@@ -180,8 +205,9 @@ export default function Registro() {
       return
     }
 
-    if (!form.name || !form.lastName || !form.phone) {
-      setClientError('Nombre, apellido y teléfono son requeridos')
+    const requiredError = clientRequiredFieldsError()
+    if (requiredError) {
+      setClientError(requiredError)
       return
     }
 
@@ -260,7 +286,7 @@ export default function Registro() {
         showToast(`✅ Orden ${response.data.data.orderNumber} creada — abono de $${amountNumber} registrado, falta $${remaining.toFixed(2)}`, 'success')
       } else {
         setPendingAbono(null)
-        showToast(`✅ Orden ${response.data.data.orderNumber} creada para ${activeClient.name} ${activeClient.lastName} — técnico asignado: ${technicianName}`, 'success')
+        showToast(`✅ Orden ${response.data.data.orderNumber} creada para ${formatFullName(activeClient.name, activeClient.lastName)} — técnico asignado: ${technicianName}`, 'success')
       }
       setOrderForm(emptyOrderForm)
       setNoAccessories(false)
@@ -327,6 +353,7 @@ export default function Registro() {
       </div>
       {role === 'ADMIN' && <p><Link to="/admin">← Volver al Panel de Administrador</Link></p>}
       {role === 'TECHNICIAN' && <p><Link to="/technician">🔧 Ver reparaciones asignadas</Link></p>}
+      <p className="form-hint">{step === 'client' ? 'Paso 1 de 2 · Datos del cliente' : 'Paso 2 de 2 · Orden de servicio'}</p>
 
       {step === 'client' && (
         <div className="card" style={{ maxWidth: 480 }}>
@@ -339,18 +366,21 @@ export default function Registro() {
                   setIdNumber(v)
                   setSearched(false)
                   setClientExists(null)
-    setIsEditingClient(false)
+                  setIsEditingClient(false)
+                  const willBeCompany = isCompanyIdPrefix(v)
+                  setForm((prev) => (willBeCompany ? { ...prev, lastName: '' } : { ...prev, contactPerson: '' }))
                 }}
               />
-              <button className="btn btn-secondary" onClick={handleSearch} disabled={searching || !idNumber.trim()}>
+              <button className="btn btn-secondary" onClick={handleSearch} disabled={searching || !canSearch}>
                 {searching ? 'Buscando…' : 'Buscar'}
               </button>
             </div>
+            {idDigitsIncomplete && <p className="form-hint">Faltan {7 - idDigits.length} dígitos</p>}
           </div>
 
           {searched && clientExists && (
             <p className="alert-success">
-              Cliente encontrado: {form.name} {form.lastName}{' '}
+              Cliente encontrado: {formatFullName(form.name, form.lastName)}{' '}
               {!isEditingClient && (
                 <button className="btn btn-outline" onClick={() => setIsEditingClient(true)}>
                   Editar
@@ -365,27 +395,46 @@ export default function Registro() {
           {searched && (
             <>
               <div className="form-group">
-                <label>Nombre</label>
+                <label>{isCompany ? 'Razón social o nombre de la empresa' : 'Nombre'}</label>
                 <input type="text" value={form.name} disabled={!!clientExists && !isEditingClient}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  placeholder={isCompany ? 'Ej: Constructora ABC, C.A.' : 'Ej: María'}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onBlur={() => setTouched((t) => ({ ...t, name: true }))} />
+                {(touched.name || submitAttempted) && nameError && <p className="field-error">{nameError}</p>}
               </div>
-              <div className="form-group">
-                <label>Apellido</label>
-                <input type="text" value={form.lastName} disabled={!!clientExists && !isEditingClient}
-                  onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+              <div className={`field-collapse${isCompany ? ' field-collapse--closed' : ''}`}>
+                <div className="form-group">
+                  <label>Apellido</label>
+                  <input type="text" value={form.lastName} disabled={!!clientExists && !isEditingClient}
+                    onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                    onBlur={() => setTouched((t) => ({ ...t, lastName: true }))} />
+                  {(touched.lastName || submitAttempted) && lastNameError && <p className="field-error">{lastNameError}</p>}
+                </div>
+              </div>
+              <div className={`field-collapse${isCompany ? '' : ' field-collapse--closed'}`}>
+                <div className="form-group">
+                  <label>Persona de contacto (opcional)</label>
+                  <input type="text" value={form.contactPerson} disabled={!!clientExists && !isEditingClient}
+                    placeholder="Quién entrega/retira el equipo"
+                    onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} />
+                </div>
               </div>
               <div className="form-group">
                 <label>Teléfono</label>
                 {clientExists && !isEditingClient ? (
                   <input type="text" value={form.phone} disabled />
                 ) : (
-                  <PhoneInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} required />
+                  <PhoneInput value={form.phone} onChange={(v) => { setForm({ ...form, phone: v }); setTouched((t) => ({ ...t, phone: true })) }} required />
                 )}
+                {(touched.phone || submitAttempted) && phoneError && <p className="field-error">{phoneError}</p>}
               </div>
               <div className="form-group">
                 <label>Correo (opcional)</label>
                 <input type="email" value={form.email} disabled={!!clientExists && !isEditingClient}
                   onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div style={{ marginTop: 20, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
+                <span className="card-eyebrow">Dirección (opcional)</span>
               </div>
               <div className="form-group">
                 <label>Estado</label>
@@ -430,11 +479,14 @@ export default function Registro() {
       )}
 
       {step === 'sale' && activeClient && (
+        <>
         <div className="card" style={{ maxWidth: 600 }}>
-          <p><strong>Cliente:</strong> {activeClient.name} {activeClient.lastName} — {activeClient.phone}</p>
+          <p><strong>Cliente:</strong> {formatFullName(activeClient.name, activeClient.lastName)} — {activeClient.phone}</p>
           <p><button className="btn btn-outline" onClick={resetAll}>← Buscar otro cliente</button></p>
+        </div>
 
-          <h2>Orden de servicio técnico</h2>
+        <div className="card" style={{ maxWidth: 600 }}>
+          <h3>Información del equipo</h3>
           <div className="form-group">
             <label>Tipo de equipo</label>
             <select value={orderForm.deviceType} onChange={(e) => setOrderForm({ ...orderForm, deviceType: e.target.value })}>
@@ -526,6 +578,10 @@ export default function Registro() {
               placeholder="Ej: rayón en la tapa, sin batería..."
             />
           </div>
+        </div>
+
+        <div className="card" style={{ maxWidth: 600 }}>
+          <h3>Detalles del servicio</h3>
           <div className="form-group">
             <label>Servicio del catálogo (opcional, solo referencia)</label>
             <select value={orderForm.serviceCatalogId} onChange={(e) => setOrderForm({ ...orderForm, serviceCatalogId: e.target.value })}>
@@ -539,6 +595,10 @@ export default function Registro() {
             <label>Descripción del problema</label>
             <textarea spellCheck value={orderForm.problem} onChange={(e) => setOrderForm({ ...orderForm, problem: e.target.value })} />
           </div>
+        </div>
+
+        <div className="card" style={{ maxWidth: 600 }}>
+          <h3>Pago de la revisión</h3>
           <div className="form-group">
             <label>Método de pago de la revisión ($15)</label>
             <select value={orderForm.advancePaymentMethod} onChange={(e) => setOrderForm({ ...orderForm, advancePaymentMethod: e.target.value })}>
@@ -548,7 +608,7 @@ export default function Registro() {
             </select>
           </div>
 
-          <h3>Confirmar datos del pago (verificado en persona)</h3>
+          <h4>Confirmar datos del pago (verificado en persona)</h4>
           <p className="form-hint">
             Concepto: <strong>Revisión del equipo — $15.00</strong> (el catálogo elegido arriba es solo
             referencia del diagnóstico, no cambia este monto)
@@ -619,6 +679,7 @@ export default function Registro() {
           <button className="btn btn-primary" onClick={handleCreateOrder} disabled={creatingOrder || !!pendingAbono}>
             {creatingOrder ? 'Creando…' : 'Registrar orden'}
           </button>
+        </div>
 
           {pendingAbono && (
             <div className="card" style={{ marginTop: 16 }}>
@@ -677,7 +738,7 @@ export default function Registro() {
               Finalizar — buscar otro cliente
             </button>
           </p>
-        </div>
+        </>
       )}
     </div>
   )

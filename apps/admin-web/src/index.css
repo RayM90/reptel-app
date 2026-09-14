@@ -739,6 +739,29 @@ details.card[open] summary::before {
   margin: 0;
 }
 
+/* ─── Colapso animado de campos condicionales (Registro — empresa vs. persona natural) ─── */
+
+.field-collapse {
+  max-height: 100px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
+}
+
+.field-collapse--closed {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ─── Error inline por campo (Registro — validación en tiempo real) ─── */
+
+.field-error {
+  font-size: 12px;
+  color: var(--color-danger);
+  margin-top: 4px;
+}
+
 .btn-link {
   background: none;
   border: none;
