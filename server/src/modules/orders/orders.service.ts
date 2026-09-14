@@ -1533,6 +1533,10 @@ export const getOrdersByTechnician = async (technicianId: string) => {
       device: true,
       serviceCatalog: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
+      inventoryMovements: {
+        where: { reversedAt: null },
+        include: { product: true },
+      },
     },
     orderBy: { receivedAt: 'desc' },
   })

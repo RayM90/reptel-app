@@ -38,6 +38,13 @@ export default function Login() {
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
+  // Estado de "¿Olvidaste tu contraseña?" — sin flujo de Cognito propio,
+  // solo deja constancia para que un Admin resuelva a mano (sin SES configurado).
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotMessage, setForgotMessage] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -76,6 +83,20 @@ export default function Login() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setForgotLoading(true)
+    setForgotMessage('')
+    try {
+      const response = await api.post('/api/auth/request-password-reset', { email: forgotEmail })
+      setForgotMessage(response.data.message)
+    } catch {
+      setForgotMessage('No se pudo procesar la solicitud. Intenta de nuevo más tarde.')
+    } finally {
+      setForgotLoading(false)
     }
   }
 
@@ -123,6 +144,49 @@ export default function Login() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (showForgotPassword) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <img src="/logo-reptel.png" alt="RepTel" className="login-logo" />
+          <h1 className="login-title">Restablecer contraseña</h1>
+          <p className="login-subtitle">Escribe tu email — un administrador te contactará para asignarte una contraseña temporal</p>
+          {forgotMessage ? (
+            <p className="alert-success">{forgotMessage}</p>
+          ) : (
+            <form onSubmit={handleForgotPasswordSubmit}>
+              <div className="form-group">
+                <label>Email</label>
+                <input
+                  type="email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <button type="submit" className="btn btn-primary" disabled={forgotLoading} style={{ width: '100%' }}>
+                {forgotLoading ? 'Enviando…' : 'Solicitar restablecimiento'}
+              </button>
+            </form>
+          )}
+          <p style={{ marginTop: 16, textAlign: 'center' }}>
+            <button
+              type="button"
+              className="btn-link"
+              onClick={() => {
+                setShowForgotPassword(false)
+                setForgotEmail('')
+                setForgotMessage('')
+              }}
+            >
+              ← Volver al inicio de sesión
+            </button>
+          </p>
+        </div>
+      </div>
+    )
   }
 
   if (requiresNewPassword) {
@@ -220,6 +284,11 @@ export default function Login() {
             {loading ? 'Ingresando…' : 'Ingresar'}
           </button>
         </form>
+        <p style={{ marginTop: 16, textAlign: 'center' }}>
+          <button type="button" className="btn-link" onClick={() => setShowForgotPassword(true)}>
+            ¿Olvidaste tu contraseña?
+          </button>
+        </p>
       </div>
     </div>
   )
