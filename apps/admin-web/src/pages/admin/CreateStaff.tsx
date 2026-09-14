@@ -1,9 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 import PhoneInput from '../../components/PhoneInput'
 
 type StaffRole = 'TECHNICIAN_DELIVERY' | 'TECHNICIAN'
+
+interface ResetRequest {
+  id: string
+  email: string
+  createdAt: string
+}
 
 export default function CreateStaff() {
   const [email, setEmail] = useState('')
@@ -16,6 +22,45 @@ export default function CreateStaff() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  const [resetRequests, setResetRequests] = useState<ResetRequest[]>([])
+  const [resetPasswordText, setResetPasswordText] = useState<Record<string, string>>({})
+  const [resetResultByRequest, setResetResultByRequest] = useState<Record<string, string>>({})
+  const [resetLoadingId, setResetLoadingId] = useState<string | null>(null)
+
+  const fetchResetRequests = async () => {
+    try {
+      const res = await api.get('/api/auth/password-reset-requests')
+      setResetRequests(res.data.data)
+    } catch {
+      // silencioso — no bloquea el resto de la página
+    }
+  }
+
+  useEffect(() => {
+    fetchResetRequests()
+  }, [])
+
+  const handleResolveReset = async (requestId: string) => {
+    const newPassword = resetPasswordText[requestId] || ''
+    if (newPassword.length < 8) return
+    setResetLoadingId(requestId)
+    try {
+      await api.post(`/api/auth/password-reset-requests/${requestId}/resolve`, { newPassword })
+      setResetResultByRequest((prev) => ({
+        ...prev,
+        [requestId]: `Contraseña temporal establecida: ${newPassword} — entrégasela al empleado.`,
+      }))
+      fetchResetRequests()
+    } catch (err: any) {
+      setResetResultByRequest((prev) => ({
+        ...prev,
+        [requestId]: err?.response?.data?.message || 'Error al resolver la solicitud',
+      }))
+    } finally {
+      setResetLoadingId(null)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -117,6 +162,41 @@ export default function CreateStaff() {
             {loading ? 'Creando…' : 'Crear empleado'}
           </button>
         </form>
+      </div>
+
+      <div className="card" style={{ maxWidth: 500, marginTop: 32 }}>
+        <h2>Solicitudes de restablecimiento</h2>
+        {resetRequests.length === 0 ? (
+          <p>No hay solicitudes pendientes</p>
+        ) : (
+          resetRequests.map((r) => (
+            <div key={r.id} style={{ borderTop: '1px solid var(--color-border)', paddingTop: 12, marginTop: 12 }}>
+              <p><strong>{r.email}</strong> — {new Date(r.createdAt).toLocaleString('es-VE')}</p>
+              {resetResultByRequest[r.id] ? (
+                <p className="alert-success">{resetResultByRequest[r.id]}</p>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 160 }}>
+                    <input
+                      type="text"
+                      placeholder="Contraseña temporal (mín. 8 caracteres)"
+                      value={resetPasswordText[r.id] || ''}
+                      onChange={(e) => setResetPasswordText((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                      minLength={8}
+                    />
+                  </div>
+                  <button
+                    className="btn btn-secondary"
+                    disabled={resetLoadingId === r.id || (resetPasswordText[r.id] || '').length < 8}
+                    onClick={() => handleResolveReset(r.id)}
+                  >
+                    Generar contraseña temporal
+                  </button>
+                </div>
+              )}
+            </div>
+          ))
+        )}
       </div>
     </div>
   )
