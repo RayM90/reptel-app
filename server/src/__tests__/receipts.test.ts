@@ -150,6 +150,18 @@ describe('regresión de layout — doc.x tras addTwoColumnRow y drawBoxedBlock',
     }
   })
 
+  it('generateIntakeReceipt: cliente empresa sin apellido no deja un espacio colgante en el nombre', () => {
+    const orderEmpresa = {
+      ...fakeOrder,
+      client: { name: 'Constructora ABC, C.A.', lastName: '', phone: '04120000000' },
+    }
+
+    const calls = captureTextXs(() => generateIntakeReceipt(orderEmpresa as any))
+
+    expect(calls.some((c) => c.text === 'Constructora ABC, C.A.')).toBe(true)
+    expect(calls.some((c) => c.text === 'Constructora ABC, C.A. ')).toBe(false)
+  })
+
   it('generatePaymentReceipt: el contenido después de la caja "Detalle de cobro" arranca en el margen izquierdo, no en contentX de la caja', () => {
     const calls = captureTextXs(() => generatePaymentReceipt(fakeOrder as any))
 

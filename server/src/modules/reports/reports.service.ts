@@ -1,4 +1,5 @@
 import prisma from '../../lib/prisma'
+import { formatFullName } from '../../lib/format'
 
 interface ReportFilters {
   from: Date
@@ -52,7 +53,7 @@ export const getReportSummary = async ({ from, to, technicianId, clientId }: Rep
   for (const o of orders) {
     const entry = servicioByClientMap.get(o.client.id) ?? {
       clientId: o.client.id,
-      clientName: `${o.client.name} ${o.client.lastName}`,
+      clientName: formatFullName(o.client.name, o.client.lastName),
       ordersCount: 0,
       totalBudget: 0,
     }
@@ -70,7 +71,7 @@ export const getReportSummary = async ({ from, to, technicianId, clientId }: Rep
     orders: orders.map((o) => ({
       orderId: o.id,
       orderNumber: o.orderNumber,
-      clientName: `${o.client.name} ${o.client.lastName}`,
+      clientName: formatFullName(o.client.name, o.client.lastName),
       technicianName: o.technician?.name ?? 'Sin asignar',
       deliveredAt: o.deliveredAt,
       budget: Number(o.budget ?? 0),
