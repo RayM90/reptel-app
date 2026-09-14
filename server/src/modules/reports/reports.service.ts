@@ -1,4 +1,5 @@
 import prisma from '../../lib/prisma'
+import * as clientsService from '../clients/clients.service'
 
 interface ReportFilters {
   from: Date
@@ -156,4 +157,94 @@ export const getAuditReport = async ({ from, to, status, channel, technicianId, 
       quantity: m.quantity,
     })),
   }))
+}
+
+const ACTIVE_ORDER_STATUSES = new Set([
+  'PENDING_PAYMENT', 'RECEIVED', 'DIAGNOSING', 'WAITING_APPROVAL',
+  'APPROVED', 'REPAIRING', 'WAITING_PART', 'READY', 'PAID_PENDING_DELIVERY',
+])
+
+const orderTotalAmount = (o: { budget: unknown; revisionAmount: unknown; deliveryAmount: unknown }) =>
+  o.budget != null
+    ? Number(o.budget)
+    : Number(o.revisionAmount ?? 0) + Number(o.deliveryAmount ?? 0)
+
+// Expediente de cliente por cédula/RIF. Reusa clientsService.getClientByIdNumber
+// (ya trae client.orders con device + statusHistory) en vez de duplicar la
+// consulta. "Casos de garantía" es una aproximación (Finding de diseño
+// 2026-09-14, sin modelo dedicado): 2ª orden sobre el mismo deviceId cuyo
+// receivedAt cae dentro de 30 días desde el deliveredAt de una orden previa
+// DELIVERED del mismo equipo.
+export const getClientHistoryReport = async (idNumber: string) => {
+  const client = await clientsService.getClientByIdNumber(idNumber)
+  if (!client) return null
+
+  const totalPaid = client.orders
+    .filter((o) => o.status === 'DELIVERED')
+    .reduce((sum, o) => sum + orderTotalAmount(o), 0)
+
+  const devicesIngresados = new Set(client.orders.map((o) => o.deviceId)).size
+
+  const activeOrders = client.orders
+    .filter((o) => ACTIVE_ORDER_STATUSES.has(o.status))
+    .map((o) => ({ orderId: o.id, orderNumber: o.orderNumber, status: o.status, deviceId: o.deviceId }))
+
+  const WARRANTY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
+  const byDevice = new Map<string, typeof client.orders>()
+  for (const o of client.orders) {
+    const list = byDevice.get(o.deviceId) ?? []
+    list.push(o)
+    byDevice.set(o.deviceId, list)
+  }
+  const possibleWarrantyCases: { orderId: string; orderNumber: string }[] = []
+  for (const list of byDevice.values()) {
+    const sorted = [...list].sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime())
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1]
+      const curr = sorted[i]
+      if (
+        prev.status === 'DELIVERED' &&
+        prev.deliveredAt &&
+        curr.receivedAt.getTime() - prev.deliveredAt.getTime() <= WARRANTY_WINDOW_MS
+      ) {
+        possibleWarrantyCases.push({ orderId: curr.id, orderNumber: curr.orderNumber })
+      }
+    }
+  }
+
+  return {
+    client: {
+      id: client.id,
+      name: client.name,
+      lastName: client.lastName,
+      idNumber: client.idNumber,
+      phone: client.phone,
+      email: client.email,
+    },
+    devicesIngresados,
+    totalPaid,
+    activeOrders,
+    possibleWarrantyCases,
+    history: client.orders.map((o) => ({
+      orderId: o.id,
+      orderNumber: o.orderNumber,
+      receivedAt: o.receivedAt,
+      deliveredAt: o.deliveredAt,
+      status: o.status,
+      deviceLabel: `${o.device.brand} ${o.device.model}`,
+      totalAmount: orderTotalAmount(o),
+    })),
+  }
+}
+
+// A diferencia de orders.service.getAvailableTechnicians (que filtra
+// isActive/technicianStatus para asignación operativa), este endpoint es
+// para reportes históricos: un técnico inactivo o de baja sigue teniendo
+// órdenes pasadas que buscar.
+export const getReportTechnicians = async () => {
+  return await prisma.user.findMany({
+    where: { role: { in: ['TECHNICIAN_DELIVERY', 'TECHNICIAN'] } },
+    select: { id: true, name: true, idNumber: true },
+    orderBy: { name: 'asc' },
+  })
 }
