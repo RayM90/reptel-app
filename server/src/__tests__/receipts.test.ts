@@ -498,3 +498,16 @@ describe('generateFinalReceipt — historial de pagos y saldo $0.00', () => {
     }
   })
 })
+
+describe('generateFinalReceipt — firma del cliente', () => {
+  it('incluye la línea de firma y la fecha de entrega antes del disclaimer legal', () => {
+    const calls = captureTextXs(() => generateFinalReceipt(fakeOrder as any))
+    const texts = calls.map((c) => c.text)
+
+    const firmaIndex = texts.indexOf('Firma del cliente')
+    const disclaimerIndex = texts.indexOf('Este documento es un recibo interno de pago — no constituye factura fiscal.')
+    expect(firmaIndex).toBeGreaterThan(-1)
+    expect(disclaimerIndex).toBeGreaterThan(-1)
+    expect(firmaIndex).toBeLessThan(disclaimerIndex)
+  })
+})
