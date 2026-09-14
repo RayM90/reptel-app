@@ -5,6 +5,7 @@ import { useConfirmDialogStore } from '../store/confirmDialog.store'
 import PhoneInput from './PhoneInput'
 import SelectWithOther from './SelectWithOther'
 import { VENEZUELAN_BANKS } from '../constants/venezuela'
+import { formatFullName } from '../utils/formatName'
 
 function PaymentDetailsView({ details }: { details: Record<string, string> | null }) {
   if (!details) return <span>—</span>
@@ -480,7 +481,7 @@ export default function OrderDetailModal({
 
         <div className="card">
           <h4>Cliente</h4>
-          <p><strong>Nombre:</strong> {order.client.name} {order.client.lastName}</p>
+          <p><strong>Nombre:</strong> {formatFullName(order.client.name, order.client.lastName)}</p>
           <p><strong>Cédula:</strong> {order.client.idNumber}</p>
           <p><strong>Teléfono:</strong> {order.client.phone}</p>
           {order.client.email && <p><strong>Email:</strong> {order.client.email}</p>}

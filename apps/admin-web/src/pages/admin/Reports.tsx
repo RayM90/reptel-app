@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
+import { formatFullName } from '../../utils/formatName'
 
 interface TechnicianRow {
   technicianId: string
@@ -107,7 +108,7 @@ export default function Reports() {
 
   const selectClient = (client: ClientSearchResult) => {
     setClientId(client.id)
-    setSelectedClientName(`${client.name} ${client.lastName}`)
+    setSelectedClientName(formatFullName(client.name, client.lastName))
     setClientQuery('')
     setClientResults([])
   }
@@ -249,7 +250,7 @@ export default function Reports() {
                   <ul className="autocomplete-list">
                     {clientResults.map((c) => (
                       <li key={c.id} onClick={() => selectClient(c)}>
-                        {c.name} {c.lastName}
+                        {formatFullName(c.name, c.lastName)}
                       </li>
                     ))}
                   </ul>

@@ -6,6 +6,7 @@ import { useToastStore } from '../../store/toast.store'
 import { useConfirm } from '../../hooks/useConfirm'
 import { POLL_INTERVAL_MS } from '../../config/constants'
 import { getStatusBadge, badgeClassName, hasPendingPayment, isQueuedForTechnician } from '../../utils/statusBadge'
+import { formatFullName } from '../../utils/formatName'
 import OrderDetailModal from '../../components/OrderDetailModal'
 import { isIntakePendingPickup, type Order } from './dashboard.types'
 
@@ -163,7 +164,7 @@ export default function Dashboard() {
     if (pendingIds.has(order.id)) return
     const confirmed = await confirmDialog({
       title: 'Aprobar pago final',
-      message: `Orden ${order.orderNumber} — ${order.client.name} ${order.client.lastName}. Calcula y fija la comisión del técnico. Esta acción no se puede deshacer.`,
+      message: `Orden ${order.orderNumber} — ${formatFullName(order.client.name, order.client.lastName)}. Calcula y fija la comisión del técnico. Esta acción no se puede deshacer.`,
       confirmLabel: 'Aprobar',
       amount: order.finalPaymentDetails?.monto ? Number(order.finalPaymentDetails.monto) : undefined,
     })
@@ -212,7 +213,7 @@ export default function Dashboard() {
     if (pendingIds.has(order.id)) return
     const confirmed = await confirmDialog({
       title: 'Marcar como entregada',
-      message: `Orden ${order.orderNumber} — ${order.client.name} ${order.client.lastName}. Presupuesto $0, no hay saldo que cobrar. Se calculará la comisión del técnico (delivery + 40% de la revisión). Esta acción no se puede deshacer.`,
+      message: `Orden ${order.orderNumber} — ${formatFullName(order.client.name, order.client.lastName)}. Presupuesto $0, no hay saldo que cobrar. Se calculará la comisión del técnico (delivery + 40% de la revisión). Esta acción no se puede deshacer.`,
       confirmLabel: 'Marcar como entregada',
     })
     if (!confirmed) return
@@ -234,7 +235,7 @@ export default function Dashboard() {
     if (pendingIds.has(order.id)) return
     const confirmed = await confirmDialog({
       title: 'Marcar como entregado',
-      message: `Orden ${order.orderNumber} — ${order.client.name} ${order.client.lastName}. Confirma que el cliente ya recibió el equipo reparado.`,
+      message: `Orden ${order.orderNumber} — ${formatFullName(order.client.name, order.client.lastName)}. Confirma que el cliente ya recibió el equipo reparado.`,
       confirmLabel: 'Marcar como entregado',
     })
     if (!confirmed) return
@@ -255,7 +256,7 @@ export default function Dashboard() {
     if (pendingIds.has(order.id)) return
     const confirmed = await confirmDialog({
       title: 'Marcar como entregado sin reparar',
-      message: `Orden ${order.orderNumber} — ${order.client.name} ${order.client.lastName}. Confirma que el cliente retiró su equipo sin reparar.`,
+      message: `Orden ${order.orderNumber} — ${formatFullName(order.client.name, order.client.lastName)}. Confirma que el cliente retiró su equipo sin reparar.`,
       confirmLabel: 'Marcar como entregado',
     })
     if (!confirmed) return
@@ -398,7 +399,7 @@ export default function Dashboard() {
                       )}
                     </td>
                     <td data-label="Origen">{order.deliveryAmount != null ? '📱 App' : '🏢 Recepción'}</td>
-                    <td data-label="Cliente">{order.client.name} {order.client.lastName}</td>
+                    <td data-label="Cliente">{formatFullName(order.client.name, order.client.lastName)}</td>
                     <td data-label="Técnico">
                       {order.technician?.name || 'Sin asignar'}
                       {isQueuedForTechnician(order) && (

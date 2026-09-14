@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/auth.store'
 import { useToastStore } from '../../store/toast.store'
 import { POLL_INTERVAL_MS } from '../../config/constants'
 import { getStatusBadge, badgeClassName } from '../../utils/statusBadge'
+import { formatFullName } from '../../utils/formatName'
 
 type OrderStatus =
   | 'PENDING_PAYMENT'
@@ -470,7 +471,7 @@ export default function TechnicianDashboard() {
                   onClick={() => toggleExpand(order.id)}
                 >
                   <div className="accordion-card-header__summary">
-                    <strong>{order.orderNumber}</strong> — {order.client.name} {order.client.lastName}
+                    <strong>{order.orderNumber}</strong> — {formatFullName(order.client.name, order.client.lastName)}
                     {isNew && <span className="badge" style={NEW_BADGE_STYLE} role="img" aria-label="Orden nueva, no revisada todavía">🆕 Nuevo</span>}
                     <br />
                     {order.device.brand} {order.device.model} ·{' '}
@@ -807,7 +808,7 @@ export default function TechnicianDashboard() {
         ) : (
           completedOrders.map((order) => (
             <div key={order.id} className="history-row">
-              <strong>{order.orderNumber}</strong> — {order.client.name} {order.client.lastName}{' '}
+              <strong>{order.orderNumber}</strong> — {formatFullName(order.client.name, order.client.lastName)}{' '}
               — {order.device.brand} {order.device.model}
               {order.technicianCommission != null && (
                 <span className="history-amount"> · Comisión: ${order.technicianCommission}</span>
