@@ -42,6 +42,7 @@ export const createClient = async (data: {
   idNumber: string
   phone: string
   email?: string
+  contactPerson?: string
   addressState?: string
   addressCity?: string
   addressNeighborhood?: string
@@ -58,6 +59,7 @@ export const updateClient = async (
     lastName?: string
     phone?: string
     email?: string
+    contactPerson?: string
     addressState?: string
     addressCity?: string
     addressNeighborhood?: string
