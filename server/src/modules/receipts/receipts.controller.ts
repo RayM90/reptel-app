@@ -172,7 +172,7 @@ export const downloadBudgetAdvanceReceipt = async (req: AuthRequest, res: Respon
     const budgetAdvanceConfirmedAt = mostRecentBudgetSubmission?.confirmedAt ?? null
 
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `attachment; filename="recibo-anticipo-presupuesto-${order.orderNumber}.pdf"`)
+    res.setHeader('Content-Disposition', `attachment; filename="recibo-pago-presupuesto-${order.orderNumber}.pdf"`)
     const doc = generateBudgetAdvanceReceipt({
       ...order,
       budgetAdvanceConfirmedAt,
