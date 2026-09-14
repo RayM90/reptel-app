@@ -115,18 +115,32 @@ const addObservationsBlock = (doc: PDFKit.PDFDocument, subtitle: string, text: s
 // teléfono y RIF centrados, una línea horizontal, y debajo el título del
 // recibo (mayúsculas) + número de orden. Reemplaza a la vieja addHeader.
 const addLetterhead = (doc: PDFKit.PDFDocument, title: string, orderNumber: string) => {
+  const startY = doc.y
+  const textX = doc.page.margins.left + 70
+  const textWidth = doc.page.width - doc.page.margins.right - textX
+  let logoBottom = startY
+
   try {
-    doc.image(LOGO_PATH, doc.page.width / 2 - 40, doc.y, { width: 80 })
-    doc.moveDown(3.5)
+    doc.image(LOGO_PATH, doc.page.margins.left, startY, { width: 60 })
+    logoBottom = startY + 60
   } catch {
     // Si el logo no está disponible, el recibo se genera igual sin imagen.
   }
 
-  doc.font('Helvetica-Bold').fontSize(14).text(BUSINESS_NAME, { align: 'center' })
+  doc.font('Helvetica-Bold').fontSize(14).text(BUSINESS_NAME, textX, startY, { width: textWidth })
   doc.font('Helvetica').fontSize(8)
-  doc.text(BUSINESS_ADDRESS, { align: 'center' })
-  doc.text(`Tel: ${BUSINESS_PHONE}`, { align: 'center' })
-  doc.text(`RIF: ${BUSINESS_RIF}`, { align: 'center' })
+  doc.text(BUSINESS_ADDRESS, textX, doc.y, { width: textWidth })
+  doc.text(`Tel: ${BUSINESS_PHONE}`, textX, doc.y, { width: textWidth })
+  doc.text(`RIF: ${BUSINESS_RIF}`, textX, doc.y, { width: textWidth })
+
+  // El logo y el bloque de texto corren en paralelo (misma startY) — el
+  // cursor debe quedar debajo de lo que termine más abajo, igual que en
+  // addTwoColumnRow con columnas de alturas distintas.
+  doc.y = Math.max(doc.y, logoBottom)
+  // pdfkit deja doc.x en textX tras el último text() del bloque de datos del
+  // negocio (no lo restaura solo) — sin este reset, la línea horizontal y el
+  // título quedarían indentados en vez de ocupar el ancho completo/centrados.
+  doc.x = doc.page.margins.left
   doc.moveDown(0.6)
 
   const lineY = doc.y
