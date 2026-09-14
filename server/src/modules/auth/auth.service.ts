@@ -6,6 +6,7 @@ import {
   AdminAddUserToGroupCommand,
   AdminConfirmSignUpCommand,
   AdminCreateUserCommand,
+  AdminSetUserPasswordCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 
 import prisma from '../../lib/prisma';
@@ -223,4 +224,21 @@ export const createStaffUser = async (
     message: 'Empleado creado exitosamente. Deberá establecer su contraseña definitiva en el primer inicio de sesión.',
     userId: user.id,
   };
+};
+
+/**
+ * ADMIN resuelve un reset de contraseña — establece una contraseña temporal
+ * (Permanent: false, igual que createStaffUser) que dispara el challenge
+ * NEW_PASSWORD_REQUIRED ya resuelto en el Login. El admin la escribe a mano
+ * y se la entrega al empleado por fuera del sistema.
+ */
+export const setTemporaryPassword = async (email: string, tempPassword: string) => {
+  await client.send(
+    new AdminSetUserPasswordCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+      Password: tempPassword,
+      Permanent: false,
+    })
+  );
 };
