@@ -457,6 +457,20 @@ const addPaymentHistory = (doc: PDFKit.PDFDocument, order: OrderForReceipt) => {
   })
 }
 
+// Sección de firma del cliente al final del Recibo de Entrega — resguardo
+// legal de que el cliente recibió el equipo. Va antes del disclaimer legal
+// (que es texto boilerplate, no parte de la interacción con el cliente).
+const addSignatureSection = (doc: PDFKit.PDFDocument, deliveredAt: Date | string | null | undefined) => {
+  doc.moveDown(2)
+  const lineY = doc.y
+  const lineWidth = 220
+  const lineX = doc.page.width / 2 - lineWidth / 2
+  doc.moveTo(lineX, lineY).lineTo(lineX + lineWidth, lineY).stroke()
+  doc.moveDown(0.3)
+  doc.font('Helvetica').fontSize(9).text('Firma del cliente', { align: 'center' })
+  doc.font('Helvetica').fontSize(8).text(formatDate(deliveredAt), { align: 'center' })
+}
+
 export const generateFinalReceipt = (order: OrderForReceipt): PDFKit.PDFDocument => {
   const doc = new PDFDocument({ margin: 50 })
 
@@ -477,6 +491,8 @@ export const generateFinalReceipt = (order: OrderForReceipt): PDFKit.PDFDocument
   }
 
   addRow(doc, 'Fecha de entrega', formatDate(order.deliveredAt))
+
+  addSignatureSection(doc, order.deliveredAt)
 
   addFooterDisclaimer(doc)
   doc.end()
