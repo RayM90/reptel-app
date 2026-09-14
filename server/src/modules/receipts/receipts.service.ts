@@ -14,6 +14,12 @@ const BUSINESS_PHONE = '0424-2440004'
 
 const FOOTER_DISCLAIMER_TEXT = 'Este documento es un recibo interno de pago — no constituye factura fiscal.'
 
+// Nota legal exclusiva del Recibo de Recepción — el anticipo de
+// diagnóstico/revisión no es un cobro aparte, se descuenta del presupuesto
+// final si el cliente aprueba la reparación.
+const INTAKE_FOOTER_NOTE =
+  'El monto abonado por diagnóstico/revisión será descontado del costo total del servicio si la reparación es aprobada.'
+
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   CASH: 'Efectivo',
   TRANSFER: 'Transferencia',
@@ -158,7 +164,7 @@ const addLetterhead = (doc: PDFKit.PDFDocument, title: string, orderNumber: stri
 // Disclaimer legal al pie de los 5 recibos — nunca se llama la palabra
 // "Factura" ni se menciona IVA/crédito fiscal en ningún recibo (regla legal
 // no negociable, ver brief de la tarea).
-const addFooterDisclaimer = (doc: PDFKit.PDFDocument) => {
+const addFooterDisclaimer = (doc: PDFKit.PDFDocument, extraNote?: string) => {
   doc.moveDown(1)
   const lineY = doc.y
   doc
@@ -166,6 +172,10 @@ const addFooterDisclaimer = (doc: PDFKit.PDFDocument) => {
     .lineTo(doc.page.width - doc.page.margins.right, lineY)
     .stroke()
   doc.moveDown(0.5)
+  if (extraNote) {
+    doc.font('Helvetica-Bold').fontSize(8).text(extraNote, { align: 'center' })
+    doc.moveDown(0.3)
+  }
   doc.font('Helvetica').fontSize(8).text(FOOTER_DISCLAIMER_TEXT, { align: 'center' })
 }
 
@@ -249,7 +259,7 @@ export const generateIntakeReceipt = (order: OrderForReceipt): PDFKit.PDFDocumen
     .fontSize(10)
     .text('El equipo queda sujeto a diagnóstico y presupuesto por parte del técnico.', { align: 'center' })
 
-  addFooterDisclaimer(doc)
+  addFooterDisclaimer(doc, INTAKE_FOOTER_NOTE)
   doc.end()
   return doc
 }
