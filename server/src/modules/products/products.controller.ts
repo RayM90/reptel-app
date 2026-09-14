@@ -8,6 +8,8 @@ import {
   createProduct,
   updateProduct,
   getInventoryMovements,
+  restockProduct,
+  registerMerma,
 } from './products.service';
 
 /**
@@ -16,7 +18,8 @@ import {
  */
 export const getProducts = async (req: Request, res: Response): Promise<void> => {
   try {
-    const products = await getAllProducts();
+    const includeInactive = req.query.includeInactive === 'true';
+    const products = await getAllProducts(includeInactive);
     res.status(200).json({ success: true, data: products });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Error al obtener productos' });
@@ -40,12 +43,33 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
  */
 export const getInventoryMovementsHandler = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { productId, channel, from, to } = req.query;
+    const { productId, channel, from, to, type, supplierName, destination, technicianRole, lossReason } = req.query;
+    if (from !== undefined && isNaN(Date.parse(String(from)))) {
+      res.status(400).json({ success: false, message: 'Rango de fechas inválido' });
+      return;
+    }
+    if (to !== undefined && isNaN(Date.parse(String(to)))) {
+      res.status(400).json({ success: false, message: 'Rango de fechas inválido' });
+      return;
+    }
+    // "to" es el fin del rango (ej. "Hasta: 2026-09-13" de un <input type="date">).
+    // new Date("2026-09-13") parsea a medianoche UTC de ese día, lo que excluiría
+    // casi todos los movimientos reales de ese día. Se ajusta al final del día
+    // (23:59:59.999 UTC) para incluir el día completo. "from" sí debe quedar en
+    // medianoche-inicio, que es el comportamiento correcto para el inicio del rango.
+    const toDate = to
+      ? new Date(new Date(String(to)).setUTCHours(23, 59, 59, 999))
+      : undefined;
     const movements = await getInventoryMovements({
       productId: productId ? String(productId) : undefined,
       channel: channel ? String(channel) : undefined,
       from: from ? new Date(String(from)) : undefined,
-      to: to ? new Date(String(to)) : undefined,
+      to: toDate,
+      type: type ? String(type) : undefined,
+      supplierName: supplierName ? String(supplierName) : undefined,
+      destination: destination ? String(destination) : undefined,
+      technicianRole: technicianRole ? String(technicianRole) : undefined,
+      lossReason: lossReason ? String(lossReason) : undefined,
     });
     res.status(200).json({ success: true, data: movements });
   } catch (error: any) {
@@ -162,5 +186,82 @@ export const updateProductHandler = async (req: AuthRequest, res: Response): Pro
       return
     }
     res.status(500).json({ success: false, message: error.message || 'Error al actualizar el producto' })
+  }
+}
+
+export const restockProductHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const { quantity, supplierName, reason } = req.body
+
+    const parsedQuantity = Number(quantity)
+    if (quantity === undefined || !Number.isInteger(parsedQuantity) || parsedQuantity <= 0) {
+      res.status(400).json({ success: false, message: 'La cantidad a reabastecer debe ser mayor a 0' })
+      return
+    }
+
+    const { product, movement } = await restockProduct(
+      id,
+      parsedQuantity,
+      req.user!.email,
+      supplierName ? String(supplierName) : undefined,
+      reason ? String(reason) : undefined,
+    )
+    res.status(200).json({ success: true, data: { product, movement } })
+  } catch (error: any) {
+    if (error.code === 'P2025') {
+      res.status(404).json({ success: false, message: 'Producto no encontrado' })
+      return
+    }
+    res.status(500).json({ success: false, message: error.message || 'Error al reabastecer el producto' })
+  }
+}
+
+const VALID_LOSS_REASONS = ['DEFECTUOSO', 'DANIO_INSTALACION', 'PERDIDA', 'GARANTIA', 'OTRO']
+const VALID_DESTINATIONS = ['TIENDA', 'DOMICILIO_CLIENTE', 'TALLER', 'OTRO']
+
+export const registerMermaHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id)
+    const { quantity, lossReason, reason, destination, orderId } = req.body
+
+    const parsedQuantity = Number(quantity)
+    if (quantity === undefined || !Number.isInteger(parsedQuantity) || parsedQuantity <= 0) {
+      res.status(400).json({ success: false, message: 'La cantidad debe ser mayor a 0' })
+      return
+    }
+    if (!lossReason || !VALID_LOSS_REASONS.includes(String(lossReason))) {
+      res.status(400).json({ success: false, message: 'El motivo de la merma no es válido' })
+      return
+    }
+    if (!reason || typeof reason !== 'string' || !reason.trim()) {
+      res.status(400).json({ success: false, message: 'Debes detallar qué pasó con el producto' })
+      return
+    }
+    if (destination !== undefined && !VALID_DESTINATIONS.includes(String(destination))) {
+      res.status(400).json({ success: false, message: 'El destino no es válido' })
+      return
+    }
+
+    const { product, movement } = await registerMerma(
+      id,
+      parsedQuantity,
+      req.user!.email,
+      String(lossReason),
+      reason.trim(),
+      destination ? String(destination) : undefined,
+      orderId ? String(orderId) : undefined,
+    )
+    res.status(200).json({ success: true, data: { product, movement } })
+  } catch (error: any) {
+    if (error.constructor?.name === 'InsufficientStockError') {
+      res.status(400).json({ success: false, message: 'No hay suficiente stock disponible para registrar esta merma' })
+      return
+    }
+    if (error.code === 'P2025') {
+      res.status(404).json({ success: false, message: 'Producto no encontrado' })
+      return
+    }
+    res.status(500).json({ success: false, message: error.message || 'Error al registrar la merma' })
   }
 }

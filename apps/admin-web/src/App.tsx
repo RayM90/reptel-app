@@ -10,6 +10,7 @@ import InventoryForm from './pages/admin/InventoryForm'
 import InventoryMovements from './pages/admin/InventoryMovements'
 import Reports from './pages/admin/Reports'
 import Registro from './pages/admin/Registro'
+import MermaForm from './pages/admin/MermaForm'
 import Toast from './components/Toast'
 import ConfirmDialog from './components/ConfirmDialog'
 
@@ -97,6 +98,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <Registro />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/inventory/merma/new"
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN', 'TECHNICIAN', 'TECHNICIAN_DELIVERY']}>
+              <MermaForm />
             </ProtectedRoute>
           }
         />

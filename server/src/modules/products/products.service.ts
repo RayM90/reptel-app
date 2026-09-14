@@ -6,6 +6,16 @@ export class InsufficientStockError extends Error {
   }
 }
 
+// Deriva el destino de un movimiento de salida a partir del rol de quien lo genera.
+// TECHNICIAN_DELIVERY (motorizado) sale a domicilio del cliente; TECHNICIAN (mostrador)
+// trabaja en el taller/tienda; cualquier otro rol (ADMIN registrando una merma encontrada
+// en el almacén, por ejemplo) cae en TIENDA como default seguro.
+export const deriveDestination = (role: string): 'TIENDA' | 'DOMICILIO_CLIENTE' | 'TALLER' => {
+  if (role === 'TECHNICIAN_DELIVERY') return 'DOMICILIO_CLIENTE';
+  if (role === 'TECHNICIAN') return 'TALLER';
+  return 'TIENDA';
+};
+
 /**
  * Obtiene todas las categorías con sus productos activos
  */
@@ -33,11 +43,14 @@ export const getProductsWithCategories = async () => {
 };
 
 /**
- * Obtiene todos los productos activos sin filtro de categoría
+ * Obtiene todos los productos sin filtro de categoría.
+ * Por default solo los activos; includeInactive=true también trae los inactivos
+ * (necesario para registrar una merma sobre un producto descontinuado que aún
+ * tiene stock residual).
  */
-export const getAllProducts = async () => {
+export const getAllProducts = async (includeInactive = false) => {
   const products = await prisma.product.findMany({
-    where: { isActive: true },
+    where: includeInactive ? {} : { isActive: true },
     include: {
       category: {
         select: { id: true, name: true },
@@ -58,11 +71,21 @@ export const getInventoryMovements = async (filters: {
   channel?: string;
   from?: Date;
   to?: Date;
+  type?: string;
+  supplierName?: string;
+  destination?: string;
+  technicianRole?: string;
+  lossReason?: string;
 }) => {
   return prisma.inventoryMovement.findMany({
     where: {
       ...(filters.productId ? { productId: filters.productId } : {}),
       ...(filters.channel ? { channel: filters.channel as any } : {}),
+      ...(filters.type ? { type: filters.type as any } : {}),
+      ...(filters.destination ? { destination: filters.destination as any } : {}),
+      ...(filters.lossReason ? { lossReason: filters.lossReason as any } : {}),
+      ...(filters.supplierName ? { supplierName: { contains: filters.supplierName } } : {}),
+      ...(filters.technicianRole ? { user: { role: filters.technicianRole as any } } : {}),
       ...(filters.from || filters.to
         ? {
             createdAt: {
@@ -74,9 +97,10 @@ export const getInventoryMovements = async (filters: {
     },
     include: {
       product: { select: { id: true, name: true } },
-      user: { select: { id: true, name: true, lastName: true } },
+      user: { select: { id: true, name: true, lastName: true, role: true } },
     },
     orderBy: { createdAt: 'desc' },
+    take: 500,
   });
 };
 
@@ -123,6 +147,79 @@ export const createProduct = async (data: {
     }
 
     return product;
+  });
+};
+
+export const restockProduct = async (
+  productId: string,
+  quantity: number,
+  actorEmail: string,
+  supplierName?: string,
+  reason?: string,
+) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } });
+  if (!actor) throw new Error('Usuario no encontrado');
+
+  return prisma.$transaction(async (tx) => {
+    const product = await tx.product.update({
+      where: { id: productId },
+      data: { stock: { increment: quantity } },
+    });
+
+    const movement = await tx.inventoryMovement.create({
+      data: {
+        productId,
+        type: 'IN',
+        channel: 'AJUSTE_MANUAL',
+        quantity,
+        reason: reason?.trim() || 'Reabastecimiento de stock',
+        supplierName: supplierName?.trim() || null,
+        userId: actor.id,
+      },
+    });
+
+    return { product, movement };
+  });
+};
+
+export const registerMerma = async (
+  productId: string,
+  quantity: number,
+  actorEmail: string,
+  lossReason: string,
+  reason: string,
+  destination?: string,
+  orderId?: string,
+) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } });
+  if (!actor) throw new Error('Usuario no encontrado');
+
+  return prisma.$transaction(async (tx) => {
+    const product = await tx.product.findUniqueOrThrow({ where: { id: productId } });
+    if (product.stock < quantity) {
+      throw new InsufficientStockError();
+    }
+
+    const updated = await tx.product.update({
+      where: { id: productId },
+      data: { stock: { decrement: quantity } },
+    });
+
+    const movement = await tx.inventoryMovement.create({
+      data: {
+        productId,
+        type: 'OUT',
+        channel: 'MERMA',
+        quantity,
+        reason,
+        lossReason: lossReason as any,
+        destination: (destination as any) ?? deriveDestination(actor.role),
+        userId: actor.id,
+        orderId: orderId ?? null,
+      },
+    });
+
+    return { product: updated, movement };
   });
 };
 
