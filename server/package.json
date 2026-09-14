@@ -7,9 +7,9 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "jest --runInBand --detectOpenHandles",
-    "test:watch": "jest --watch --runInBand",
-    "test:coverage": "jest --coverage --runInBand --detectOpenHandles",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --detectOpenHandles",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch --runInBand",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --detectOpenHandles",
     "seed": "ts-node prisma/seed.ts"
   },
   "keywords": [],

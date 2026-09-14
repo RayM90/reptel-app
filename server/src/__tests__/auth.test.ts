@@ -246,3 +246,145 @@ describe('Auth — GET/POST /api/auth/password-reset-requests (ADMIN)', () => {
     expect(stillPending?.status).toBe('PENDING')
   }, 15000)
 })
+
+describe('Auth — POST /api/auth/register (paridad de campos)', () => {
+  const baseAddress = {
+    addressState: 'Carabobo',
+    addressCity: 'Valencia',
+    addressNeighborhood: 'La Isabelica',
+    addressStreet: 'Av. Bolívar',
+    addressBuilding: 'Res. Las Palmas, piso 2',
+  }
+
+  it('retorna 400 si falta la cédula', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        email: `sin-cedula-${Date.now()}@test.com`,
+        password: 'Passw0rd!',
+        name: 'Sin',
+        lastName: 'Cedula',
+        phone: '04121234567',
+        role: 'CLIENT',
+        address: baseAddress,
+      })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('retorna 400 si la dirección no trae los 5 campos', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        email: `direccion-incompleta-${Date.now()}@test.com`,
+        password: 'Passw0rd!',
+        name: 'Direccion',
+        lastName: 'Incompleta',
+        idNumber: `V-${String(Date.now()).slice(-7)}`,
+        phone: '04121234567',
+        role: 'CLIENT',
+        address: { addressState: 'Carabobo' },
+      })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('retorna 400 si la segunda dirección viene incompleta (todo o nada)', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        email: `secundaria-incompleta-${Date.now()}@test.com`,
+        password: 'Passw0rd!',
+        name: 'Secundaria',
+        lastName: 'Incompleta',
+        idNumber: `V-${String(Date.now()).slice(-7)}`,
+        phone: '04121234567',
+        role: 'CLIENT',
+        address: baseAddress,
+        secondaryAddress: { label: 'Trabajo', addressState: 'Carabobo' },
+      })
+
+    expect(res.status).toBe(400)
+  })
+
+  // Este describe es el primer test automatizado que ejercita SignUpCommand
+  // (auto-registro) — a diferencia de InitiateAuthCommand/AdminCreateUserCommand
+  // (login/altas de personal, ya cubiertos en otros describes de este archivo),
+  // dispara un `await import()` dentro de @aws-sdk/credential-provider-node que
+  // Jest no resuelve sin --experimental-vm-modules (ver "test" en package.json).
+  it('retorna 400 si la cédula ya existe, SIN dejar una cuenta de Cognito huérfana', async () => {
+    const idNumber = `V-${String(Date.now()).slice(-7)}`
+    const firstEmail = `primero-${Date.now()}@test.com`
+    const first = await request(app)
+      .post('/api/auth/register')
+      .send({
+        email: firstEmail,
+        password: 'Passw0rd!',
+        name: 'Primero',
+        lastName: 'Registrado',
+        idNumber,
+        phone: '04121234567',
+        role: 'CLIENT',
+        address: baseAddress,
+      })
+    expect(first.status).toBe(201)
+
+    const duplicateEmail = `duplicado-${Date.now()}@test.com`
+    const second = await request(app)
+      .post('/api/auth/register')
+      .send({
+        email: duplicateEmail,
+        password: 'Passw0rd!',
+        name: 'Segundo',
+        lastName: 'ConCedulaRepetida',
+        idNumber,
+        phone: '04121234567',
+        role: 'CLIENT',
+        address: baseAddress,
+      })
+    expect(second.status).toBe(400)
+    expect(second.body.message).toMatch(/cédula/i)
+
+    // Si Cognito llegó a crear la cuenta duplicada, este login funcionaría
+    // (o devolvería un error de challenge, no "credenciales inválidas").
+    const loginAttempt = await request(app)
+      .post('/api/auth/login')
+      .send({ email: duplicateEmail, password: 'Passw0rd!' })
+    expect(loginAttempt.status).toBe(401)
+
+    await prisma.client.delete({ where: { idNumber } }).catch(() => {})
+    await prisma.user.deleteMany({ where: { email: firstEmail } })
+  }, 20000)
+
+  it('registra una empresa (RIF J-) sin apellido, con contactPerson y dirección secundaria', async () => {
+    const idNumber = `J-${String(Date.now()).slice(-9)}`
+    const email = `empresa-${Date.now()}@test.com`
+
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        email,
+        password: 'Passw0rd!',
+        name: 'Constructora ABC, C.A.',
+        idNumber,
+        phone: '04121234567',
+        role: 'CLIENT',
+        contactPerson: 'Juan Pérez',
+        address: baseAddress,
+        secondaryAddress: { label: 'Trabajo', ...baseAddress, addressCity: 'Naguanagua' },
+      })
+
+    expect(res.status).toBe(201)
+
+    const client = await prisma.client.findUnique({ where: { idNumber }, include: { addresses: true } })
+    expect(client?.lastName).toBe('')
+    expect(client?.contactPerson).toBe('Juan Pérez')
+    expect(client?.addresses).toHaveLength(2)
+    expect(client?.addresses.find((a) => a.isPrimary)?.addressCity).toBe('Valencia')
+    expect(client?.addresses.find((a) => !a.isPrimary)?.label).toBe('Trabajo')
+
+    await prisma.clientAddress.deleteMany({ where: { clientId: client!.id } })
+    await prisma.client.delete({ where: { idNumber } })
+    await prisma.user.deleteMany({ where: { email } })
+  }, 20000)
+})

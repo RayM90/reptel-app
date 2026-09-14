@@ -8,9 +8,9 @@ import { isValidVenezuelanPhone, isValidVenezuelanIdNumber, isCompanyIdNumber } 
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, name, role, phone, address } = req.body;
+    const { email, password, name, lastName, idNumber, role, phone, contactPerson, address, secondaryAddress } = req.body;
 
-    if (!email || !password || !name || !role) {
+    if (!email || !password || !name || !role || !idNumber || !phone) {
       res.status(400).json({ message: 'Todos los campos son requeridos' });
       return;
     }
@@ -24,12 +24,61 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (phone && !isValidVenezuelanPhone(phone)) {
+    if (!isValidVenezuelanIdNumber(idNumber)) {
+      res.status(400).json({ message: 'La cédula/RIF debe tener el formato V-12345678, E-12345678, J-123456789 o G-123456789' });
+      return;
+    }
+
+    const isCompany = isCompanyIdNumber(idNumber);
+    if (!isCompany && !lastName) {
+      res.status(400).json({ message: 'El apellido es requerido para personas naturales (V-/E-)' });
+      return;
+    }
+
+    if (!isValidVenezuelanPhone(phone)) {
       res.status(400).json({ message: 'El teléfono debe ser un número venezolano válido (04XX + 7 dígitos)' });
       return;
     }
 
-    const result = await registerUser(email, password, name, role, phone, address);
+    const addressComplete = !!address && !!address.addressState && !!address.addressCity && !!address.addressNeighborhood && !!address.addressStreet && !!address.addressBuilding;
+    if (!addressComplete) {
+      res.status(400).json({ message: 'La dirección completa (estado, municipio, barrio, calle y edificio/casa) es requerida' });
+      return;
+    }
+
+    if (secondaryAddress) {
+      const secondaryComplete = !!secondaryAddress.label && !!secondaryAddress.addressState && !!secondaryAddress.addressCity && !!secondaryAddress.addressNeighborhood && !!secondaryAddress.addressStreet && !!secondaryAddress.addressBuilding;
+      if (!secondaryComplete) {
+        res.status(400).json({ message: 'La segunda dirección debe tener etiqueta y los 5 campos completos, o no enviarse' });
+        return;
+      }
+    }
+
+    // Duplicados — se validan ANTES de llamar a Cognito para no dejar
+    // cuentas huérfanas si la cédula o el correo ya existen.
+    const existingByIdNumber = await prisma.client.findUnique({ where: { idNumber } });
+    if (existingByIdNumber) {
+      res.status(400).json({ message: 'Ya existe un cliente con esa cédula' });
+      return;
+    }
+    const existingByEmail = await prisma.user.findUnique({ where: { email } });
+    if (existingByEmail) {
+      res.status(400).json({ message: 'Ya existe una cuenta con ese correo electrónico' });
+      return;
+    }
+
+    const result = await registerUser({
+      email,
+      password,
+      name,
+      lastName: isCompany ? '' : lastName,
+      idNumber,
+      role,
+      phone,
+      contactPerson: isCompany ? contactPerson : undefined,
+      address,
+      secondaryAddress,
+    });
     res.status(201).json(result);
   } catch (error: any) {
     res.status(400).json({ message: translateCognitoError(error) || 'Error al registrar usuario' });
