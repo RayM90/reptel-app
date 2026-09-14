@@ -1,5 +1,11 @@
 const PREFIXES = ['V', 'E', 'J', 'G']
+const COMPANY_PREFIXES = ['J', 'G']
 const MAX_DIGITS = 9
+
+// J- (jurídico/empresa) y G- (gobierno) no tienen apellido — Registro.tsx
+// lo usa para adaptar labels y campos requeridos.
+export const isCompanyIdPrefix = (idNumber: string): boolean =>
+  COMPANY_PREFIXES.some((p) => idNumber.startsWith(`${p}-`))
 
 interface IdNumberInputProps {
   value: string
