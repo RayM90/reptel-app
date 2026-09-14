@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit'
 import path from 'path'
+import { formatFullName } from '../../lib/format'
 
 const LOGO_PATH = path.join(process.cwd(), 'assets', 'logo-reptel.png')
 
@@ -201,7 +202,7 @@ export const generateIntakeReceipt = (order: OrderForReceipt): PDFKit.PDFDocumen
 
   addLetterhead(doc, title, order.orderNumber)
 
-  addTwoColumnRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`, 'Teléf', order.client.phone)
+  addTwoColumnRow(doc, 'Cliente', formatFullName(order.client.name, order.client.lastName), 'Teléf', order.client.phone)
   addTwoColumnRow(
     doc,
     'Equipo/Marca',
@@ -353,7 +354,7 @@ export const generateFinalReceipt = (order: OrderForReceipt): PDFKit.PDFDocument
 
   addLetterhead(doc, 'Recibo de Entrega', order.orderNumber)
 
-  addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
+  addRow(doc, 'Cliente', formatFullName(order.client.name, order.client.lastName))
   addRow(doc, 'Técnico asignado', order.technician?.name ?? 'Sin asignar')
   doc.moveDown(0.5)
 
@@ -385,7 +386,7 @@ export const generatePaymentReceipt = (order: OrderForReceipt): PDFKit.PDFDocume
 
   addLetterhead(doc, 'Recibo de Pago', order.orderNumber)
 
-  addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
+  addRow(doc, 'Cliente', formatFullName(order.client.name, order.client.lastName))
   addRow(doc, 'Técnico asignado', order.technician?.name ?? 'Sin asignar')
   doc.moveDown(0.5)
 
@@ -413,7 +414,7 @@ export const generateClosureReceipt = (order: OrderForReceipt): PDFKit.PDFDocume
 
   addLetterhead(doc, 'Recibo de Cierre', order.orderNumber)
 
-  addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
+  addRow(doc, 'Cliente', formatFullName(order.client.name, order.client.lastName))
   doc.moveDown(0.5)
 
   addRow(doc, 'Falla reportada', order.problem)
@@ -459,7 +460,7 @@ export const generateBudgetAdvanceReceipt = (order: OrderForReceipt): PDFKit.PDF
 
   addLetterhead(doc, 'Recibo de Anticipo de Presupuesto', order.orderNumber)
 
-  addRow(doc, 'Cliente', `${order.client.name} ${order.client.lastName}`)
+  addRow(doc, 'Cliente', formatFullName(order.client.name, order.client.lastName))
   addRow(doc, 'Técnico asignado', order.technician?.name ?? 'Sin asignar')
   doc.moveDown(0.5)
 
