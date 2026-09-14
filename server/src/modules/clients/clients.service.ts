@@ -75,15 +75,20 @@ export const updateClient = async (
     // El User vinculado (si existe) duplica name/phone/email para no tener
     // que hacer join en cada lectura — hallazgo de auditoría: sin este sync
     // quedaban desincronizados en cuanto se editaba solo uno de los dos.
+    // Se usa `!== undefined` (no truthy) porque lastName puede llegar como
+    // '' para un cliente empresa/gobierno sin apellido — un check truthy
+    // descartaría ese '' silenciosamente y dejaría el User desincronizado.
     const linkedUser = await tx.user.findUnique({ where: { clientId: id }, select: { id: true } })
-    if (linkedUser && (data.name || data.lastName || data.phone || data.email)) {
+    const hasUserSyncableChange =
+      data.name !== undefined || data.lastName !== undefined || data.phone !== undefined || data.email !== undefined
+    if (linkedUser && hasUserSyncableChange) {
       await tx.user.update({
         where: { id: linkedUser.id },
         data: {
-          ...(data.name && { name: data.name }),
-          ...(data.lastName && { lastName: data.lastName }),
-          ...(data.phone && { phone: data.phone }),
-          ...(data.email && { email: data.email }),
+          ...(data.name !== undefined && { name: data.name }),
+          ...(data.lastName !== undefined && { lastName: data.lastName }),
+          ...(data.phone !== undefined && { phone: data.phone }),
+          ...(data.email !== undefined && { email: data.email }),
         },
       })
     }
