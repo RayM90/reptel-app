@@ -352,6 +352,72 @@ describe('GET /api/reports/audit', () => {
   }, 10000)
 })
 
+describe('reports.service — getClientHistoryReport', () => {
+  it('retorna null si la cédula no existe', async () => {
+    const { getClientHistoryReport } = await import('../modules/reports/reports.service')
+    const result = await getClientHistoryReport('CEDULA-QUE-NO-EXISTE-999')
+    expect(result).toBeNull()
+  })
+
+  it('calcula devicesIngresados, totalPaid e historial', async () => {
+    const { getClientHistoryReport } = await import('../modules/reports/reports.service')
+    const result = await getClientHistoryReport(clientA.idNumber)
+
+    expect(result).not.toBeNull()
+    expect(result!.devicesIngresados).toBe(1) // las 4 órdenes de clientA usan el mismo device
+    // getClientHistoryReport no filtra por rango de fechas — suma TODAS las
+    // DELIVERED del cliente: 100 + 60 + 80 + 999 (la "fuera de rango" también
+    // es DELIVERED, solo queda fuera del reporte de resumen por fecha).
+    expect(result!.totalPaid).toBe(1239)
+    expect(result!.history.length).toBeGreaterThanOrEqual(4)
+  })
+})
+
+describe('reports.service — getReportTechnicians', () => {
+  it('incluye técnicos sin filtrar por isActive/estado', async () => {
+    const { getReportTechnicians } = await import('../modules/reports/reports.service')
+    const result = await getReportTechnicians()
+
+    expect(result.some((t) => t.id === technicianX.id)).toBe(true)
+    expect(result.some((t) => t.id === technicianY.id)).toBe(true)
+  })
+})
+
+describe('GET /api/reports/client-history/:idNumber', () => {
+  it('sin token retorna 401', async () => {
+    const res = await request(app).get(`/api/reports/client-history/${clientA.idNumber}`)
+    expect(res.status).toBe(401)
+  })
+
+  it('con token ADMIN y cédula existente retorna 200', async () => {
+    const res = await request(app)
+      .get(`/api/reports/client-history/${clientA.idNumber}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.client.idNumber).toBe(clientA.idNumber)
+  }, 10000)
+
+  it('con cédula inexistente retorna 404', async () => {
+    const res = await request(app)
+      .get('/api/reports/client-history/CEDULA-QUE-NO-EXISTE-999')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(404)
+  }, 10000)
+})
+
+describe('GET /api/reports/technicians', () => {
+  it('con token ADMIN retorna 200 con un arreglo', async () => {
+    const res = await request(app)
+      .get('/api/reports/technicians')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.data)).toBe(true)
+  }, 10000)
+})
+
 describe('Reports — authorize() rechaza roles no-ADMIN (unitario)', () => {
   it('retorna 403 cuando el usuario no tiene el rol ADMIN', () => {
     const middleware = authorize('ADMIN')

@@ -87,3 +87,26 @@ export const getAudit = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ success: false, message: 'Error al generar la auditoría' })
   }
 }
+
+export const getClientHistory = async (req: AuthRequest, res: Response) => {
+  try {
+    const idNumber = String(req.params.idNumber)
+    const result = await reportsService.getClientHistoryReport(idNumber)
+    if (!result) {
+      res.status(404).json({ success: false, message: 'Cliente no encontrado' })
+      return
+    }
+    res.json({ success: true, data: result })
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error al generar el expediente del cliente' })
+  }
+}
+
+export const getTechnicians = async (req: AuthRequest, res: Response) => {
+  try {
+    const technicians = await reportsService.getReportTechnicians()
+    res.json({ success: true, data: technicians })
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error al obtener los técnicos' })
+  }
+}
