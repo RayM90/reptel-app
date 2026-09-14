@@ -753,3 +753,11 @@ details.card[open] summary::before {
   opacity: 0;
   pointer-events: none;
 }
+
+/* ─── Error inline por campo (Registro — validación en tiempo real) ─── */
+
+.field-error {
+  font-size: 12px;
+  color: var(--color-danger);
+  margin-top: 4px;
+}

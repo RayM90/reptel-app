@@ -71,8 +71,16 @@ export default function Registro() {
   const [form, setForm] = useState(emptyForm)
   const [savingClient, setSavingClient] = useState(false)
   const [clientError, setClientError] = useState('')
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const [submitAttempted, setSubmitAttempted] = useState(false)
   const [activeClient, setActiveClient] = useState<Client | null>(null)
   const isCompany = isCompanyIdPrefix(idNumber)
+  const idDigits = idNumber.includes('-') ? idNumber.split('-')[1] ?? '' : ''
+  const idDigitsIncomplete = idDigits.length > 0 && idDigits.length < 7
+  const canSearch = idDigits.length >= 7 && idDigits.length <= 9
+  const nameError = !form.name.trim() ? (isCompany ? 'La razón social es requerida' : 'El nombre es requerido') : ''
+  const lastNameError = !isCompany && !form.lastName.trim() ? 'El apellido es requerido' : ''
+  const phoneError = !form.phone ? 'El teléfono es requerido' : ''
 
   // ── Paso 2: orden de servicio técnico ──
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
@@ -113,6 +121,8 @@ export default function Registro() {
     setForm(emptyForm)
     setClientError('')
     setActiveClient(null)
+    setTouched({})
+    setSubmitAttempted(false)
     setOrderForm(emptyOrderForm)
     setOrderError('')
     setNoAccessories(false)
@@ -169,6 +179,7 @@ export default function Registro() {
   }
 
   const handleContinue = async () => {
+    setSubmitAttempted(true)
     if (clientExists) {
       if (!isEditingClient) {
         setStep('sale')
@@ -359,10 +370,11 @@ export default function Registro() {
                   setForm((prev) => (willBeCompany ? { ...prev, lastName: '' } : { ...prev, contactPerson: '' }))
                 }}
               />
-              <button className="btn btn-secondary" onClick={handleSearch} disabled={searching || !idNumber.trim()}>
+              <button className="btn btn-secondary" onClick={handleSearch} disabled={searching || !canSearch}>
                 {searching ? 'Buscando…' : 'Buscar'}
               </button>
             </div>
+            {idDigitsIncomplete && <p className="form-hint">Faltan {7 - idDigits.length} dígitos</p>}
           </div>
 
           {searched && clientExists && (
@@ -385,13 +397,17 @@ export default function Registro() {
                 <label>{isCompany ? 'Razón social o nombre de la empresa' : 'Nombre'}</label>
                 <input type="text" value={form.name} disabled={!!clientExists && !isEditingClient}
                   placeholder={isCompany ? 'Ej: Constructora ABC, C.A.' : 'Ej: María'}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onBlur={() => setTouched((t) => ({ ...t, name: true }))} />
+                {(touched.name || submitAttempted) && nameError && <p className="field-error">{nameError}</p>}
               </div>
               <div className={`field-collapse${isCompany ? ' field-collapse--closed' : ''}`}>
                 <div className="form-group">
                   <label>Apellido</label>
                   <input type="text" value={form.lastName} disabled={!!clientExists && !isEditingClient}
-                    onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+                    onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                    onBlur={() => setTouched((t) => ({ ...t, lastName: true }))} />
+                  {(touched.lastName || submitAttempted) && lastNameError && <p className="field-error">{lastNameError}</p>}
                 </div>
               </div>
               <div className={`field-collapse${isCompany ? '' : ' field-collapse--closed'}`}>
@@ -407,8 +423,9 @@ export default function Registro() {
                 {clientExists && !isEditingClient ? (
                   <input type="text" value={form.phone} disabled />
                 ) : (
-                  <PhoneInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} required />
+                  <PhoneInput value={form.phone} onChange={(v) => { setForm({ ...form, phone: v }); setTouched((t) => ({ ...t, phone: true })) }} required />
                 )}
+                {(touched.phone || submitAttempted) && phoneError && <p className="field-error">{phoneError}</p>}
               </div>
               <div className="form-group">
                 <label>Correo (opcional)</label>
