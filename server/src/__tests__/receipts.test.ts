@@ -362,3 +362,36 @@ describe('Orders — GET /:id/receipt/*', () => {
     expect(res.headers['content-type']).toBe('application/pdf')
   }, 10000)
 })
+
+describe('addLetterhead — grid corporativo (logo izq, datos del negocio a la derecha)', () => {
+  const MARGIN = 50
+
+  it('el bloque de datos del negocio (dirección, teléfono, RIF) arranca a la derecha del logo, no centrado', () => {
+    // captureTextXs registra doc.x ANTES de que pdfkit procese cada llamada,
+    // así que la primera línea (nombre) no puede probarse así: su x propio
+    // (120) recién queda reflejado en doc.x para la SIGUIENTE llamada. Las
+    // 3 líneas siguientes sí heredan correctamente ese x explícito.
+    const calls = captureTextXs(() => generateIntakeReceipt(fakeOrder as any))
+    const textX = MARGIN + 70
+
+    const direccionCall = calls.find((c) => c.text === 'Av. Urdaneta, Caracas, Venezuela')
+    const telefonoCall = calls.find((c) => c.text === 'Tel: 0424-2440004')
+    const rifCall = calls.find((c) => c.text === 'RIF: J-40587644')
+
+    expect(direccionCall?.x).toBe(textX)
+    expect(telefonoCall?.x).toBe(textX)
+    expect(rifCall?.x).toBe(textX)
+  })
+
+  it('el título y el número de orden siguen arrancando en el margen izquierdo tras el nuevo membrete (doc.x restaurado)', () => {
+    const calls = captureTextXs(() => generateIntakeReceipt(fakeOrder as any))
+
+    const tituloIndex = calls.findIndex((c) => c.text === 'RECIBO DE RECEPCIÓN')
+    expect(tituloIndex).toBeGreaterThan(-1)
+    expect(calls[tituloIndex].x).toBe(MARGIN)
+
+    const ordenIndex = calls.findIndex((c) => c.text === `Orden ${fakeOrder.orderNumber}`)
+    expect(ordenIndex).toBeGreaterThan(-1)
+    expect(calls[ordenIndex].x).toBe(MARGIN)
+  })
+})
