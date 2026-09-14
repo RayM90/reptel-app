@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/auth.store'
 import { useToastStore } from '../../store/toast.store'
@@ -64,6 +63,7 @@ interface TechOrder {
   status: OrderStatus
   problem: string
   diagnosis: string | null
+  observations: string | null
   budget: string | null
   deliveryAmount: string | null
   revisionAmount: string | null
@@ -76,6 +76,7 @@ interface TechOrder {
   device: { type: string; brand: string; model: string; color: string; accessories: string; devicePassword: string | null; serialNumber: string | null }
   serviceCatalog: { id: string; name: string; basePrice: string } | null
   statusHistory: StatusHistoryEntry[]
+  inventoryMovements: { id: string; quantity: number; unitPriceAtUse: string | null; product: { name: string } }[]
 }
 
 // Estilo del resaltado para órdenes nuevas — mismo criterio en los 3 paneles internos.
@@ -157,6 +158,12 @@ export default function TechnicianDashboard() {
   const [partsByOrder, setPartsByOrder] = useState<Record<string, PartUsed[]>>({})
   const [partsProductId, setPartsProductId] = useState<Record<string, string>>({})
   const [partsQuantity, setPartsQuantity] = useState<Record<string, string>>({})
+  // Toggle "¿Se requieren repuestos?" — solo UI, no se persiste. Arranca en
+  // true si la orden ya tiene repuestos activos cargados.
+  const [repuestosVisible, setRepuestosVisible] = useState<Record<string, boolean>>({})
+
+  const isRepuestosVisible = (orderId: string): boolean =>
+    repuestosVisible[orderId] ?? (partsByOrder[orderId] ?? []).some((p) => !p.reversedAt)
 
   useEffect(() => {
     fetchData()
@@ -434,8 +441,6 @@ export default function TechnicianDashboard() {
         </button>
       </div>
 
-      {user?.role === 'TECHNICIAN' && <p><Link to="/registro">🧾 Ir a Registro (Recepción)</Link></p>}
-
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         <button
           className={tab === 'ordenes' ? 'btn btn-primary' : 'btn btn-outline'}
@@ -490,6 +495,24 @@ export default function TechnicianDashboard() {
                     {order.finalPaymentDetails && !order.finalPaymentConfirmed && (
                       <p className="alert-success">💰 El cliente ya reportó el pago final — esperando confirmación del administrador.</p>
                     )}
+
+                    {/* ── Top View: lo esencial de la orden, sin scroll ── */}
+                    <div className="card" style={{ marginBottom: 12 }}>
+                      <p><strong>Cliente:</strong> {formatFullName(order.client.name, order.client.lastName)}{' '}
+                        &nbsp;·&nbsp; <strong>Equipo:</strong> {order.device.brand} {order.device.model} · Serial: {order.device.serialNumber ?? '—'}</p>
+                      <p><strong>Falla reportada:</strong> {order.problem}</p>
+                      <p><strong>Estado de recepción:</strong> Accesorios: {order.device.accessories || '—'} · Observaciones: {order.observations || '—'}</p>
+                    </div>
+
+                    <details className="card card--muted" style={{ marginBottom: 12 }}>
+                      <summary><h4 style={{ display: 'inline' }}>Historial</h4></summary>
+                      {order.statusHistory.map((entry) => (
+                        <div key={entry.id} className="form-hint">
+                          <strong>{getStatusBadge('order', entry.status).label}</strong> — {formatDate(entry.createdAt)}
+                          {entry.comment && <div>{entry.comment}</div>}
+                        </div>
+                      ))}
+                    </details>
 
                     {/* ── Acción principal: una sola tarjeta destacada, según
                         el estado — antes "Finalizar reparación" y "Agregar
@@ -691,10 +714,31 @@ export default function TechnicianDashboard() {
                       </div>
                     )}
 
-                    {/* ── Repuestos: utilidad siempre accesible, no compite
-                        visualmente con la acción principal de arriba. ── */}
+                    {/* ── Repuestos: fusionado dentro de la Acción Requerida
+                        de arriba, con un toggle Sí/No — ya no es tarjeta
+                        aparte. Sigue disponible tanto en diagnóstico como en
+                        "Finalizar reparación"/comentario, porque un repuesto
+                        imprevisto puede aparecer en cualquier momento. ── */}
                     <div className="card">
-                      <h4>Repuestos</h4>
+                      <p style={{ fontWeight: 600, marginBottom: 8 }}>¿Se requieren repuestos?</p>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: isRepuestosVisible(order.id) ? 12 : 0 }}>
+                        <button
+                          type="button"
+                          className={isRepuestosVisible(order.id) ? 'btn btn-primary' : 'btn btn-outline'}
+                          onClick={() => setRepuestosVisible((prev) => ({ ...prev, [order.id]: true }))}
+                        >
+                          Sí
+                        </button>
+                        <button
+                          type="button"
+                          className={!isRepuestosVisible(order.id) ? 'btn btn-primary' : 'btn btn-outline'}
+                          onClick={() => setRepuestosVisible((prev) => ({ ...prev, [order.id]: false }))}
+                        >
+                          No
+                        </button>
+                      </div>
+                      {isRepuestosVisible(order.id) && (
+                      <>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                         <div className="form-group" style={{ flex: 1, marginBottom: 0, minWidth: 160 }}>
                           <label>Producto</label>
@@ -770,28 +814,17 @@ export default function TechnicianDashboard() {
                           </div>
                         )
                       })()}
+                      </>
+                      )}
                     </div>
 
-                    {/* ── Referencia: colapsada por defecto — no compite con
-                        la acción principal ni con Repuestos. ── */}
+                    {/* ── Referencia: Tipo/Color/Contraseña no se promovieron
+                        al Top View (no los pidió Ray) — quedan acá, colapsados. ── */}
                     <details className="card card--muted">
-                      <summary><h4 style={{ display: 'inline' }}>Detalle del equipo</h4></summary>
+                      <summary><h4 style={{ display: 'inline' }}>Más detalles del equipo</h4></summary>
                       <p><strong>Tipo:</strong> {order.device.type === 'LAPTOP' ? 'Laptop' : 'PC'}</p>
-                      <p><strong>Marca / Modelo:</strong> {order.device.brand} {order.device.model}</p>
                       <p><strong>Color:</strong> {order.device.color}</p>
-                      <p><strong>Accesorios:</strong> {order.device.accessories || '—'}</p>
                       {order.device.devicePassword && <p><strong>Contraseña del equipo:</strong> {order.device.devicePassword}</p>}
-                      <p><strong>Problema reportado por el cliente:</strong> {order.problem}</p>
-                    </details>
-
-                    <details className="card card--muted">
-                      <summary><h4 style={{ display: 'inline' }}>Historial</h4></summary>
-                      {order.statusHistory.map((entry) => (
-                        <div key={entry.id} className="form-hint">
-                          <strong>{getStatusBadge('order', entry.status).label}</strong> — {formatDate(entry.createdAt)}
-                          {entry.comment && <div>{entry.comment}</div>}
-                        </div>
-                      ))}
                     </details>
                   </div>
                 )}
@@ -801,30 +834,12 @@ export default function TechnicianDashboard() {
         )}
       </div>
 
-      <div className="card" style={{ marginTop: 32 }}>
-        <h3>Órdenes completadas ({completedOrders.length})</h3>
-        {completedOrders.length === 0 ? (
-          <p>Aún no tienes órdenes completadas</p>
-        ) : (
-          completedOrders.map((order) => (
-            <div key={order.id} className="history-row">
-              <strong>{order.orderNumber}</strong> — {formatFullName(order.client.name, order.client.lastName)}{' '}
-              — {order.device.brand} {order.device.model}
-              {order.technicianCommission != null && (
-                <span className="history-amount"> · Comisión: ${order.technicianCommission}</span>
-              )}
-            </div>
-          ))
-        )}
-        <p style={{ textAlign: 'right', fontWeight: 700, marginTop: 12 }}>
-          Total comisiones: ${totalCommission.toFixed(2)}
-        </p>
-      </div>
         </>
       )}
 
       {tab === 'resumen' && (
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+      <>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 24 }}>
         <div className="card">
           <h3>Resumen mensual — {monthLabel}</h3>
           <p>Servicios completados: {monthlyOrders.length}</p>
@@ -837,6 +852,53 @@ export default function TechnicianDashboard() {
           <p>Comisión de esta semana: ${weeklyCommission.toFixed(2)}</p>
         </div>
       </div>
+
+      <div className="card">
+        <h3>Órdenes completadas ({completedOrders.length})</h3>
+        {completedOrders.length === 0 ? (
+          <p>Aún no tienes órdenes completadas</p>
+        ) : (
+          <div className="table-wrapper">
+            <table className="styled-table">
+              <thead>
+                <tr>
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Cliente/Equipo</th>
+                  <th scope="col">Trabajo realizado</th>
+                  <th scope="col">Repuestos usados</th>
+                  <th scope="col" className="money">Comisión</th>
+                </tr>
+              </thead>
+              <tbody>
+                {completedOrders.map((order) => (
+                  <tr key={order.id}>
+                    <td data-label="Fecha">{formatDate(order.finalPaymentConfirmedAt ?? order.deliveredAt ?? '')}</td>
+                    <td data-label="Cliente/Equipo">
+                      {formatFullName(order.client.name, order.client.lastName)} — {order.device.brand} {order.device.model}
+                    </td>
+                    <td data-label="Trabajo realizado">{order.diagnosis || '—'}</td>
+                    <td data-label="Repuestos usados">
+                      {order.inventoryMovements.length === 0
+                        ? '—'
+                        : order.inventoryMovements.map((m) => `${m.product.name} (x${m.quantity})`).join(', ')}
+                    </td>
+                    <td className="money" data-label="Comisión">
+                      {order.technicianCommission != null ? `$${order.technicianCommission}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>Total comisiones</td>
+                  <td className="money" style={{ fontWeight: 700 }}>${totalCommission.toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+      </>
       )}
     </div>
   )
