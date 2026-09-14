@@ -5,18 +5,29 @@ interface ReportFilters {
   to: Date
   technicianId?: string
   clientId?: string
+  channel?: 'WEB' | 'APK'
 }
 
-export const getReportSummary = async ({ from, to, technicianId, clientId }: ReportFilters) => {
+// El canal se deriva de deliveryAmount: no-nulo significa que la orden nació
+// por self-service (APK, apps/mobile, POST /orders/self-service); nulo
+// significa mostrador (Web, admin-web, POST /orders/counter). La ruta legacy
+// POST /orders (admin, sin pago) también cae en WEB — caso raro, aproximación
+// documentada en el spec.
+export const getOrderChannel = (order: { deliveryAmount: unknown }): 'WEB' | 'APK' =>
+  order.deliveryAmount != null ? 'APK' : 'WEB'
+
+export const getReportSummary = async ({ from, to, technicianId, clientId, channel }: ReportFilters) => {
   const orders = await prisma.order.findMany({
     where: {
       status: 'DELIVERED',
       deliveredAt: { gte: from, lte: to },
       ...(technicianId ? { technicianId } : {}),
       ...(clientId ? { clientId } : {}),
+      ...(channel === 'APK' ? { deliveryAmount: { not: null } } : {}),
+      ...(channel === 'WEB' ? { deliveryAmount: null } : {}),
     },
     include: {
-      client: { select: { id: true, name: true, lastName: true } },
+      client: { select: { id: true, name: true, lastName: true, idNumber: true } },
       technician: { select: { id: true, name: true } },
     },
     orderBy: { deliveredAt: 'asc' },
@@ -71,12 +82,26 @@ export const getReportSummary = async ({ from, to, technicianId, clientId }: Rep
       orderId: o.id,
       orderNumber: o.orderNumber,
       clientName: `${o.client.name} ${o.client.lastName}`,
+      clientIdNumber: o.client.idNumber,
       technicianName: o.technician?.name ?? 'Sin asignar',
       deliveredAt: o.deliveredAt,
       budget: Number(o.budget ?? 0),
       technicianCommission: Number(o.technicianCommission ?? 0),
+      channel: getOrderChannel(o),
     })),
   }
 
-  return { range: { from, to }, servicio }
+  // Mermas: KPI global independiente de cliente/técnico/canal — solo depende
+  // del rango de fechas. Aproximación (Finding de diseño 2026-09-14): no hay
+  // modelo de merma dedicado, se estima con InventoryMovement OUT/AJUSTE_MANUAL.
+  const mermaMovements = await prisma.inventoryMovement.findMany({
+    where: { type: 'OUT', channel: 'AJUSTE_MANUAL', createdAt: { gte: from, lte: to } },
+    include: { product: { select: { price: true } } },
+  })
+  const mermasTotal = mermaMovements.reduce(
+    (sum, m) => sum + m.quantity * Number(m.unitPriceAtUse ?? m.product.price),
+    0
+  )
+
+  return { range: { from, to }, servicio, mermas: { total: mermasTotal, count: mermaMovements.length } }
 }
