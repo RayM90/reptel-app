@@ -75,6 +75,7 @@ interface TechOrder {
   device: { type: string; brand: string; model: string; color: string; accessories: string; devicePassword: string | null; serialNumber: string | null }
   serviceCatalog: { id: string; name: string; basePrice: string } | null
   statusHistory: StatusHistoryEntry[]
+  inventoryMovements: { id: string; quantity: number; unitPriceAtUse: string | null; product: { name: string } }[]
 }
 
 // Estilo del resaltado para órdenes nuevas — mismo criterio en los 3 paneles internos.
@@ -832,30 +833,12 @@ export default function TechnicianDashboard() {
         )}
       </div>
 
-      <div className="card" style={{ marginTop: 32 }}>
-        <h3>Órdenes completadas ({completedOrders.length})</h3>
-        {completedOrders.length === 0 ? (
-          <p>Aún no tienes órdenes completadas</p>
-        ) : (
-          completedOrders.map((order) => (
-            <div key={order.id} className="history-row">
-              <strong>{order.orderNumber}</strong> — {order.client.name} {order.client.lastName}{' '}
-              — {order.device.brand} {order.device.model}
-              {order.technicianCommission != null && (
-                <span className="history-amount"> · Comisión: ${order.technicianCommission}</span>
-              )}
-            </div>
-          ))
-        )}
-        <p style={{ textAlign: 'right', fontWeight: 700, marginTop: 12 }}>
-          Total comisiones: ${totalCommission.toFixed(2)}
-        </p>
-      </div>
         </>
       )}
 
       {tab === 'resumen' && (
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+      <>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 24 }}>
         <div className="card">
           <h3>Resumen mensual — {monthLabel}</h3>
           <p>Servicios completados: {monthlyOrders.length}</p>
@@ -868,6 +851,53 @@ export default function TechnicianDashboard() {
           <p>Comisión de esta semana: ${weeklyCommission.toFixed(2)}</p>
         </div>
       </div>
+
+      <div className="card">
+        <h3>Órdenes completadas ({completedOrders.length})</h3>
+        {completedOrders.length === 0 ? (
+          <p>Aún no tienes órdenes completadas</p>
+        ) : (
+          <div className="table-wrapper">
+            <table className="styled-table">
+              <thead>
+                <tr>
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Cliente/Equipo</th>
+                  <th scope="col">Trabajo realizado</th>
+                  <th scope="col">Repuestos usados</th>
+                  <th scope="col" className="money">Comisión</th>
+                </tr>
+              </thead>
+              <tbody>
+                {completedOrders.map((order) => (
+                  <tr key={order.id}>
+                    <td data-label="Fecha">{formatDate(order.finalPaymentConfirmedAt ?? order.deliveredAt ?? '')}</td>
+                    <td data-label="Cliente/Equipo">
+                      {order.client.name} {order.client.lastName} — {order.device.brand} {order.device.model}
+                    </td>
+                    <td data-label="Trabajo realizado">{order.diagnosis || '—'}</td>
+                    <td data-label="Repuestos usados">
+                      {order.inventoryMovements.length === 0
+                        ? '—'
+                        : order.inventoryMovements.map((m) => `${m.product.name} (x${m.quantity})`).join(', ')}
+                    </td>
+                    <td className="money" data-label="Comisión">
+                      {order.technicianCommission != null ? `$${order.technicianCommission}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>Total comisiones</td>
+                  <td className="money" style={{ fontWeight: 700 }}>${totalCommission.toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+      </>
       )}
     </div>
   )
