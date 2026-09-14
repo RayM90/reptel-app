@@ -7,6 +7,16 @@ export const PHONE_PREFIXES = ['0412', '0414', '0416', '0424', '0426'] as const
 
 export const PHONE_DIGITS_LENGTH = 7
 
+// V/E (persona natural) o J/G (jurídico/gobierno) + 7 a 9 dígitos — mismo
+// formato que valida el backend en lib/venezuela.ts::isValidVenezuelanIdNumber.
+export const ID_NUMBER_PREFIXES = ['V', 'E', 'J', 'G'] as const
+export const ID_NUMBER_COMPANY_PREFIXES = ['J', 'G'] as const
+export const ID_NUMBER_MAX_DIGITS = 9
+
+// Dominios de correo más usados en Venezuela — chips de autocompletado en
+// EmailAutocompleteInput.
+export const EMAIL_DOMAIN_SUGGESTIONS = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com'] as const
+
 export interface Bank {
   code: string
   name: string
