@@ -3,8 +3,8 @@ import { registerUser, loginUser, refreshUserToken, completeNewPasswordChallenge
 import { translateCognitoError } from './auth.errors';
 import prisma from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
-import { formatClientAddress } from '../../lib/clientAddress';
-import { isValidVenezuelanPhone, isValidVenezuelanIdNumber } from '../../lib/venezuela';
+import { formatClientAddress, getPrimaryAddress } from '../../lib/clientAddress';
+import { isValidVenezuelanPhone, isValidVenezuelanIdNumber, isCompanyIdNumber } from '../../lib/venezuela';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -75,13 +75,9 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         client: {
           select: {
             id: true,
-            addressState: true,
-            addressCity: true,
-            addressNeighborhood: true,
-            addressStreet: true,
-            addressBuilding: true,
             phone: true,
             idNumber: true,
+            addresses: true,
           }
         }
       }
@@ -103,7 +99,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           phone: user.phone,
           role: user.role,
           clientId: user.clientId,
-          address: formatClientAddress(user.client),
+          address: formatClientAddress(getPrimaryAddress(user.client?.addresses)),
         },
         token: tokens.idToken,
         accessToken: tokens.accessToken,
@@ -143,13 +139,9 @@ export const completeNewPassword = async (req: Request, res: Response): Promise<
         client: {
           select: {
             id: true,
-            addressState: true,
-            addressCity: true,
-            addressNeighborhood: true,
-            addressStreet: true,
-            addressBuilding: true,
             phone: true,
             idNumber: true,
+            addresses: true,
           }
         }
       }
@@ -171,7 +163,7 @@ export const completeNewPassword = async (req: Request, res: Response): Promise<
           phone: user.phone,
           role: user.role,
           clientId: user.clientId,
-          address: formatClientAddress(user.client),
+          address: formatClientAddress(getPrimaryAddress(user.client?.addresses)),
         },
         token: tokens.idToken,
         accessToken: tokens.accessToken,

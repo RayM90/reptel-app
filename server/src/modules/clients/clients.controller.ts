@@ -1,11 +1,12 @@
 import { Request, Response } from 'express'
 import * as clientsService from './clients.service'
 import { isValidVenezuelanPhone, isValidVenezuelanIdNumber, isCompanyIdNumber } from '../../lib/venezuela'
+import { flattenClientAddresses } from '../../lib/clientAddress'
 
 export const getClients = async (req: Request, res: Response): Promise<void> => {
   try {
     const clients = await clientsService.getAllClients()
-    res.json({ success: true, data: clients })
+    res.json({ success: true, data: clients.map(flattenClientAddresses) })
   } catch (error) {
     console.error('ERROR GET CLIENTS:', error)
     res.status(500).json({ success: false, message: 'Error al obtener clientes' })
@@ -20,7 +21,7 @@ export const getClient = async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ success: false, message: 'Cliente no encontrado' })
       return
     }
-    res.json({ success: true, data: client })
+    res.json({ success: true, data: flattenClientAddresses(client) })
   } catch (error) {
     console.error('ERROR GET CLIENT:', error)
     res.status(500).json({ success: false, message: 'Error al obtener el cliente' })
@@ -35,7 +36,7 @@ export const getClientByIdNumber = async (req: Request, res: Response): Promise<
       res.status(404).json({ success: false, message: 'Cliente no encontrado' })
       return
     }
-    res.json({ success: true, data: client })
+    res.json({ success: true, data: flattenClientAddresses(client) })
   } catch (error) {
     console.error('ERROR GET CLIENT BY ID NUMBER:', error)
     res.status(500).json({ success: false, message: 'Error al buscar el cliente' })
@@ -95,7 +96,7 @@ export const createClient = async (req: Request, res: Response): Promise<void> =
       addressStreet,
       addressBuilding,
     })
-    res.status(201).json({ success: true, data: client })
+    res.status(201).json({ success: true, data: flattenClientAddresses(client) })
   } catch (error) {
     console.error('ERROR CREATE CLIENT:', error)
     res.status(500).json({ success: false, message: 'Error al crear el cliente' })
@@ -125,7 +126,11 @@ export const updateClient = async (req: Request, res: Response): Promise<void> =
       addressStreet,
       addressBuilding,
     })
-    res.json({ success: true, data: client })
+    if (!client) {
+      res.status(404).json({ success: false, message: 'Cliente no encontrado' })
+      return
+    }
+    res.json({ success: true, data: flattenClientAddresses(client) })
   } catch (error) {
     console.error('ERROR UPDATE CLIENT:', error)
     res.status(500).json({ success: false, message: 'Error al actualizar el cliente' })
@@ -140,7 +145,7 @@ export const searchClients = async (req: Request, res: Response): Promise<void> 
       return
     }
     const clients = await clientsService.searchClients(query)
-    res.json({ success: true, data: clients })
+    res.json({ success: true, data: clients.map(flattenClientAddresses) })
   } catch (error) {
     console.error('ERROR SEARCH CLIENTS:', error)
     res.status(500).json({ success: false, message: 'Error al buscar clientes' })
