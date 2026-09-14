@@ -156,6 +156,12 @@ export default function TechnicianDashboard() {
   const [partsByOrder, setPartsByOrder] = useState<Record<string, PartUsed[]>>({})
   const [partsProductId, setPartsProductId] = useState<Record<string, string>>({})
   const [partsQuantity, setPartsQuantity] = useState<Record<string, string>>({})
+  // Toggle "¿Se requieren repuestos?" — solo UI, no se persiste. Arranca en
+  // true si la orden ya tiene repuestos activos cargados.
+  const [repuestosVisible, setRepuestosVisible] = useState<Record<string, boolean>>({})
+
+  const isRepuestosVisible = (orderId: string): boolean =>
+    repuestosVisible[orderId] ?? (partsByOrder[orderId] ?? []).some((p) => !p.reversedAt)
 
   useEffect(() => {
     fetchData()
@@ -706,10 +712,31 @@ export default function TechnicianDashboard() {
                       </div>
                     )}
 
-                    {/* ── Repuestos: utilidad siempre accesible, no compite
-                        visualmente con la acción principal de arriba. ── */}
+                    {/* ── Repuestos: fusionado dentro de la Acción Requerida
+                        de arriba, con un toggle Sí/No — ya no es tarjeta
+                        aparte. Sigue disponible tanto en diagnóstico como en
+                        "Finalizar reparación"/comentario, porque un repuesto
+                        imprevisto puede aparecer en cualquier momento. ── */}
                     <div className="card">
-                      <h4>Repuestos</h4>
+                      <p style={{ fontWeight: 600, marginBottom: 8 }}>¿Se requieren repuestos?</p>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: isRepuestosVisible(order.id) ? 12 : 0 }}>
+                        <button
+                          type="button"
+                          className={isRepuestosVisible(order.id) ? 'btn btn-primary' : 'btn btn-outline'}
+                          onClick={() => setRepuestosVisible((prev) => ({ ...prev, [order.id]: true }))}
+                        >
+                          Sí
+                        </button>
+                        <button
+                          type="button"
+                          className={!isRepuestosVisible(order.id) ? 'btn btn-primary' : 'btn btn-outline'}
+                          onClick={() => setRepuestosVisible((prev) => ({ ...prev, [order.id]: false }))}
+                        >
+                          No
+                        </button>
+                      </div>
+                      {isRepuestosVisible(order.id) && (
+                      <>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                         <div className="form-group" style={{ flex: 1, marginBottom: 0, minWidth: 160 }}>
                           <label>Producto</label>
@@ -785,6 +812,8 @@ export default function TechnicianDashboard() {
                           </div>
                         )
                       })()}
+                      </>
+                      )}
                     </div>
 
                     {/* ── Referencia: Tipo/Color/Contraseña no se promovieron
