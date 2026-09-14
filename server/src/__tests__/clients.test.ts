@@ -72,3 +72,38 @@ describe('Clients — authorize() rechaza roles no-ADMIN (unitario, sin depender
     expect(next).not.toHaveBeenCalled()
   })
 })
+
+describe('Clients — persona natural vs. empresa (J-/G-)', () => {
+  it('POST /api/clients retorna 400 si falta el apellido para un prefijo V/E (persona natural)', async () => {
+    const res = await request(app)
+      .post('/api/clients')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Test', idNumber: `V-${String(Date.now()).slice(-7)}`, phone: '04121234567' })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/apellido/i)
+  })
+
+  it('POST /api/clients crea el cliente sin apellido cuando el prefijo es J- (empresa)', async () => {
+    const idNumber = `J-${String(Date.now()).slice(-9)}`
+    const res = await request(app)
+      .post('/api/clients')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Constructora Test, C.A.', idNumber, phone: '04121234567' })
+
+    expect(res.status).toBe(201)
+    expect(res.body.data.lastName).toBe('')
+  })
+
+  it('POST /api/clients crea el cliente sin apellido cuando el prefijo es G- (gobierno) y guarda contactPerson', async () => {
+    const idNumber = `G-${String(Date.now()).slice(-9)}`
+    const res = await request(app)
+      .post('/api/clients')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Alcaldía Test', idNumber, phone: '04121234567', contactPerson: 'Ana Pérez' })
+
+    expect(res.status).toBe(201)
+    expect(res.body.data.lastName).toBe('')
+    expect(res.body.data.contactPerson).toBe('Ana Pérez')
+  })
+})
