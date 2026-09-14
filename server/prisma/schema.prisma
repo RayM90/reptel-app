@@ -112,6 +112,7 @@ model User {
   statusChangesMade    OrderStatusHistory[] @relation("StatusChangeActor")
   advanceSubmissionsConfirmed AdvancePaymentSubmission[] @relation("AdvanceConfirmedBy")
   inventoryMovementsMade InventoryMovement[]
+  passwordResetsResolved PasswordResetRequest[] @relation("PasswordResetResolvedBy")
 }
 
 model Client {
@@ -132,6 +133,28 @@ model Client {
 
   user            User?
   orders          Order[]
+}
+
+enum PasswordResetStatus {
+  PENDING
+  RESOLVED
+}
+
+// Reset de contraseña mediado por Admin — Cognito no tiene email (SES)
+// configurado en este proyecto, así que no hay flujo self-service por
+// correo. El usuario deja constancia acá; un Admin resuelve a mano
+// (ver auth.service.ts:setTemporaryPassword).
+model PasswordResetRequest {
+  id         String               @id @default(uuid())
+  email      String
+  status     PasswordResetStatus  @default(PENDING)
+  createdAt  DateTime             @default(now())
+  resolvedAt DateTime?
+
+  resolvedByUserId String?
+  resolvedByUser   User?   @relation("PasswordResetResolvedBy", fields: [resolvedByUserId], references: [id])
+
+  @@index([status])
 }
 
 // ─────────────────────────────────────────────
