@@ -17,3 +17,9 @@ export const ID_NUMBER_PREFIXES = ['V', 'E', 'J', 'G'];
 export const isValidVenezuelanIdNumber = (idNumber: string): boolean => {
   return /^[VEJG]-\d{7,9}$/.test(idNumber);
 };
+
+// J- (jurídico/empresa) y G- (gobierno) no tienen apellido — se usa para
+// relajar la validación de lastName en clients.controller.ts.
+export const isCompanyIdNumber = (idNumber: string): boolean => {
+  return /^[JG]-/.test(idNumber);
+};

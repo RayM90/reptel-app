@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import * as clientsService from './clients.service'
-import { isValidVenezuelanPhone, isValidVenezuelanIdNumber } from '../../lib/venezuela'
+import { isValidVenezuelanPhone, isValidVenezuelanIdNumber, isCompanyIdNumber } from '../../lib/venezuela'
 
 export const getClients = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -44,18 +44,26 @@ export const getClientByIdNumber = async (req: Request, res: Response): Promise<
 
 export const createClient = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, lastName, idNumber, phone, email, addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding } = req.body
-    if (!name || !lastName || !idNumber || !phone) {
+    const { name, lastName, idNumber, phone, email, contactPerson, addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding } = req.body
+    if (!name || !idNumber || !phone) {
       res.status(400).json({
         success: false,
-        message: 'Nombre, apellido, cédula y teléfono son requeridos',
+        message: 'Nombre, cédula y teléfono son requeridos',
       })
       return
     }
     if (!isValidVenezuelanIdNumber(idNumber)) {
       res.status(400).json({
         success: false,
-        message: 'La cédula debe tener el formato V-12345678 o E-12345678',
+        message: 'La cédula/RIF debe tener el formato V-12345678, E-12345678, J-123456789 o G-123456789',
+      })
+      return
+    }
+    const isCompany = isCompanyIdNumber(idNumber)
+    if (!isCompany && !lastName) {
+      res.status(400).json({
+        success: false,
+        message: 'El apellido es requerido para personas naturales (V-/E-)',
       })
       return
     }
@@ -76,10 +84,11 @@ export const createClient = async (req: Request, res: Response): Promise<void> =
     }
     const client = await clientsService.createClient({
       name,
-      lastName,
+      lastName: lastName || '',
       idNumber,
       phone,
       email,
+      contactPerson,
       addressState,
       addressCity,
       addressNeighborhood,
@@ -96,7 +105,7 @@ export const createClient = async (req: Request, res: Response): Promise<void> =
 export const updateClient = async (req: Request, res: Response): Promise<void> => {
   try {
     const id = String(req.params.id)
-    const { name, lastName, phone, email, addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding } = req.body
+    const { name, lastName, phone, email, contactPerson, addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding } = req.body
     if (phone && !isValidVenezuelanPhone(phone)) {
       res.status(400).json({
         success: false,
@@ -109,6 +118,7 @@ export const updateClient = async (req: Request, res: Response): Promise<void> =
       lastName,
       phone,
       email,
+      contactPerson,
       addressState,
       addressCity,
       addressNeighborhood,
