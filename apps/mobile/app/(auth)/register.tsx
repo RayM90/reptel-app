@@ -20,8 +20,12 @@ import { Feather } from "@expo/vector-icons";
 import { useToastStore } from "../../src/store/toast.store";
 import { api } from "../../src/services/api";
 import PhoneInput from "../../src/components/PhoneInput";
+import IdNumberInput, { isCompanyIdPrefix } from "../../src/components/IdNumberInput";
+import EmailAutocompleteInput from "../../src/components/EmailAutocompleteInput";
+import AddressFields, { emptyAddressValues, isAddressComplete, AddressValues } from "../../src/components/AddressFields";
 
 const { width } = Dimensions.get("window");
+const SECONDARY_LABELS = ["Casa", "Trabajo", "Otro"];
 
 const traducirErrorCognito = (mensaje: string): string => {
   if (mensaje.includes("already exists") || mensaje.includes("UsernameExistsException"))
@@ -44,10 +48,17 @@ const traducirErrorCognito = (mensaje: string): string => {
 };
 
 export default function RegisterScreen() {
+  const [idNumber,      setIdNumber]      = useState("");
   const [nombre,        setNombre]        = useState("");
+  const [apellido,      setApellido]      = useState("");
+  const [contactPerson, setContactPerson] = useState("");
   const [correo,        setCorreo]        = useState("");
   const [telefono,      setTelefono]      = useState("");
-  const [direccion,     setDireccion]     = useState("");
+  const [address,       setAddress]       = useState<AddressValues>(emptyAddressValues);
+  const [wantsSecondary, setWantsSecondary] = useState(false);
+  const [secondaryLabel, setSecondaryLabel] = useState(SECONDARY_LABELS[0]);
+  const [secondaryLabelOther, setSecondaryLabelOther] = useState("");
+  const [secondaryAddress, setSecondaryAddress] = useState<AddressValues>(emptyAddressValues);
   const [password,      setPassword]      = useState("");
   const [confirmar,     setConfirmar]     = useState("");
   const [loading,       setLoading]       = useState(false);
@@ -55,10 +66,27 @@ export default function RegisterScreen() {
   const [verConfirmar,  setVerConfirmar]  = useState(false);
   const showToast = useToastStore((state) => state.showToast);
 
+  const isCompany = isCompanyIdPrefix(idNumber);
+
   const handleRegister = async () => {
-    if (!nombre || !correo || !telefono || !direccion || !password || !confirmar) {
+    if (!idNumber || !nombre || !correo || !telefono || !password || !confirmar) {
       showToast("Por favor completa todos los campos", "error");
       return;
+    }
+    if (!isCompany && !apellido) {
+      showToast("El apellido es requerido", "error");
+      return;
+    }
+    if (!isAddressComplete(address)) {
+      showToast("La dirección de entrega debe estar completa (los 5 campos)", "error");
+      return;
+    }
+    const resolvedSecondaryLabel = secondaryLabel === "Otro" ? secondaryLabelOther.trim() : secondaryLabel;
+    if (wantsSecondary) {
+      if (!resolvedSecondaryLabel || !isAddressComplete(secondaryAddress)) {
+        showToast("La segunda dirección debe tener nombre y los 5 campos completos", "error");
+        return;
+      }
     }
     if (password !== confirmar) {
       showToast("Las contraseñas no coinciden", "error");
@@ -72,12 +100,16 @@ export default function RegisterScreen() {
     try {
       setLoading(true);
       await api.post("/api/auth/register", {
-        name:     nombre,
-        email:    correo,
-        phone:    telefono,
-        address:  direccion,
+        name:          nombre,
+        lastName:      isCompany ? "" : apellido,
+        idNumber,
+        email:         correo,
+        phone:         telefono,
         password,
-        role:     "CLIENT",
+        role:          "CLIENT",
+        contactPerson: isCompany ? contactPerson || undefined : undefined,
+        address,
+        secondaryAddress: wantsSecondary ? { label: resolvedSecondaryLabel, ...secondaryAddress } : undefined,
       });
 
       // El Alert original solo tenía un botón ("Iniciar sesión") que navegaba
@@ -129,10 +161,13 @@ export default function RegisterScreen() {
             {/* Formulario */}
             <View style={styles.form}>
 
-              <Text style={styles.label}>Nombre completo</Text>
+              <Text style={styles.label}>Cédula / RIF</Text>
+              <IdNumberInput value={idNumber} onChange={setIdNumber} />
+
+              <Text style={styles.label}>{isCompany ? "Razón social o nombre de la empresa" : "Nombre"}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Juan Pérez"
+                placeholder={isCompany ? "Ej: Constructora ABC, C.A." : "Juan Pérez"}
                 placeholderTextColor="#9ca3af"
                 value={nombre}
                 onChangeText={setNombre}
@@ -140,32 +175,80 @@ export default function RegisterScreen() {
                 returnKeyType="next"
               />
 
+              {!isCompany && (
+                <>
+                  <Text style={styles.label}>Apellido</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Pérez"
+                    placeholderTextColor="#9ca3af"
+                    value={apellido}
+                    onChangeText={setApellido}
+                    autoCapitalize="words"
+                    returnKeyType="next"
+                  />
+                </>
+              )}
+
+              {isCompany && (
+                <>
+                  <Text style={styles.label}>Persona de contacto (opcional)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Quién recibe la entrega"
+                    placeholderTextColor="#9ca3af"
+                    value={contactPerson}
+                    onChangeText={setContactPerson}
+                    autoCapitalize="words"
+                  />
+                </>
+              )}
+
               <Text style={styles.label}>Correo electrónico</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="correo@ejemplo.com"
-                placeholderTextColor="#9ca3af"
-                value={correo}
-                onChangeText={setCorreo}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                returnKeyType="next"
-              />
+              <EmailAutocompleteInput value={correo} onChange={setCorreo} />
 
               <Text style={styles.label}>Teléfono</Text>
               <PhoneInput value={telefono} onChange={setTelefono} />
 
-              <Text style={styles.label}>Dirección completa</Text>
-              <TextInput
-                style={[styles.input, styles.inputMultiline]}
-                placeholder="Calle, Urbanización, Ciudad, Estado"
-                placeholderTextColor="#9ca3af"
-                value={direccion}
-                onChangeText={setDireccion}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
+              <Text style={styles.sectionTitle}>Dirección de entrega</Text>
+              <AddressFields values={address} onChange={setAddress} />
+
+              <TouchableOpacity
+                style={styles.secondaryToggle}
+                onPress={() => setWantsSecondary((prev) => !prev)}
+              >
+                <Text style={styles.secondaryToggleText}>
+                  {wantsSecondary ? "− Quitar segunda dirección" : "+ Agregar otra dirección (opcional)"}
+                </Text>
+              </TouchableOpacity>
+
+              {wantsSecondary && (
+                <>
+                  <View style={styles.chipsRow}>
+                    {SECONDARY_LABELS.map((label) => (
+                      <TouchableOpacity
+                        key={label}
+                        style={[styles.labelChip, secondaryLabel === label && styles.labelChipActive]}
+                        onPress={() => setSecondaryLabel(label)}
+                      >
+                        <Text style={[styles.labelChipText, secondaryLabel === label && styles.labelChipTextActive]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {secondaryLabel === "Otro" && (
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Nombre de esta dirección"
+                      placeholderTextColor="#9ca3af"
+                      value={secondaryLabelOther}
+                      onChangeText={setSecondaryLabelOther}
+                    />
+                  )}
+                  <AddressFields values={secondaryAddress} onChange={setSecondaryAddress} />
+                </>
+              )}
 
               {/* Contraseña con ojito */}
               <Text style={styles.label}>Contraseña</Text>
@@ -380,4 +463,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
   },
+  sectionTitle: {
+    fontSize: 15, fontWeight: "700", color: "#1a1a6e", marginTop: 18, marginBottom: 10,
+  },
+  secondaryToggle: { marginTop: 4, marginBottom: 12 },
+  secondaryToggleText: { fontSize: 13, fontWeight: "600", color: "#5564ad" },
+  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  labelChip: {
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1.5,
+    borderColor: "#d0d8ff", backgroundColor: "#f0f4ff",
+  },
+  labelChipActive: { borderColor: "#5564ad", backgroundColor: "#eef2ff" },
+  labelChipText: { fontSize: 13, color: "#4a4a8a", fontWeight: "600" },
+  labelChipTextActive: { color: "#1a1a6e" },
 });
