@@ -1,8 +1,8 @@
 import prisma from '../lib/prisma'
 import { getReportSummary } from '../modules/reports/reports.service'
 
-let clientA: { id: string; name: string; lastName: string }
-let clientB: { id: string; name: string; lastName: string }
+let clientA: { id: string; name: string; lastName: string; idNumber: string }
+let clientB: { id: string; name: string; lastName: string; idNumber: string }
 let technicianX: { id: string; name: string }
 let technicianY: { id: string; name: string }
 let device: { id: string }
@@ -188,6 +188,44 @@ describe('reports.service — getReportSummary', () => {
     expect(result.servicio.byTechnician).toEqual([])
     expect(result.servicio.byClient).toEqual([])
   })
+
+  it('incluye el canal (WEB/APK) en cada orden del detalle', async () => {
+    const result = await getReportSummary({ from: RANGE_FROM, to: RANGE_TO, clientId: clientB.id })
+
+    expect(result.servicio.orders[0].channel).toBe('WEB')
+    expect(result.servicio.orders[0].clientIdNumber).toBe(clientB.idNumber)
+  })
+
+  it('filtra por channel APK cuando se especifica', async () => {
+    const result = await getReportSummary({ from: RANGE_FROM, to: RANGE_TO, channel: 'APK' })
+    expect(result.servicio.ordersCount).toBe(0) // ninguna orden de este fixture tiene deliveryAmount
+  })
+
+  it('filtra por channel WEB cuando se especifica', async () => {
+    const result = await getReportSummary({ from: RANGE_FROM, to: RANGE_TO, channel: 'WEB' })
+    expect(result.servicio.ordersCount).toBe(4) // todas las órdenes del fixture son WEB (sin deliveryAmount)
+  })
+
+  it('calcula mermas a partir de InventoryMovement OUT/AJUSTE_MANUAL en el rango', async () => {
+    const category = await prisma.productCategory.create({ data: { name: `Cat-Mermas-${Date.now()}` } })
+    const product = await prisma.product.create({
+      data: { name: `Producto Merma ${Date.now()}`, price: 10, categoryId: category.id },
+    })
+    await prisma.inventoryMovement.create({
+      data: {
+        type: 'OUT', channel: 'AJUSTE_MANUAL', quantity: 3, reason: 'Merma de prueba',
+        productId: product.id, createdAt: IN_RANGE,
+      },
+    })
+
+    const result = await getReportSummary({ from: RANGE_FROM, to: RANGE_TO })
+    expect(result.mermas.total).toBe(30) // 3 × $10
+    expect(result.mermas.count).toBe(1)
+
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await prisma.product.delete({ where: { id: product.id } })
+    await prisma.productCategory.delete({ where: { id: category.id } })
+  })
 })
 
 import request from 'supertest'
@@ -252,6 +290,131 @@ describe('GET /api/reports/summary', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.data.servicio.ordersCount).toBe(1)
+  }, 10000)
+})
+
+describe('reports.service — getAuditReport', () => {
+  // Fixture propia (con receivedAt explícito dentro de RANGE) — las órdenes
+  // del describe de arriba no fijan receivedAt (queda en "now" real, fuera
+  // de RANGE_FROM/RANGE_TO que son fechas fijas de 2026-06), así que audit
+  // (que filtra por receivedAt) no las vería.
+  it('incluye la orden en el rango, filtra por status/cliente y trae partsUsed', async () => {
+    const { getAuditReport } = await import('../modules/reports/reports.service')
+    const suffix = Date.now()
+
+    const client = await prisma.client.create({
+      data: { name: 'Cliente', lastName: 'Audit', idNumber: `TEST-AUDIT-${suffix}`, phone: '0000000005' },
+    })
+    const dev = await prisma.device.create({ data: { type: 'LAPTOP', brand: 'Dell', model: 'Audit' } })
+    const order = await prisma.order.create({
+      data: {
+        orderNumber: `REP-AUDIT-${suffix}`,
+        status: 'WAITING_PART',
+        problem: 'Test audit',
+        clientId: client.id,
+        deviceId: dev.id,
+        receivedAt: IN_RANGE,
+      },
+    })
+
+    try {
+      const all = await getAuditReport({ from: RANGE_FROM, to: RANGE_TO })
+      expect(all.some((o) => o.orderId === order.id)).toBe(true)
+
+      const filtered = await getAuditReport({
+        from: RANGE_FROM, to: RANGE_TO, status: 'WAITING_PART', clientId: client.id,
+      })
+      expect(filtered).toHaveLength(1)
+      expect(filtered[0].clientIdNumber).toBe(client.idNumber)
+      expect(filtered[0].channel).toBe('WEB')
+      expect(filtered[0].partsUsed).toEqual([])
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } }).catch(() => {})
+      await prisma.device.delete({ where: { id: dev.id } }).catch(() => {})
+      await prisma.client.delete({ where: { id: client.id } }).catch(() => {})
+    }
+  })
+})
+
+describe('GET /api/reports/audit', () => {
+  it('sin token retorna 401', async () => {
+    const res = await request(app).get('/api/reports/audit?from=2026-06-01&to=2026-06-30')
+    expect(res.status).toBe(401)
+  })
+
+  it('con token ADMIN retorna 200 con un arreglo', async () => {
+    const res = await request(app)
+      .get('/api/reports/audit?from=2026-06-01&to=2026-06-30')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.data)).toBe(true)
+  }, 10000)
+})
+
+describe('reports.service — getClientHistoryReport', () => {
+  it('retorna null si la cédula no existe', async () => {
+    const { getClientHistoryReport } = await import('../modules/reports/reports.service')
+    const result = await getClientHistoryReport('CEDULA-QUE-NO-EXISTE-999')
+    expect(result).toBeNull()
+  })
+
+  it('calcula devicesIngresados, totalPaid e historial', async () => {
+    const { getClientHistoryReport } = await import('../modules/reports/reports.service')
+    const result = await getClientHistoryReport(clientA.idNumber)
+
+    expect(result).not.toBeNull()
+    expect(result!.devicesIngresados).toBe(1) // las 4 órdenes de clientA usan el mismo device
+    // getClientHistoryReport no filtra por rango de fechas — suma TODAS las
+    // DELIVERED del cliente: 100 + 60 + 80 + 999 (la "fuera de rango" también
+    // es DELIVERED, solo queda fuera del reporte de resumen por fecha).
+    expect(result!.totalPaid).toBe(1239)
+    expect(result!.history.length).toBeGreaterThanOrEqual(4)
+  })
+})
+
+describe('reports.service — getReportTechnicians', () => {
+  it('incluye técnicos sin filtrar por isActive/estado', async () => {
+    const { getReportTechnicians } = await import('../modules/reports/reports.service')
+    const result = await getReportTechnicians()
+
+    expect(result.some((t) => t.id === technicianX.id)).toBe(true)
+    expect(result.some((t) => t.id === technicianY.id)).toBe(true)
+  })
+})
+
+describe('GET /api/reports/client-history/:idNumber', () => {
+  it('sin token retorna 401', async () => {
+    const res = await request(app).get(`/api/reports/client-history/${clientA.idNumber}`)
+    expect(res.status).toBe(401)
+  })
+
+  it('con token ADMIN y cédula existente retorna 200', async () => {
+    const res = await request(app)
+      .get(`/api/reports/client-history/${clientA.idNumber}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.client.idNumber).toBe(clientA.idNumber)
+  }, 10000)
+
+  it('con cédula inexistente retorna 404', async () => {
+    const res = await request(app)
+      .get('/api/reports/client-history/CEDULA-QUE-NO-EXISTE-999')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(404)
+  }, 10000)
+})
+
+describe('GET /api/reports/technicians', () => {
+  it('con token ADMIN retorna 200 con un arreglo', async () => {
+    const res = await request(app)
+      .get('/api/reports/technicians')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.data)).toBe(true)
   }, 10000)
 })
 
