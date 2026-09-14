@@ -2,9 +2,53 @@ import { useEffect, useRef, useState } from 'react'
 import { formatClientAddress, isIntakePendingPickup, type Order, type PaymentSubmission, type StatusHistoryEntry } from '../pages/admin/dashboard.types'
 import { getStatusBadge, badgeClassName } from '../utils/statusBadge'
 import { useConfirmDialogStore } from '../store/confirmDialog.store'
+import { api } from '../services/api'
 import PhoneInput from './PhoneInput'
 import SelectWithOther from './SelectWithOther'
 import { VENEZUELAN_BANKS } from '../constants/venezuela'
+
+// Repuesto de servicio técnico usado en la orden — viene de GET /api/orders/:id/parts
+// (ya existía para el panel del técnico, acá lo reutilizamos tal cual).
+interface PartUsed {
+  id: string
+  quantity: number
+  reversedAt: string | null
+  createdAt: string
+  product: { id: string; name: string }
+  user: { id: string; name: string; lastName: string } | null
+}
+
+type PhaseState = 'done' | 'active' | 'locked'
+
+// Fase del stepper cronológico de la orden. Arranca cerrada (✅) si ya se
+// completó, abierta (▶️) si es la fase actual, y sin contenido ni interacción
+// (🔒, atenuada) si todavía no corresponde — el admin ve qué viene después
+// sin poder tocarlo. Ver docs/superpowers/specs/2026-09-14-stepper-orden-admin-design.md.
+function OrderPhase({
+  number,
+  title,
+  state,
+  children,
+}: {
+  number: number
+  title: string
+  state: PhaseState
+  children: React.ReactNode
+}) {
+  if (state === 'locked') {
+    return (
+      <div className="card" style={{ opacity: 0.5 }}>
+        <h4>🔒 {number}. {title}</h4>
+      </div>
+    )
+  }
+  return (
+    <details className="card" open={state === 'active'}>
+      <summary><h4 style={{ display: 'inline' }}>{state === 'done' ? '✅' : '▶️'} {number}. {title}</h4></summary>
+      <div style={{ marginTop: 12 }}>{children}</div>
+    </details>
+  )
+}
 
 function PaymentDetailsView({ details }: { details: Record<string, string> | null }) {
   if (!details) return <span>—</span>
@@ -307,11 +351,9 @@ function CounterBudgetPaymentForm({
 }
 
 // Ajuste imprevisto al presupuesto (Finding F, revisión final). El backend lo
-// permite en REPAIRING, READY y PAID_PENDING_DELIVERY, pero la única UI que lo
-// llamaba era la tarjeta del técnico, visible solo en REPAIRING — y una orden
-// en PAID_PENDING_DELIVERY ni siquiera aparece en su lista de órdenes activas.
-// El caso de negocio que motivó la función ("cobrar un imprevisto DESPUÉS de
-// que el cliente ya pagó el 100%") no se podía ejecutar desde ningún lado.
+// permite en REPAIRING, READY y PAID_PENDING_DELIVERY. Vive en la fase 3
+// (Presupuesto y Ajustes) del stepper — antes del cobro final — para que el
+// admin lo use antes de cerrar la cuenta con el cliente, no después.
 function BudgetAdjustmentForm({
   disabled,
   onSubmit,
@@ -382,6 +424,17 @@ interface OrderDetailModalProps {
   onDownloadReceipt: (order: Order, type: 'intake' | 'budget-advance' | 'payment' | 'final' | 'closure') => void
 }
 
+// Etiqueta de la fase "Reparación y Pruebas" (informativa, sin formularios
+// propios hoy) — deriva del status real de la orden.
+const REPAIR_PHASE_LABEL: Record<string, string> = {
+  APPROVED: 'Presupuesto aprobado, en espera de inicio de reparación',
+  REPAIRING: 'En reparación',
+  WAITING_PART: 'Esperando repuesto',
+  READY: 'Reparación y pruebas terminadas',
+  PAID_PENDING_DELIVERY: 'Reparación y pruebas terminadas',
+  DELIVERED: 'Reparación y pruebas terminadas',
+}
+
 export default function OrderDetailModal({
   order,
   pendingIds,
@@ -399,6 +452,7 @@ export default function OrderDetailModal({
   onDownloadReceipt,
 }: OrderDetailModalProps) {
   const boxRef = useRef<HTMLDivElement>(null)
+  const [partsUsed, setPartsUsed] = useState<PartUsed[]>([])
 
   useEffect(() => {
     boxRef.current?.focus()
@@ -415,7 +469,26 @@ export default function OrderDetailModal({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
+  // Repuestos de servicio técnico usados en la orden (fase 2) — mismo
+  // endpoint que ya consume el panel del técnico, no requiere nada nuevo
+  // en el backend.
+  useEffect(() => {
+    let cancelled = false
+    api
+      .get(`/api/orders/${order.id}/parts`)
+      .then((res) => {
+        if (!cancelled) setPartsUsed(res.data.data)
+      })
+      .catch(() => {
+        if (!cancelled) setPartsUsed([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [order.id])
+
   const clientAddress = formatClientAddress(order.client)
+  const activePartsUsed = partsUsed.filter((p) => p.reversedAt == null)
 
   // Cada recibo se muestra junto a la sección de la que es constancia, no
   // todos juntos al final — así queda claro a qué pago/paso corresponde
@@ -462,6 +535,27 @@ export default function OrderDetailModal({
   const canAdjustBudget =
     order.status === 'REPAIRING' || order.status === 'READY' || order.status === 'PAID_PENDING_DELIVERY'
 
+  // ─── Stepper cronológico: 6 fases, cada una desbloqueada cuando la orden
+  // llegó al punto del flujo que le corresponde. El "Cobro/Autorización"
+  // (fase 4) agrupa el pago de revisión (que se cobra desde la recepción,
+  // antes del diagnóstico) y el anticipo de presupuesto (que aparece
+  // después) — por eso se desbloquea apenas la orden fue recibida, no
+  // recién tras el diagnóstico. La fase activa por defecto es la última
+  // desbloqueada; las anteriores arrancan cerradas (✅) para no forzar
+  // scroll largo. "Acciones" queda fuera de las fases: aplica en estados
+  // que no siguen el orden lineal (cierre sin costo desde WAITING_APPROVAL,
+  // cierre por cancelación), y siempre debe quedar accesible.
+  const phase2Unlocked = order.status !== 'PENDING_PAYMENT' && order.status !== 'RECEIVED'
+  const phase3Unlocked = phase2Unlocked && order.status !== 'DIAGNOSING'
+  const phase4Unlocked = order.status !== 'PENDING_PAYMENT'
+  const phase5Unlocked = ['APPROVED', 'REPAIRING', 'WAITING_PART', 'READY', 'PAID_PENDING_DELIVERY', 'DELIVERED'].includes(order.status)
+  const phase6Unlocked = ['READY', 'PAID_PENDING_DELIVERY', 'DELIVERED', 'REJECTED_PENDING_PICKUP', 'CANCELLED'].includes(order.status)
+
+  const unlockedByPhase = [true, phase2Unlocked, phase3Unlocked, phase4Unlocked, phase5Unlocked, phase6Unlocked]
+  const activePhase = unlockedByPhase.lastIndexOf(true) + 1
+  const phaseState = (phaseNumber: number, unlocked: boolean): PhaseState =>
+    !unlocked ? 'locked' : phaseNumber === activePhase ? 'active' : 'done'
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -478,33 +572,73 @@ export default function OrderDetailModal({
           <button className="btn btn-outline" onClick={onClose} aria-label="Cerrar">✕</button>
         </div>
 
-        <div className="card">
+        <OrderPhase number={1} title="Recepción" state={phaseState(1, true)}>
           <h4>Cliente</h4>
           <p><strong>Nombre:</strong> {order.client.name} {order.client.lastName}</p>
           <p><strong>Cédula:</strong> {order.client.idNumber}</p>
           <p><strong>Teléfono:</strong> {order.client.phone}</p>
           {order.client.email && <p><strong>Email:</strong> {order.client.email}</p>}
           {clientAddress && <p><strong>Dirección:</strong> {clientAddress}</p>}
-        </div>
-
-        <StatusTimeline history={order.statusHistory} />
-
-        <div className="card">
-          <h4>Recepción</h4>
+          <h4 style={{ marginTop: 16 }}>Equipo y falla</h4>
           <p><strong>Origen:</strong> {order.deliveryAmount != null ? '📱 App' : '🏢 Recepción'}</p>
           <p><strong>Falla reportada:</strong> {order.problem}</p>
           <p><strong>Accesorios entregados:</strong> {order.device.accessories || '—'}</p>
           {order.observations && <p><strong>Observaciones:</strong> {order.observations}</p>}
-        </div>
+        </OrderPhase>
 
-        <div className="card">
-          <h4>Técnico</h4>
-          <p><strong>Asignado:</strong> {order.technician?.name || 'Sin asignar'}</p>
+        <StatusTimeline history={order.statusHistory} />
+
+        <OrderPhase number={2} title="Diagnóstico Técnico" state={phaseState(2, phase2Unlocked)}>
+          <p><strong>Técnico asignado:</strong> {order.technician?.name || 'Sin asignar'}</p>
           <p><strong>Diagnóstico:</strong> {order.diagnosis || '—'}</p>
+          <h4 style={{ marginTop: 16 }}>Repuestos usados</h4>
+          {activePartsUsed.length === 0 ? (
+            <p>Sin repuestos registrados</p>
+          ) : (
+            activePartsUsed.map((p) => (
+              <p key={p.id}>
+                <strong>{p.product.name}</strong> × {p.quantity}
+                {p.user && ` — usado por ${p.user.name} ${p.user.lastName}`}
+                {' · '}{new Date(p.createdAt).toLocaleDateString('es-VE')}
+              </p>
+            ))
+          )}
+        </OrderPhase>
+
+        <OrderPhase number={3} title="Presupuesto y Ajustes" state={phaseState(3, phase3Unlocked)}>
           <p><strong>Presupuesto:</strong> {order.budget ? `$${order.budget}` : '—'}</p>
           {order.budget != null && Number(order.budget) > 0 && (
             <BudgetBreakdown budget={Number(order.budget)} revisionAmount={Number(order.revisionAmount ?? 15)} />
           )}
+          {canAdjustBudget && (
+            <BudgetAdjustmentForm
+              disabled={pendingIds.has(order.id)}
+              onSubmit={(amount, reason) => onAddBudgetAdjustment(order, amount, reason)}
+            />
+          )}
+        </OrderPhase>
+
+        <OrderPhase number={4} title="Cobro / Autorización del Cliente" state={phaseState(4, phase4Unlocked)}>
+          <h4>Pago anticipado</h4>
+          <PaymentSubmissionsView
+            submissions={(order.advancePaymentSubmissions ?? []).filter((s) => s.kind === 'REVISION')}
+            total={String(
+              order.deliveryAmount != null
+                ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? 15)
+                : Number(order.revisionAmount ?? 15)
+            )}
+            onApprove={onApproveAdvanceInstallment}
+            onReject={onRejectAdvanceInstallment}
+            pendingIds={pendingIds}
+          />
+          {showIntakeReceipt && (
+            <p style={{ marginTop: 8 }}>
+              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'intake')}>
+                📄 Recibo de {isIntakePendingPickup(order) ? 'Anticipo' : 'Recepción'}
+              </button>
+            </p>
+          )}
+
           {showBudgetAdvanceSection && (
             <>
               <h4 style={{ marginTop: 16 }}>Anticipo de presupuesto (mínimo 50%)</h4>
@@ -531,41 +665,16 @@ export default function OrderDetailModal({
               )}
             </>
           )}
-        </div>
+        </OrderPhase>
 
-        <div className="card">
-          <h4>Pago anticipado</h4>
-          <PaymentSubmissionsView
-            submissions={(order.advancePaymentSubmissions ?? []).filter((s) => s.kind === 'REVISION')}
-            total={String(
-              order.deliveryAmount != null
-                ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? 15)
-                : Number(order.revisionAmount ?? 15)
-            )}
-            onApprove={onApproveAdvanceInstallment}
-            onReject={onRejectAdvanceInstallment}
-            pendingIds={pendingIds}
-          />
-          {showIntakeReceipt && (
-            <p style={{ marginTop: 8 }}>
-              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'intake')}>
-                📄 Recibo de {isIntakePendingPickup(order) ? 'Anticipo' : 'Recepción'}
-              </button>
-            </p>
-          )}
-        </div>
+        <OrderPhase number={5} title="Reparación y Pruebas" state={phaseState(5, phase5Unlocked)}>
+          <p>{REPAIR_PHASE_LABEL[order.status] ?? '—'}</p>
+        </OrderPhase>
 
-        <div className="card">
+        <OrderPhase number={6} title="Pago Final y Entrega" state={phaseState(6, phase6Unlocked)}>
           <h4>Pago final</h4>
-          {order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15) && (
-            <>
-              <BudgetBreakdown budget={Number(order.budget)} revisionAmount={Number(order.revisionAmount ?? 15)} />
-              {/* Con la orden pagada en su totalidad este número es siempre
-                  $0.00 y solo compite visualmente con el mensaje de abajo. */}
-              {!finalPaidInFull && (
-                <p className="form-hint">Saldo pendiente al entregar: ${Math.max(finalRemaining, 0).toFixed(2)}</p>
-              )}
-            </>
+          {order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15) && !finalPaidInFull && (
+            <p className="form-hint">Saldo pendiente al entregar: ${Math.max(finalRemaining, 0).toFixed(2)}</p>
           )}
           {finalPaidInFull ? (
             <p>✅ Pagado en su totalidad — sin cobro pendiente.</p>
@@ -599,13 +708,7 @@ export default function OrderDetailModal({
               )}
             </p>
           )}
-          {canAdjustBudget && (
-            <BudgetAdjustmentForm
-              disabled={pendingIds.has(order.id)}
-              onSubmit={(amount, reason) => onAddBudgetAdjustment(order, amount, reason)}
-            />
-          )}
-        </div>
+        </OrderPhase>
 
         <p>
           <strong>Acciones:</strong>{' '}
