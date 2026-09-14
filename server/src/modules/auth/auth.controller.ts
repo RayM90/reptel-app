@@ -249,3 +249,26 @@ export const createStaff = async (req: Request, res: Response): Promise<void> =>
     res.status(400).json({ message: translateCognitoError(error) || 'Error al crear el empleado' });
   }
 };
+
+// Mensaje idéntico se devuelva o no la cuenta exista — evita que este
+// endpoint público sirva para enumerar qué emails están registrados.
+const GENERIC_RESET_MESSAGE = 'Si el correo existe en el sistema, un administrador se pondrá en contacto para restablecer tu contraseña.';
+
+export const requestPasswordReset = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ message: 'Email es requerido' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (user) {
+      await prisma.passwordResetRequest.create({ data: { email } });
+    }
+
+    res.status(200).json({ success: true, message: GENERIC_RESET_MESSAGE });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Error al procesar la solicitud' });
+  }
+};
