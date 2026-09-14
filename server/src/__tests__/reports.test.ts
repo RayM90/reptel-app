@@ -1,8 +1,8 @@
 import prisma from '../lib/prisma'
 import { getReportSummary } from '../modules/reports/reports.service'
 
-let clientA: { id: string; name: string; lastName: string }
-let clientB: { id: string; name: string; lastName: string }
+let clientA: { id: string; name: string; lastName: string; idNumber: string }
+let clientB: { id: string; name: string; lastName: string; idNumber: string }
 let technicianX: { id: string; name: string }
 let technicianY: { id: string; name: string }
 let device: { id: string }
@@ -187,6 +187,44 @@ describe('reports.service — getReportSummary', () => {
     expect(result.servicio.totalBudget).toBe(0)
     expect(result.servicio.byTechnician).toEqual([])
     expect(result.servicio.byClient).toEqual([])
+  })
+
+  it('incluye el canal (WEB/APK) en cada orden del detalle', async () => {
+    const result = await getReportSummary({ from: RANGE_FROM, to: RANGE_TO, clientId: clientB.id })
+
+    expect(result.servicio.orders[0].channel).toBe('WEB')
+    expect(result.servicio.orders[0].clientIdNumber).toBe(clientB.idNumber)
+  })
+
+  it('filtra por channel APK cuando se especifica', async () => {
+    const result = await getReportSummary({ from: RANGE_FROM, to: RANGE_TO, channel: 'APK' })
+    expect(result.servicio.ordersCount).toBe(0) // ninguna orden de este fixture tiene deliveryAmount
+  })
+
+  it('filtra por channel WEB cuando se especifica', async () => {
+    const result = await getReportSummary({ from: RANGE_FROM, to: RANGE_TO, channel: 'WEB' })
+    expect(result.servicio.ordersCount).toBe(4) // todas las órdenes del fixture son WEB (sin deliveryAmount)
+  })
+
+  it('calcula mermas a partir de InventoryMovement OUT/AJUSTE_MANUAL en el rango', async () => {
+    const category = await prisma.productCategory.create({ data: { name: `Cat-Mermas-${Date.now()}` } })
+    const product = await prisma.product.create({
+      data: { name: `Producto Merma ${Date.now()}`, price: 10, categoryId: category.id },
+    })
+    await prisma.inventoryMovement.create({
+      data: {
+        type: 'OUT', channel: 'AJUSTE_MANUAL', quantity: 3, reason: 'Merma de prueba',
+        productId: product.id, createdAt: IN_RANGE,
+      },
+    })
+
+    const result = await getReportSummary({ from: RANGE_FROM, to: RANGE_TO })
+    expect(result.mermas.total).toBe(30) // 3 × $10
+    expect(result.mermas.count).toBe(1)
+
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await prisma.product.delete({ where: { id: product.id } })
+    await prisma.productCategory.delete({ where: { id: category.id } })
   })
 })
 
