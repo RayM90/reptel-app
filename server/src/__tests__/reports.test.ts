@@ -293,6 +293,65 @@ describe('GET /api/reports/summary', () => {
   }, 10000)
 })
 
+describe('reports.service — getAuditReport', () => {
+  // Fixture propia (con receivedAt explícito dentro de RANGE) — las órdenes
+  // del describe de arriba no fijan receivedAt (queda en "now" real, fuera
+  // de RANGE_FROM/RANGE_TO que son fechas fijas de 2026-06), así que audit
+  // (que filtra por receivedAt) no las vería.
+  it('incluye la orden en el rango, filtra por status/cliente y trae partsUsed', async () => {
+    const { getAuditReport } = await import('../modules/reports/reports.service')
+    const suffix = Date.now()
+
+    const client = await prisma.client.create({
+      data: { name: 'Cliente', lastName: 'Audit', idNumber: `TEST-AUDIT-${suffix}`, phone: '0000000005' },
+    })
+    const dev = await prisma.device.create({ data: { type: 'LAPTOP', brand: 'Dell', model: 'Audit' } })
+    const order = await prisma.order.create({
+      data: {
+        orderNumber: `REP-AUDIT-${suffix}`,
+        status: 'WAITING_PART',
+        problem: 'Test audit',
+        clientId: client.id,
+        deviceId: dev.id,
+        receivedAt: IN_RANGE,
+      },
+    })
+
+    try {
+      const all = await getAuditReport({ from: RANGE_FROM, to: RANGE_TO })
+      expect(all.some((o) => o.orderId === order.id)).toBe(true)
+
+      const filtered = await getAuditReport({
+        from: RANGE_FROM, to: RANGE_TO, status: 'WAITING_PART', clientId: client.id,
+      })
+      expect(filtered).toHaveLength(1)
+      expect(filtered[0].clientIdNumber).toBe(client.idNumber)
+      expect(filtered[0].channel).toBe('WEB')
+      expect(filtered[0].partsUsed).toEqual([])
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } }).catch(() => {})
+      await prisma.device.delete({ where: { id: dev.id } }).catch(() => {})
+      await prisma.client.delete({ where: { id: client.id } }).catch(() => {})
+    }
+  })
+})
+
+describe('GET /api/reports/audit', () => {
+  it('sin token retorna 401', async () => {
+    const res = await request(app).get('/api/reports/audit?from=2026-06-01&to=2026-06-30')
+    expect(res.status).toBe(401)
+  })
+
+  it('con token ADMIN retorna 200 con un arreglo', async () => {
+    const res = await request(app)
+      .get('/api/reports/audit?from=2026-06-01&to=2026-06-30')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.data)).toBe(true)
+  }, 10000)
+})
+
 describe('Reports — authorize() rechaza roles no-ADMIN (unitario)', () => {
   it('retorna 403 cuando el usuario no tiene el rol ADMIN', () => {
     const middleware = authorize('ADMIN')
