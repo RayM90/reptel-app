@@ -373,6 +373,26 @@ const addCostBreakdown = (doc: PDFKit.PDFDocument, order: OrderForReceipt, payme
   })
 }
 
+// Tabla financiera del Recibo Pago de Presupuesto — Monto Total / Monto
+// Abonado / Saldo Pendiente. El estado del pago vive aquí, no en el título
+// del recibo (decisión de negocio: el título es siempre "Recibo Pago de
+// Presupuesto").
+const addBudgetPaymentTable = (
+  doc: PDFKit.PDFDocument,
+  order: Pick<OrderForReceipt, 'budget' | 'budgetAdvanceAmount'>
+) => {
+  const saldoPendiente = Number(order.budget ?? 0) - Number(order.budgetAdvanceAmount ?? 0)
+  drawBoxedBlock(doc, (target, contentX, contentWidth) => {
+    addBoxRow(target, 'Monto Total', formatMoney(order.budget), contentX, contentWidth)
+    addBoxRow(target, 'Monto Abonado', formatMoney(order.budgetAdvanceAmount), contentX, contentWidth)
+    target.moveDown(0.2)
+    target
+      .font('Helvetica-Bold')
+      .fontSize(12)
+      .text(`Saldo Pendiente: ${formatMoney(saldoPendiente)}`, contentX, target.y, { width: contentWidth, align: 'right' })
+  })
+}
+
 export const generateFinalReceipt = (order: OrderForReceipt): PDFKit.PDFDocument => {
   const doc = new PDFDocument({ margin: 50 })
 
@@ -482,7 +502,7 @@ export const generateClosureReceipt = (order: OrderForReceipt): PDFKit.PDFDocume
 export const generateBudgetAdvanceReceipt = (order: OrderForReceipt): PDFKit.PDFDocument => {
   const doc = new PDFDocument({ margin: 50 })
 
-  addLetterhead(doc, 'Recibo de Anticipo de Presupuesto', order.orderNumber)
+  addLetterhead(doc, 'Recibo Pago de Presupuesto', order.orderNumber)
 
   addRow(doc, 'Cliente', formatFullName(order.client.name, order.client.lastName))
   addRow(doc, 'Técnico asignado', order.technician?.name ?? 'Sin asignar')
@@ -492,8 +512,14 @@ export const generateBudgetAdvanceReceipt = (order: OrderForReceipt): PDFKit.PDF
   addRow(doc, 'Diagnóstico', order.diagnosis ?? '—')
   doc.moveDown(0.5)
 
-  addCostBreakdown(doc, order, 'Forma de pago')
+  addBudgetPaymentTable(doc, order)
 
+  if (order.finalPaymentDetails) {
+    const methodEntries = Object.entries(order.finalPaymentDetails)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(' — ')
+    if (methodEntries) addRow(doc, 'Forma de pago', methodEntries)
+  }
   addRow(doc, 'Anticipo pagado', formatMoney(order.budgetAdvanceAmount))
   addRow(doc, 'Fecha de anticipo', formatDate(order.budgetAdvanceConfirmedAt))
 

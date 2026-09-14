@@ -413,3 +413,24 @@ describe('addFooterDisclaimer — nota adicional exclusiva del Recibo de Recepci
     )
   })
 })
+
+describe('generateBudgetAdvanceReceipt — título estricto y tabla financiera', () => {
+  it('el título es "RECIBO PAGO DE PRESUPUESTO" (ya no "de Anticipo")', () => {
+    const calls = captureTextXs(() => generateBudgetAdvanceReceipt(fakeOrder as any))
+    const texts = calls.map((c) => c.text)
+    expect(texts).toContain('RECIBO PAGO DE PRESUPUESTO')
+    expect(texts).not.toContain('RECIBO DE ANTICIPO DE PRESUPUESTO')
+  })
+
+  it('la tabla muestra Monto Total, Monto Abonado y Saldo Pendiente calculado', () => {
+    // fakeOrder: budget 50, budgetAdvanceAmount 7.5 → saldo 42.5
+    const calls = captureTextXs(() => generateBudgetAdvanceReceipt(fakeOrder as any))
+    const texts = calls.map((c) => c.text)
+
+    expect(texts).toContain('Monto Total: ')
+    expect(texts.some((t) => t.startsWith('$50.00'))).toBe(true)
+    expect(texts).toContain('Monto Abonado: ')
+    expect(texts.some((t) => t.startsWith('$7.50'))).toBe(true)
+    expect(texts).toContain('Saldo Pendiente: $42.50')
+  })
+})
