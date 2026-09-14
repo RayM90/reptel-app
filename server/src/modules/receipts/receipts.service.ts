@@ -409,7 +409,7 @@ export const generateFinalReceipt = (order: OrderForReceipt): PDFKit.PDFDocument
   addCostBreakdown(doc, order, 'Forma de pago final')
 
   if (order.deliveryObservations && order.deliveryObservations.trim() !== '') {
-    addObservationsBlock(doc, 'Estado del equipo al entregar', order.deliveryObservations)
+    addObservationsBlock(doc, 'Estado final, pruebas y observaciones', order.deliveryObservations)
   }
 
   addRow(doc, 'Fecha de entrega', formatDate(order.deliveredAt))
