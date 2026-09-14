@@ -68,9 +68,13 @@ export const downloadFinalReceipt = async (req: AuthRequest, res: Response): Pro
       .filter((m) => !m.reversedAt)
       .map((m) => ({ productName: m.product.name, quantity: m.quantity, unitPriceAtUse: m.unitPriceAtUse }))
 
+    const confirmedSubmissions = ((order as any).advancePaymentSubmissions ?? []).filter(
+      (s: any) => s.status === 'CONFIRMED'
+    )
+
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="recibo-entrega-${order.orderNumber}.pdf"`)
-    const doc = generateFinalReceipt({ ...order, partsUsed } as any)
+    const doc = generateFinalReceipt({ ...order, partsUsed, advancePaymentSubmissions: confirmedSubmissions } as any)
     doc.pipe(res)
   } catch (error: any) {
     console.error('ERROR GENERAR RECIBO DE ENTREGA:', error)

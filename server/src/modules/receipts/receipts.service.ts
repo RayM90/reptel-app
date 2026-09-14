@@ -201,6 +201,12 @@ interface OrderForReceipt {
   technician: { name: string } | null
   device: { type: string; brand: string; model: string; color: string | null; serialNumber: string | null }
   partsUsed?: { productName: string; quantity: number; unitPriceAtUse: unknown }[]
+  advancePaymentSubmissions?: {
+    kind: string
+    amount: unknown
+    paymentDetails: Record<string, string> | null
+    confirmedAt: Date | string | null
+  }[]
 }
 
 // Self-service + delivery: RECEIVED se dispara al confirmar el anticipo, no cuando
@@ -393,6 +399,64 @@ const addBudgetPaymentTable = (
   })
 }
 
+const PARTIAL_PAYMENT_KIND_LABELS: Record<string, string> = {
+  REVISION: 'Anticipo de revisión',
+  BUDGET: 'Anticipo de presupuesto',
+}
+
+// Historial completo de pagos del Recibo de Entrega — a diferencia de
+// addCostBreakdown (que solo muestra el desglose de UN cobro puntual), este
+// bloque lista cada AdvancePaymentSubmission confirmado (revisión y/o
+// presupuesto, puede haber varios si el cliente abonó por partes) más el
+// pago final, y cierra siempre en $0.00: la entrega solo ocurre con el
+// presupuesto pagado en su totalidad (regla de negocio existente).
+const addPaymentHistory = (doc: PDFKit.PDFDocument, order: OrderForReceipt) => {
+  drawBoxedBlock(doc, (target, contentX, contentWidth) => {
+    target.font('Helvetica-Bold').fontSize(12).text('Historial de pagos', contentX, target.y, { width: contentWidth })
+    target.moveDown(0.3)
+
+    for (const submission of order.advancePaymentSubmissions ?? []) {
+      const label = PARTIAL_PAYMENT_KIND_LABELS[submission.kind] ?? submission.kind
+      const methodEntries = submission.paymentDetails
+        ? Object.entries(submission.paymentDetails)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join(' — ')
+        : ''
+      const value = methodEntries
+        ? `${formatMoney(submission.amount)} (${methodEntries}) — ${formatDate(submission.confirmedAt)}`
+        : `${formatMoney(submission.amount)} — ${formatDate(submission.confirmedAt)}`
+      addBoxRow(target, label, value, contentX, contentWidth)
+    }
+
+    if (order.partsUsed && order.partsUsed.length > 0) {
+      target.moveDown(0.2)
+      target.font('Helvetica-Bold').fontSize(11).text('Repuestos usados:', contentX, target.y, { width: contentWidth })
+      for (const part of order.partsUsed) {
+        const lineTotal = part.quantity * Number(part.unitPriceAtUse ?? 0)
+        addBoxRow(target, `  ${part.productName} (x${part.quantity})`, `$${lineTotal.toFixed(2)}`, contentX, contentWidth)
+      }
+    }
+
+    if (order.finalPaymentDetails) {
+      const methodEntries = Object.entries(order.finalPaymentDetails)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(' — ')
+      if (methodEntries) addBoxRow(target, 'Pago final', methodEntries, contentX, contentWidth)
+    }
+
+    target.moveDown(0.2)
+    target
+      .font('Helvetica-Bold')
+      .fontSize(12)
+      .text(`Total: ${formatMoney(order.budget)}`, contentX, target.y, { width: contentWidth })
+    target.moveDown(0.1)
+    target
+      .font('Helvetica-Bold')
+      .fontSize(12)
+      .text('Saldo pendiente: $0.00', contentX, target.y, { width: contentWidth, align: 'right' })
+  })
+}
+
 export const generateFinalReceipt = (order: OrderForReceipt): PDFKit.PDFDocument => {
   const doc = new PDFDocument({ margin: 50 })
 
@@ -406,7 +470,7 @@ export const generateFinalReceipt = (order: OrderForReceipt): PDFKit.PDFDocument
   addRow(doc, 'Diagnóstico', order.diagnosis ?? '—')
   doc.moveDown(0.5)
 
-  addCostBreakdown(doc, order, 'Forma de pago final')
+  addPaymentHistory(doc, order)
 
   if (order.deliveryObservations && order.deliveryObservations.trim() !== '') {
     addObservationsBlock(doc, 'Estado final, pruebas y observaciones', order.deliveryObservations)

@@ -443,3 +443,58 @@ describe('generateFinalReceipt — relabel de observaciones de entrega', () => {
     expect(texts).not.toContain('Estado del equipo al entregar:')
   })
 })
+
+const orderConHistorialDePagos = {
+  ...fakeOrder,
+  advancePaymentSubmissions: [
+    {
+      kind: 'REVISION',
+      amount: 15,
+      paymentDetails: { banco: 'Bancaribe', referencia: '1111' },
+      confirmedAt: new Date('2026-01-01T10:00:00Z'),
+    },
+    {
+      kind: 'BUDGET',
+      amount: 25,
+      paymentDetails: { banco: 'Bancaribe', referencia: '2222' },
+      confirmedAt: new Date('2026-01-05T10:00:00Z'),
+    },
+  ],
+}
+
+describe('generateFinalReceipt — historial de pagos y saldo $0.00', () => {
+  const MARGIN = 50
+
+  it('lista cada abono confirmado (revisión y presupuesto) con monto, método y fecha', () => {
+    const calls = captureTextXs(() => generateFinalReceipt(orderConHistorialDePagos as any))
+    const texts = calls.map((c) => c.text)
+
+    expect(texts).toContain('Anticipo de revisión: ')
+    expect(texts.some((t) => t.includes('$15.00') && t.includes('banco: Bancaribe'))).toBe(true)
+    expect(texts).toContain('Anticipo de presupuesto: ')
+    expect(texts.some((t) => t.includes('$25.00') && t.includes('referencia: 2222'))).toBe(true)
+  })
+
+  it('cierra siempre con "Saldo pendiente: $0.00", sin importar los montos abonados', () => {
+    const calls = captureTextXs(() => generateFinalReceipt(orderConHistorialDePagos as any))
+    const texts = calls.map((c) => c.text)
+    expect(texts).toContain('Saldo pendiente: $0.00')
+  })
+
+  it('no falla cuando no hay advancePaymentSubmissions (orden sin abonos previos registrados)', async () => {
+    const orderSinHistorial = { ...fakeOrder, advancePaymentSubmissions: undefined }
+    const buffer = await collectPdfBuffer(generateFinalReceipt(orderSinHistorial as any))
+    expect(buffer.subarray(0, 4).toString()).toBe('%PDF')
+  })
+
+  it('el contenido después de la caja de historial de pagos arranca en el margen izquierdo', () => {
+    const calls = captureTextXs(() => generateFinalReceipt(orderConHistorialDePagos as any))
+    const fechaIndex = calls.findIndex((c) => c.text === 'Fecha de entrega: ')
+    expect(fechaIndex).toBeGreaterThan(-1)
+    const postBoxCalls = calls.slice(fechaIndex)
+    expect(postBoxCalls.length).toBeGreaterThan(0)
+    for (const call of postBoxCalls) {
+      expect(call.x).toBe(MARGIN)
+    }
+  })
+})
