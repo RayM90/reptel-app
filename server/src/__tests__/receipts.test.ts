@@ -434,3 +434,12 @@ describe('generateBudgetAdvanceReceipt — título estricto y tabla financiera',
     expect(texts).toContain('Saldo Pendiente: $42.50')
   })
 })
+
+describe('generateFinalReceipt — relabel de observaciones de entrega', () => {
+  it('usa el subtítulo "Estado final, pruebas y observaciones" en vez de "Estado del equipo al entregar"', () => {
+    const calls = captureTextXs(() => generateFinalReceipt(fakeOrder as any))
+    const texts = calls.map((c) => c.text)
+    expect(texts).toContain('Estado final, pruebas y observaciones:')
+    expect(texts).not.toContain('Estado del equipo al entregar:')
+  })
+})
