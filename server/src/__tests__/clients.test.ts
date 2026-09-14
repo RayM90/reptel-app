@@ -1,6 +1,7 @@
 import request from 'supertest'
 import app from '../app'
 import { authorize } from '../middleware/auth.middleware'
+import prisma from '../lib/prisma'
 
 let adminToken: string
 
@@ -105,5 +106,68 @@ describe('Clients — persona natural vs. empresa (J-/G-)', () => {
     expect(res.status).toBe(201)
     expect(res.body.data.lastName).toBe('')
     expect(res.body.data.contactPerson).toBe('Ana Pérez')
+  })
+})
+
+describe('Clients — dirección vía ClientAddress', () => {
+  let createdClientId: string
+  const testIdNumber = `V-${String(Date.now()).slice(-7)}`
+
+  afterAll(async () => {
+    if (createdClientId) {
+      await prisma.clientAddress.deleteMany({ where: { clientId: createdClientId } })
+      await prisma.client.delete({ where: { id: createdClientId } }).catch(() => {})
+    }
+  })
+
+  it('POST /api/clients crea una fila ClientAddress principal y la API la devuelve aplanada', async () => {
+    const res = await request(app)
+      .post('/api/clients')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Cliente',
+        lastName: 'DePrueba',
+        idNumber: testIdNumber,
+        phone: '04121234567',
+        addressState: 'Carabobo',
+        addressCity: 'Valencia',
+        addressNeighborhood: 'La Trigaleña',
+        addressStreet: 'Calle 5',
+        addressBuilding: 'Casa 12',
+      })
+
+    expect(res.status).toBe(201)
+    expect(res.body.data.addressState).toBe('Carabobo')
+    expect(res.body.data.addressBuilding).toBe('Casa 12')
+    createdClientId = res.body.data.id
+
+    const rows = await prisma.clientAddress.findMany({ where: { clientId: createdClientId } })
+    expect(rows).toHaveLength(1)
+    expect(rows[0].isPrimary).toBe(true)
+    expect(rows[0].label).toBe('Principal')
+  }, 15000)
+
+  it('PATCH /api/clients/:id actualiza la fila ClientAddress principal existente (no crea una segunda)', async () => {
+    const res = await request(app)
+      .patch(`/api/clients/${createdClientId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ addressCity: 'Naguanagua' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.addressCity).toBe('Naguanagua')
+    expect(res.body.data.addressState).toBe('Carabobo') // no se pierde lo que no vino en el PATCH
+
+    const rows = await prisma.clientAddress.findMany({ where: { clientId: createdClientId } })
+    expect(rows).toHaveLength(1)
+  })
+
+  it('GET /api/clients/idnumber/:idNumber devuelve la dirección aplanada', async () => {
+    const res = await request(app)
+      .get(`/api/clients/idnumber/${testIdNumber}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.addressCity).toBe('Naguanagua')
+    expect(res.body.data.addresses).toBeUndefined() // no se filtra el array crudo en la respuesta
   })
 })

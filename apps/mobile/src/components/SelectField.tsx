@@ -10,12 +10,13 @@ interface SelectFieldProps {
   onChange: (value: string) => void
   allowOther?: boolean
   placeholder?: string
+  compact?: boolean // sin label propio, trigger angosto — para usar dentro de una fila (ej. prefijo de teléfono/cédula)
 }
 
 // Select genérico con modal — usado para marca, modelo (dependiente de marca),
 // color y banco en los formularios de intake. Sin librería de picker nueva:
 // RN no trae <select>, esto reutiliza solo componentes core (Modal/FlatList).
-export default function SelectField({ label, value, options, onChange, allowOther, placeholder }: SelectFieldProps) {
+export default function SelectField({ label, value, options, onChange, allowOther, placeholder, compact }: SelectFieldProps) {
   const [open, setOpen] = useState(false)
   const [otherMode, setOtherMode] = useState(() => !!allowOther && value !== '' && !options.includes(value))
 
@@ -37,9 +38,9 @@ export default function SelectField({ label, value, options, onChange, allowOthe
   }
 
   return (
-    <View style={{ marginBottom: 12 }}>
-      <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity style={styles.trigger} onPress={() => setOpen(true)}>
+    <View style={compact ? undefined : { marginBottom: 12 }}>
+      {!compact && <Text style={styles.label}>{label}</Text>}
+      <TouchableOpacity style={compact ? styles.triggerCompact : styles.trigger} onPress={() => setOpen(true)}>
         <Text style={value ? styles.triggerText : styles.triggerPlaceholder}>
           {value || placeholder || 'Seleccionar…'}
         </Text>
@@ -80,6 +81,10 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 6 },
   trigger: {
     borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, backgroundColor: '#fff',
+  },
+  triggerCompact: {
+    borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 10,
+    backgroundColor: '#fff', minWidth: 64, alignItems: 'center',
   },
   triggerText: { fontSize: 15, color: '#222' },
   triggerPlaceholder: { fontSize: 15, color: '#999' },

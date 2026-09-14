@@ -123,17 +123,30 @@ model Client {
   phone     String
   email     String?
   contactPerson       String?
-  addressState        String?
-  addressCity         String?
-  addressNeighborhood String?
-  addressStreet       String?
-  addressBuilding     String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user            User?
   orders          Order[]
+  addresses       ClientAddress[]
+}
+
+model ClientAddress {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  label     String   // "Principal" (default), "Casa", "Trabajo", "Otro"
+  isPrimary Boolean  @default(false)
+  addressState        String?
+  addressCity         String?
+  addressNeighborhood String?
+  addressStreet       String?
+  addressBuilding     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
 }
 
 enum PasswordResetStatus {

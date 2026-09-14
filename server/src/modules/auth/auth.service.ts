@@ -10,6 +10,7 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider';
 
 import prisma from '../../lib/prisma';
+import type { StructuredAddress } from '../../lib/clientAddress';
 
 const client = new CognitoIdentityProviderClient({
   region: process.env.AWS_REGION!,
@@ -18,15 +19,23 @@ const client = new CognitoIdentityProviderClient({
 const CLIENT_ID = process.env.COGNITO_CLIENT_ID!;
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID!;
 
-export const registerUser = async (
-  email: string,
-  password: string,
-  name: string,
-  role: string,
-  phone?: string,
-  address?: string,
-) => {
-  // 1. Registrar en Cognito
+export const registerUser = async (input: {
+  email: string
+  password: string
+  name: string
+  lastName: string
+  idNumber: string
+  role: string
+  phone: string
+  contactPerson?: string
+  address: StructuredAddress
+  secondaryAddress?: StructuredAddress & { label: string }
+}) => {
+  const { email, password, name, lastName, idNumber, role, phone, contactPerson, address, secondaryAddress } = input;
+
+  // 1. Registrar en Cognito — los duplicados de idNumber/email ya se
+  // validaron en el controller antes de llegar acá (ver auth.controller.ts
+  // register), para no dejar una cuenta de Cognito huérfana si fallan.
   await client.send(
     new SignUpCommand({
       ClientId: CLIENT_ID,
@@ -34,7 +43,7 @@ export const registerUser = async (
       Password: password,
       UserAttributes: [
         { Name: 'email', Value: email },
-        { Name: 'name', Value: name },
+        { Name: 'name', Value: `${name} ${lastName}`.trim() },
       ],
     })
   );
@@ -56,17 +65,23 @@ export const registerUser = async (
     })
   );
 
-  // 4. Si es CLIENT, crear registro en tabla Client primero
+  // 4. Si es CLIENT, crear registro en tabla Client (con cédula/apellido
+  // reales, ya no el placeholder idNumber: email / lastName: '')
   let clientId: string | undefined = undefined;
   if (role === 'CLIENT') {
+    const addressRows = [
+      { label: 'Principal', isPrimary: true, ...address },
+      ...(secondaryAddress ? [{ isPrimary: false, ...secondaryAddress }] : []),
+    ];
     const newClient = await prisma.client.create({
       data: {
         name,
-        lastName: '',
-        idNumber: email,
-        phone: phone ?? '',
+        lastName,
+        idNumber,
+        phone,
         email,
-        addressStreet: address ?? null,
+        contactPerson: contactPerson ?? null,
+        addresses: { create: addressRows },
       },
     });
     clientId = newClient.id;

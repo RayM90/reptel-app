@@ -3,6 +3,7 @@ import prisma from '../../lib/prisma'
 export const getAllClients = async () => {
   return await prisma.client.findMany({
     orderBy: { createdAt: 'desc' },
+    include: { addresses: true },
   })
 }
 
@@ -10,6 +11,7 @@ export const getClientById = async (id: string) => {
   return await prisma.client.findUnique({
     where: { id },
     include: {
+      addresses: true,
       orders: {
         include: {
           device: true,
@@ -25,6 +27,7 @@ export const getClientByIdNumber = async (idNumber: string) => {
   return await prisma.client.findUnique({
     where: { idNumber },
     include: {
+      addresses: true,
       orders: {
         include: {
           device: true,
@@ -49,7 +52,16 @@ export const createClient = async (data: {
   addressStreet?: string
   addressBuilding?: string
 }) => {
-  return await prisma.client.create({ data })
+  const { addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding, ...clientFields } = data
+  return await prisma.client.create({
+    data: {
+      ...clientFields,
+      addresses: {
+        create: [{ label: 'Principal', isPrimary: true, addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding }],
+      },
+    },
+    include: { addresses: true },
+  })
 }
 
 export const updateClient = async (
@@ -67,10 +79,29 @@ export const updateClient = async (
     addressBuilding?: string
   }
 ) => {
+  const { addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding, ...clientFields } = data
+  const hasAddressChange = [addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding].some(
+    (v) => v !== undefined
+  )
+
   // Envuelve Client.update y User.update en una transacción para evitar
   // desincronización si una de las escrituras falla (e.g., constraint violation).
-  const updated = await prisma.$transaction(async (tx) => {
-    const clientUpdated = await tx.client.update({ where: { id }, data })
+  await prisma.$transaction(async (tx) => {
+    await tx.client.update({ where: { id }, data: clientFields })
+
+    if (hasAddressChange) {
+      const primary = await tx.clientAddress.findFirst({ where: { clientId: id, isPrimary: true } })
+      if (primary) {
+        await tx.clientAddress.update({
+          where: { id: primary.id },
+          data: { addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding },
+        })
+      } else {
+        await tx.clientAddress.create({
+          data: { clientId: id, label: 'Principal', isPrimary: true, addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding },
+        })
+      }
+    }
 
     // El User vinculado (si existe) duplica name/phone/email para no tener
     // que hacer join en cada lectura — hallazgo de auditoría: sin este sync
@@ -80,23 +111,21 @@ export const updateClient = async (
     // descartaría ese '' silenciosamente y dejaría el User desincronizado.
     const linkedUser = await tx.user.findUnique({ where: { clientId: id }, select: { id: true } })
     const hasUserSyncableChange =
-      data.name !== undefined || data.lastName !== undefined || data.phone !== undefined || data.email !== undefined
+      clientFields.name !== undefined || clientFields.lastName !== undefined || clientFields.phone !== undefined || clientFields.email !== undefined
     if (linkedUser && hasUserSyncableChange) {
       await tx.user.update({
         where: { id: linkedUser.id },
         data: {
-          ...(data.name !== undefined && { name: data.name }),
-          ...(data.lastName !== undefined && { lastName: data.lastName }),
-          ...(data.phone !== undefined && { phone: data.phone }),
-          ...(data.email !== undefined && { email: data.email }),
+          ...(clientFields.name !== undefined && { name: clientFields.name }),
+          ...(clientFields.lastName !== undefined && { lastName: clientFields.lastName }),
+          ...(clientFields.phone !== undefined && { phone: clientFields.phone }),
+          ...(clientFields.email !== undefined && { email: clientFields.email }),
         },
       })
     }
-
-    return clientUpdated
   })
 
-  return updated
+  return await prisma.client.findUnique({ where: { id }, include: { addresses: true } })
 }
 
 export const searchClients = async (query: string) => {
@@ -111,5 +140,6 @@ export const searchClients = async (query: string) => {
     },
     orderBy: { createdAt: 'desc' },
     take: 10,
+    include: { addresses: true },
   })
 }
