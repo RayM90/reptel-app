@@ -62,6 +62,7 @@ interface TechOrder {
   status: OrderStatus
   problem: string
   diagnosis: string | null
+  observations: string | null
   budget: string | null
   deliveryAmount: string | null
   revisionAmount: string | null
@@ -487,6 +488,24 @@ export default function TechnicianDashboard() {
                       <p className="alert-success">💰 El cliente ya reportó el pago final — esperando confirmación del administrador.</p>
                     )}
 
+                    {/* ── Top View: lo esencial de la orden, sin scroll ── */}
+                    <div className="card" style={{ marginBottom: 12 }}>
+                      <p><strong>Cliente:</strong> {order.client.name} {order.client.lastName}{' '}
+                        &nbsp;·&nbsp; <strong>Equipo:</strong> {order.device.brand} {order.device.model} · Serial: {order.device.serialNumber ?? '—'}</p>
+                      <p><strong>Falla reportada:</strong> {order.problem}</p>
+                      <p><strong>Estado de recepción:</strong> Accesorios: {order.device.accessories || '—'} · Observaciones: {order.observations || '—'}</p>
+                    </div>
+
+                    <details className="card card--muted" style={{ marginBottom: 12 }}>
+                      <summary><h4 style={{ display: 'inline' }}>Historial</h4></summary>
+                      {order.statusHistory.map((entry) => (
+                        <div key={entry.id} className="form-hint">
+                          <strong>{getStatusBadge('order', entry.status).label}</strong> — {formatDate(entry.createdAt)}
+                          {entry.comment && <div>{entry.comment}</div>}
+                        </div>
+                      ))}
+                    </details>
+
                     {/* ── Acción principal: una sola tarjeta destacada, según
                         el estado — antes "Finalizar reparación" y "Agregar
                         comentario de progreso" podían mostrarse juntas en
@@ -768,26 +787,13 @@ export default function TechnicianDashboard() {
                       })()}
                     </div>
 
-                    {/* ── Referencia: colapsada por defecto — no compite con
-                        la acción principal ni con Repuestos. ── */}
+                    {/* ── Referencia: Tipo/Color/Contraseña no se promovieron
+                        al Top View (no los pidió Ray) — quedan acá, colapsados. ── */}
                     <details className="card card--muted">
-                      <summary><h4 style={{ display: 'inline' }}>Detalle del equipo</h4></summary>
+                      <summary><h4 style={{ display: 'inline' }}>Más detalles del equipo</h4></summary>
                       <p><strong>Tipo:</strong> {order.device.type === 'LAPTOP' ? 'Laptop' : 'PC'}</p>
-                      <p><strong>Marca / Modelo:</strong> {order.device.brand} {order.device.model}</p>
                       <p><strong>Color:</strong> {order.device.color}</p>
-                      <p><strong>Accesorios:</strong> {order.device.accessories || '—'}</p>
                       {order.device.devicePassword && <p><strong>Contraseña del equipo:</strong> {order.device.devicePassword}</p>}
-                      <p><strong>Problema reportado por el cliente:</strong> {order.problem}</p>
-                    </details>
-
-                    <details className="card card--muted">
-                      <summary><h4 style={{ display: 'inline' }}>Historial</h4></summary>
-                      {order.statusHistory.map((entry) => (
-                        <div key={entry.id} className="form-hint">
-                          <strong>{getStatusBadge('order', entry.status).label}</strong> — {formatDate(entry.createdAt)}
-                          {entry.comment && <div>{entry.comment}</div>}
-                        </div>
-                      ))}
                     </details>
                   </div>
                 )}
