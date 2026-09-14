@@ -9,7 +9,7 @@ const ORDER_STATUS: Record<string, StatusBadgeInfo> = {
   PENDING_PAYMENT: { label: 'Pago pendiente', variant: 'neutral' },
   RECEIVED: { label: 'Recibido', variant: 'neutral' },
   DIAGNOSING: { label: 'En diagnóstico', variant: 'progress' },
-  WAITING_APPROVAL: { label: 'Esperando aprobación', variant: 'progress' },
+  WAITING_APPROVAL: { label: 'Diagnóstico Listo - Notificar Cliente', variant: 'warning' },
   APPROVED: { label: 'Aprobado', variant: 'progress' },
   REPAIRING: { label: 'En reparación', variant: 'progress' },
   WAITING_PART: { label: 'Esperando repuesto', variant: 'progress' },
