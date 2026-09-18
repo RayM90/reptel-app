@@ -232,7 +232,7 @@ export const getOrdersByClient = async (clientId: string) => {
       statusHistory: { orderBy: { createdAt: 'desc' } },
       advancePaymentSubmissions: { orderBy: { createdAt: 'desc' } },
       inventoryMovements: {
-        where: { channel: 'SERVICIO_TECNICO', reversedAt: null },
+        where: { channel: 'SERVICIO_TECNICO', reversedAt: null, lossReportedAt: null },
         include: { product: { select: { name: true } } },
       },
     },
@@ -1698,6 +1698,63 @@ export const revertProductUsage = async (movementId: string, actorEmail: string)
         orderId: movement.orderId!,
         status: updatedOrder.status,
         comment: `Repuesto revertido: ${product.name} (x${movement.quantity}) — -$${revertedCost.toFixed(2)}`,
+        userId: actor.id,
+      },
+    })
+
+    return { movement: updatedMovement, order: updatedOrder }
+  })
+}
+
+export const reportPartLoss = async (movementId: string, actorEmail: string, description: string) => {
+  if (!description || !description.trim()) {
+    throw new Error('La descripción de la merma es requerida')
+  }
+
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const movement = await prisma.inventoryMovement.findUnique({ where: { id: movementId } })
+  if (!movement) throw new Error('Movimiento no encontrado')
+  if (movement.channel !== 'SERVICIO_TECNICO' || !movement.orderId) {
+    throw new Error('Este movimiento no corresponde a un repuesto de orden de servicio')
+  }
+  if (movement.reversedAt) {
+    throw new Error('Este repuesto ya fue revertido')
+  }
+  if (movement.lossReportedAt) {
+    throw new Error('Este repuesto ya fue reportado como merma')
+  }
+
+  const order = await prisma.order.findUnique({ where: { id: movement.orderId } })
+  if (!order) throw new Error('Orden no encontrada')
+  if (order.technicianId !== actor.id) {
+    throw new Error('Solo el técnico asignado a esta orden puede reportar esta merma')
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const product = await tx.product.findUniqueOrThrow({ where: { id: movement.productId } })
+
+    const lostCost = Number(movement.unitPriceAtUse ?? 0) * movement.quantity
+    const updatedOrder = await tx.order.update({
+      where: { id: movement.orderId! },
+      data: { budget: { decrement: lostCost } },
+    })
+
+    const updatedMovement = await tx.inventoryMovement.update({
+      where: { id: movementId },
+      data: {
+        lossReportedAt: new Date(),
+        lossDescription: description.trim(),
+        lossReportedByUserId: actor.id,
+      },
+    })
+
+    await tx.orderStatusHistory.create({
+      data: {
+        orderId: movement.orderId!,
+        status: updatedOrder.status,
+        comment: `Repuesto reportado como merma: ${product.name} (x${movement.quantity}) — ${description.trim()} — no se cobra al cliente`,
         userId: actor.id,
       },
     })

@@ -65,7 +65,7 @@ export const downloadFinalReceipt = async (req: AuthRequest, res: Response): Pro
 
     const movements = await getPartsUsedInOrder(id)
     const partsUsed = movements
-      .filter((m) => !m.reversedAt)
+      .filter((m) => !m.reversedAt && !m.lossReportedAt)
       .map((m) => ({ productName: m.product.name, quantity: m.quantity, unitPriceAtUse: m.unitPriceAtUse }))
 
     const confirmedSubmissions = ((order as any).advancePaymentSubmissions ?? []).filter(
@@ -101,7 +101,7 @@ export const downloadPaymentReceipt = async (req: AuthRequest, res: Response): P
 
     const movements = await getPartsUsedInOrder(id)
     const partsUsed = movements
-      .filter((m) => !m.reversedAt)
+      .filter((m) => !m.reversedAt && !m.lossReportedAt)
       .map((m) => ({ productName: m.product.name, quantity: m.quantity, unitPriceAtUse: m.unitPriceAtUse }))
 
     res.setHeader('Content-Type', 'application/pdf')
@@ -177,7 +177,7 @@ export const downloadBudgetAdvanceReceipt = async (req: AuthRequest, res: Respon
 
     const movements = await getPartsUsedInOrder(id)
     const partsUsed = movements
-      .filter((m) => !m.reversedAt)
+      .filter((m) => !m.reversedAt && !m.lossReportedAt)
       .map((m) => ({ productName: m.product.name, quantity: m.quantity, unitPriceAtUse: m.unitPriceAtUse }))
 
     res.setHeader('Content-Type', 'application/pdf')
