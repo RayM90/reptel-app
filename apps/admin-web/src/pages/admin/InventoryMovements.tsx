@@ -88,6 +88,7 @@ export default function InventoryMovements() {
         >
           <option value="">Todos</option>
           <option value="MOSTRADOR">Mostrador</option>
+          <option value="SERVICIO_TECNICO">Servicio técnico</option>
           <option value="SERVICIO_TECNICO_MOSTRADOR">Servicio técnico – Mostrador</option>
           <option value="SERVICIO_TECNICO_APP">Servicio técnico – App</option>
           <option value="AJUSTE_MANUAL">Ajuste manual</option>
