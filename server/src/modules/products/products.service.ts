@@ -75,6 +75,7 @@ export const getInventoryMovements = async (filters: {
     include: {
       product: { select: { id: true, name: true } },
       user: { select: { id: true, name: true, lastName: true } },
+      order: { select: { deliveryAmount: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
