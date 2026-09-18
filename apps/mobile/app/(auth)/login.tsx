@@ -32,6 +32,22 @@ export default function LoginScreen() {
   const { setUser } = useAuthStore();
   const showToast = useToastStore((state) => state.showToast);
 
+  // Challenge NEW_PASSWORD_REQUIRED (admin le puso una contraseña temporal
+  // vía "olvidé mi contraseña" o al crear la cuenta) — Cognito exige que el
+  // usuario establezca su propia contraseña definitiva antes de continuar.
+  const [requiresNewPassword, setRequiresNewPassword] = useState(false);
+  const [session, setSession] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [verNewPassword, setVerNewPassword] = useState(false);
+
+  // "¿Olvidaste tu contraseña?" — sin flujo de Cognito propio (sin SES
+  // configurado), solo deja constancia para que un Admin resuelva a mano.
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotMessage, setForgotMessage] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+
   const handleLogin = async () => {
     if (!email || !password) {
       showToast("Por favor completa todos los campos", "error");
@@ -40,7 +56,16 @@ export default function LoginScreen() {
     try {
       setLoading(true);
       const response = await api.post("/api/auth/login", { email, password });
-      const { user, token, refreshToken } = response.data.data;
+      const data = response.data.data;
+
+      if (data.challengeName === "NEW_PASSWORD_REQUIRED") {
+        setSession(data.session);
+        setRequiresNewPassword(true);
+        setLoading(false);
+        return;
+      }
+
+      const { user, token, refreshToken } = data;
       setUser(user, token, refreshToken);
 
       router.replace("/(client)/home-client");
@@ -58,6 +83,60 @@ export default function LoginScreen() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleNewPasswordSubmit = async () => {
+    if (!newPassword || !confirmNewPassword) {
+      showToast("Por favor completa los dos campos", "error");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      showToast("Las contraseñas no coinciden", "error");
+      return;
+    }
+    if (newPassword.length < 8) {
+      showToast("La contraseña debe tener al menos 8 caracteres", "error");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await api.post("/api/auth/complete-new-password", {
+        email,
+        newPassword,
+        session,
+      });
+      const { user, token, refreshToken } = response.data.data;
+      setUser(user, token, refreshToken);
+
+      router.replace("/(client)/home-client");
+    } catch (error: any) {
+      showToast(
+        error.response?.data?.message || "Error al establecer la nueva contraseña",
+        "error"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPasswordSubmit = async () => {
+    if (!forgotEmail) {
+      showToast("Por favor ingresa tu correo", "error");
+      return;
+    }
+
+    try {
+      setForgotLoading(true);
+      const response = await api.post("/api/auth/request-password-reset", {
+        email: forgotEmail,
+      });
+      setForgotMessage(response.data.message);
+    } catch (error: any) {
+      setForgotMessage("No se pudo procesar la solicitud. Intenta de nuevo más tarde.");
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -87,84 +166,206 @@ export default function LoginScreen() {
                 style={styles.logo}
                 resizeMode="contain"
               />
-              <Text style={styles.roleLabel}>Portal Cliente</Text>
+              <Text style={styles.roleLabel}>
+                {requiresNewPassword
+                  ? "Nueva contraseña"
+                  : showForgotPassword
+                  ? "Restablecer contraseña"
+                  : "Portal Cliente"}
+              </Text>
               <Text style={styles.roleSubtitle}>
-                Ingresa con tu cuenta para continuar
+                {requiresNewPassword
+                  ? "Debes establecer una nueva contraseña para continuar"
+                  : showForgotPassword
+                  ? "Escribe tu email — un administrador te contactará para asignarte una contraseña temporal"
+                  : "Ingresa con tu cuenta para continuar"}
               </Text>
             </View>
 
             {/* Formulario */}
             <View style={styles.form}>
+              {requiresNewPassword ? (
+                <>
+                  <Text style={styles.label}>Nueva contraseña</Text>
+                  <View style={styles.inputRow}>
+                    <TextInput
+                      style={styles.inputFlex}
+                      placeholder="••••••••"
+                      placeholderTextColor="#9ca3af"
+                      value={newPassword}
+                      onChangeText={setNewPassword}
+                      secureTextEntry={!verNewPassword}
+                      autoCapitalize="none"
+                      returnKeyType="next"
+                    />
+                    <TouchableOpacity
+                      style={styles.eyeBtn}
+                      onPress={() => setVerNewPassword(!verNewPassword)}
+                    >
+                      <Feather
+                        name={verNewPassword ? "eye-off" : "eye"}
+                        size={20}
+                        color="#8a8fc0"
+                      />
+                    </TouchableOpacity>
+                  </View>
 
-              <Text style={styles.label}>Correo electrónico</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="correo@ejemplo.com"
-                placeholderTextColor="#9ca3af"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                returnKeyType="next"
-              />
-
-              {/* Contraseña con ojito */}
-              <Text style={styles.label}>Contraseña</Text>
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={styles.inputFlex}
-                  placeholder="••••••••"
-                  placeholderTextColor="#9ca3af"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!verPassword}
-                  returnKeyType="done"
-                  onSubmitEditing={handleLogin}
-                />
-                <TouchableOpacity
-                  style={styles.eyeBtn}
-                  onPress={() => setVerPassword(!verPassword)}
-                >
-                  <Feather
-                    name={verPassword ? "eye-off" : "eye"}
-                    size={20}
-                    color="#8a8fc0"
+                  <Text style={styles.label}>Confirmar nueva contraseña</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="••••••••"
+                    placeholderTextColor="#9ca3af"
+                    value={confirmNewPassword}
+                    onChangeText={setConfirmNewPassword}
+                    secureTextEntry={!verNewPassword}
+                    autoCapitalize="none"
+                    returnKeyType="done"
+                    onSubmitEditing={handleNewPasswordSubmit}
                   />
-                </TouchableOpacity>
-              </View>
 
-              <TouchableOpacity
-                style={[
-                  styles.btnLogin,
-                  loading && styles.btnDisabled,
-                ]}
-                onPress={handleLogin}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.btnText}>Iniciar sesión</Text>
-                )}
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.btnLogin, loading && styles.btnDisabled]}
+                    onPress={handleNewPasswordSubmit}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.btnText}>Establecer contraseña</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              ) : showForgotPassword ? (
+                <>
+                  {forgotMessage ? (
+                    <Text style={styles.successText}>{forgotMessage}</Text>
+                  ) : (
+                    <>
+                      <Text style={styles.label}>Correo electrónico</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="correo@ejemplo.com"
+                        placeholderTextColor="#9ca3af"
+                        value={forgotEmail}
+                        onChangeText={setForgotEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        returnKeyType="done"
+                        onSubmitEditing={handleForgotPasswordSubmit}
+                      />
 
-              <TouchableOpacity
-                style={styles.btnRegister}
-                onPress={() => router.push("/(auth)/register")}
-              >
-                <Text style={styles.btnRegisterText}>
-                  ¿No tienes cuenta?{" "}
-                  <Text style={styles.btnRegisterLink}>Regístrate</Text>
-                </Text>
-              </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.btnLogin, forgotLoading && styles.btnDisabled]}
+                        onPress={handleForgotPasswordSubmit}
+                        disabled={forgotLoading}
+                      >
+                        {forgotLoading ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <Text style={styles.btnText}>Solicitar restablecimiento</Text>
+                        )}
+                      </TouchableOpacity>
+                    </>
+                  )}
+
+                  <TouchableOpacity
+                    style={styles.btnRegister}
+                    onPress={() => {
+                      setShowForgotPassword(false);
+                      setForgotEmail("");
+                      setForgotMessage("");
+                    }}
+                  >
+                    <Text style={styles.btnRegisterText}>
+                      <Text style={styles.btnRegisterLink}>← Volver al inicio de sesión</Text>
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.label}>Correo electrónico</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="correo@ejemplo.com"
+                    placeholderTextColor="#9ca3af"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    returnKeyType="next"
+                  />
+
+                  {/* Contraseña con ojito */}
+                  <Text style={styles.label}>Contraseña</Text>
+                  <View style={styles.inputRow}>
+                    <TextInput
+                      style={styles.inputFlex}
+                      placeholder="••••••••"
+                      placeholderTextColor="#9ca3af"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={!verPassword}
+                      autoCapitalize="none"
+                      returnKeyType="done"
+                      onSubmitEditing={handleLogin}
+                    />
+                    <TouchableOpacity
+                      style={styles.eyeBtn}
+                      onPress={() => setVerPassword(!verPassword)}
+                    >
+                      <Feather
+                        name={verPassword ? "eye-off" : "eye"}
+                        size={20}
+                        color="#8a8fc0"
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.btnLogin,
+                      loading && styles.btnDisabled,
+                    ]}
+                    onPress={handleLogin}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.btnText}>Iniciar sesión</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.btnRegister}
+                    onPress={() => router.push("/(auth)/register")}
+                  >
+                    <Text style={styles.btnRegisterText}>
+                      ¿No tienes cuenta?{" "}
+                      <Text style={styles.btnRegisterLink}>Regístrate</Text>
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.btnRegister}
+                    onPress={() => setShowForgotPassword(true)}
+                  >
+                    <Text style={styles.btnRegisterText}>
+                      <Text style={styles.btnRegisterLink}>¿Olvidaste tu contraseña?</Text>
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
 
-            <TouchableOpacity
-              style={styles.backBtn}
-              onPress={() => router.replace("/welcome")}
-            >
-              <Text style={styles.backText}>← Volver al inicio</Text>
-            </TouchableOpacity>
+            {!requiresNewPassword && !showForgotPassword && (
+              <TouchableOpacity
+                style={styles.backBtn}
+                onPress={() => router.replace("/welcome")}
+              >
+                <Text style={styles.backText}>← Volver al inicio</Text>
+              </TouchableOpacity>
+            )}
 
           </ScrollView>
         </KeyboardAvoidingView>
@@ -287,6 +488,14 @@ const styles = StyleSheet.create({
   btnRegisterLink: {
     color: "#1a1a6e",
     fontWeight: "700",
+  },
+
+  successText: {
+    fontSize: 14,
+    color: "#166534",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 8,
   },
 
   backBtn: {
