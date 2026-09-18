@@ -40,6 +40,10 @@ router.post('/:id/reject-budget', authenticate, authorize('CLIENT'), ordersContr
 router.post('/:id/confirm-zero-budget-diagnosis', authenticate, authorize('CLIENT'), ordersController.confirmZeroBudgetDiagnosis)
 router.post('/:id/dispute-zero-budget-diagnosis', authenticate, authorize('CLIENT'), ordersController.disputeZeroBudgetDiagnosis)
 
+// Cliente confirma que recibió el equipo (solo órdenes a domicilio) —
+// reemplaza el "Marcar como entregado" del admin para self-service+delivery
+router.post('/:id/confirm-delivery', authenticate, authorize('CLIENT'), ordersController.confirmDeliveryByClient)
+
 // ─── Rutas estáticas (personal) — deben ir ANTES de /:id ──────────
 // Órdenes del día — ADMIN
 router.get('/today', authenticate, authorize('ADMIN'), ordersController.getTodayOrders)

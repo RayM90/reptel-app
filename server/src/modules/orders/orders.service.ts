@@ -1204,6 +1204,28 @@ export const confirmFinalPayment = async (
 // paso solo cierra el ciclo físico.
 // ─────────────────────────────────────────────
 
+const closeOrderAsDelivered = async (id: string, comment: string) => {
+  return prisma.order.update({
+    where: { id },
+    data: {
+      status: 'DELIVERED',
+      deliveredAt: new Date(),
+      statusHistory: {
+        create: {
+          status: 'DELIVERED',
+          comment,
+        },
+      },
+    },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+}
+
 export const markOrderDelivered = async (id: string) => {
   const order = await prisma.order.findUnique({
     where: { id },
@@ -1217,27 +1239,31 @@ export const markOrderDelivered = async (id: string) => {
     throw new Error('Esta acción solo aplica a órdenes pagadas, pendientes de entrega')
   }
 
-  const updatedOrder = await prisma.order.update({
-    where: { id },
-    data: {
-      status: 'DELIVERED',
-      deliveredAt: new Date(),
-      statusHistory: {
-        create: {
-          status: 'DELIVERED',
-          comment: 'Equipo entregado al cliente.',
-        },
-      },
-    },
-    include: {
-      client: true,
-      device: true,
-      technician: { select: { id: true, name: true } },
-      statusHistory: { orderBy: { createdAt: 'desc' } },
-    },
-  })
+  return closeOrderAsDelivered(id, 'Equipo entregado al cliente.')
+}
 
-  return updatedOrder
+// ─────────────────────────────────────────────
+// CLIENTE — Confirma la recepción del equipo (solo órdenes a domicilio).
+// Reemplaza al "Marcar como entregado" del admin para self-service+delivery:
+// el admin no está presente en la entrega física, la hace el técnico en la
+// casa del cliente — quien puede confirmarla de verdad es el cliente.
+// ─────────────────────────────────────────────
+
+export const confirmDeliveryByClient = async (id: string, email: string) => {
+  const user = await prisma.user.findUnique({ where: { email }, select: { clientId: true } })
+  if (!user || !user.clientId) throw new Error('Cliente no encontrado para este usuario')
+
+  const order = await prisma.order.findFirst({ where: { id, clientId: user.clientId } })
+  if (!order) throw new Error('Orden no encontrada')
+
+  if (order.deliveryAmount == null) {
+    throw new Error('Esta acción solo aplica a órdenes con entrega a domicilio')
+  }
+  if (order.status !== 'PAID_PENDING_DELIVERY') {
+    throw new Error('Esta acción solo aplica a órdenes pagadas, pendientes de entrega')
+  }
+
+  return closeOrderAsDelivered(id, 'Cliente confirmó la recepción del equipo desde la app — entrega finalizada.')
 }
 
 // ─────────────────────────────────────────────
