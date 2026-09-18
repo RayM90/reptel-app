@@ -8,6 +8,7 @@ export interface Order {
   budget: string | null
   deliveredAt: string | null
   finalPaymentConfirmed: boolean
+  budgetRejectionReason: string | null
   client: {
     name: string
     lastName: string

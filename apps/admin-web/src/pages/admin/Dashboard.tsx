@@ -16,6 +16,11 @@ const NEW_ROW_STYLE: CSSProperties = {
   borderLeft: '4px solid #f59e0b',
 }
 
+const REJECTED_ROW_STYLE: CSSProperties = {
+  backgroundColor: '#fdecea',
+  borderLeft: '4px solid #dc2626',
+}
+
 const NEW_BADGE_STYLE: CSSProperties = {
   backgroundColor: 'var(--color-secondary)',
   color: '#fff',
@@ -390,7 +395,13 @@ export default function Dashboard() {
                       setSelectedOrderId(order.id)
                       clearNewOrder(order.id)
                     }}
-                    style={newOrderIds.has(order.id) ? NEW_ROW_STYLE : undefined}
+                    style={
+                      newOrderIds.has(order.id)
+                        ? NEW_ROW_STYLE
+                        : order.status === 'REJECTED_PENDING_PICKUP'
+                          ? REJECTED_ROW_STYLE
+                          : undefined
+                    }
                   >
                     <td data-label="Orden">
                       {order.orderNumber}
