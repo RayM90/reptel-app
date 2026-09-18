@@ -192,7 +192,7 @@ function CounterFinalPaymentForm({
   disabled: boolean
   onSubmit: (paymentDetails: Record<string, string>) => void
 }) {
-  const [method, setMethod] = useState<'TRANSFER' | 'BINANCE'>('TRANSFER')
+  const [method, setMethod] = useState<'TRANSFER' | 'BINANCE' | 'CASH'>('TRANSFER')
   const [banco, setBanco] = useState('')
   const [telefono, setTelefono] = useState('')
   const [referencia, setReferencia] = useState('')
@@ -201,9 +201,12 @@ function CounterFinalPaymentForm({
   const [nombre, setNombre] = useState('')
 
   const handleSubmit = () => {
-    const details: Record<string, string> = method === 'BINANCE'
-      ? { correo, uid, nombre }
-      : { banco, telefono, referencia }
+    const details: Record<string, string> =
+      method === 'BINANCE'
+        ? { correo, uid, nombre }
+        : method === 'CASH'
+          ? { metodo: 'Efectivo' }
+          : { banco, telefono, referencia }
     onSubmit(details)
   }
 
@@ -211,9 +214,10 @@ function CounterFinalPaymentForm({
     <div style={{ marginTop: 8 }}>
       <div className="form-group">
         <label>Método de pago</label>
-        <select value={method} onChange={(e) => setMethod(e.target.value as 'TRANSFER' | 'BINANCE')}>
+        <select value={method} onChange={(e) => setMethod(e.target.value as 'TRANSFER' | 'BINANCE' | 'CASH')}>
           <option value="TRANSFER">Transferencia / Pago Móvil</option>
           <option value="BINANCE">Binance</option>
+          <option value="CASH">Efectivo</option>
         </select>
       </div>
       {method === 'BINANCE' ? (
@@ -231,7 +235,7 @@ function CounterFinalPaymentForm({
             <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} />
           </div>
         </>
-      ) : (
+      ) : method === 'CASH' ? null : (
         <>
           <div className="form-group">
             <label>Banco</label>
@@ -274,7 +278,7 @@ function CounterBudgetPaymentForm({
   disabled: boolean
   onSubmit: (paymentDetails: Record<string, string>, amount: number) => void
 }) {
-  const [method, setMethod] = useState<'TRANSFER' | 'BINANCE'>('TRANSFER')
+  const [method, setMethod] = useState<'TRANSFER' | 'BINANCE' | 'CASH'>('TRANSFER')
   const [monto, setMonto] = useState(suggestedAmount.toFixed(2))
   const [banco, setBanco] = useState('')
   const [telefono, setTelefono] = useState('')
@@ -284,9 +288,12 @@ function CounterBudgetPaymentForm({
   const [nombre, setNombre] = useState('')
 
   const handleSubmit = () => {
-    const details: Record<string, string> = method === 'BINANCE'
-      ? { correo, uid, nombre }
-      : { banco, telefono, referencia }
+    const details: Record<string, string> =
+      method === 'BINANCE'
+        ? { correo, uid, nombre }
+        : method === 'CASH'
+          ? { metodo: 'Efectivo' }
+          : { banco, telefono, referencia }
     onSubmit(details, Number(monto))
   }
 
@@ -301,9 +308,10 @@ function CounterBudgetPaymentForm({
       </div>
       <div className="form-group">
         <label>Método de pago</label>
-        <select value={method} onChange={(e) => setMethod(e.target.value as 'TRANSFER' | 'BINANCE')}>
+        <select value={method} onChange={(e) => setMethod(e.target.value as 'TRANSFER' | 'BINANCE' | 'CASH')}>
           <option value="TRANSFER">Transferencia / Pago Móvil</option>
           <option value="BINANCE">Binance</option>
+          <option value="CASH">Efectivo</option>
         </select>
       </div>
       {method === 'BINANCE' ? (
@@ -321,7 +329,7 @@ function CounterBudgetPaymentForm({
             <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} />
           </div>
         </>
-      ) : (
+      ) : method === 'CASH' ? null : (
         <>
           <div className="form-group">
             <label>Banco</label>
@@ -345,7 +353,7 @@ function CounterBudgetPaymentForm({
         </>
       )}
       <button className="btn btn-primary" disabled={disabled || !monto || Number(monto) <= 0} onClick={handleSubmit}>
-        Registrar anticipo
+        Registrar pago
       </button>
     </div>
   )

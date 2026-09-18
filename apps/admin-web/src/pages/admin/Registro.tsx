@@ -605,6 +605,7 @@ export default function Registro() {
               <option value="PAGO_MOVIL">Pago Móvil</option>
               <option value="TRANSFERENCIA">Transferencia</option>
               <option value="BINANCE">Binance</option>
+              <option value="EFECTIVO">Efectivo</option>
             </select>
           </div>
 
