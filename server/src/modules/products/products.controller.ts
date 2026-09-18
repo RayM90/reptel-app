@@ -124,7 +124,7 @@ export const createProductHandler = async (req: AuthRequest, res: Response): Pro
 export const updateProductHandler = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const id = String(req.params.id)
-    const { name, description, price, stock, minStock, imageUrl, categoryId, requiresInstallation, isActive } = req.body
+    const { name, description, price, stock, minStock, imageUrl, categoryId, requiresInstallation, isActive, stockAdjustmentReason } = req.body
 
     if (price !== undefined && Number(price) < 0) {
       res.status(400).json({ success: false, message: 'El precio debe ser un número mayor o igual a 0' })
@@ -149,6 +149,7 @@ export const updateProductHandler = async (req: AuthRequest, res: Response): Pro
     if (categoryId !== undefined) data.categoryId = categoryId
     if (requiresInstallation !== undefined) data.requiresInstallation = Boolean(requiresInstallation)
     if (isActive !== undefined) data.isActive = Boolean(isActive)
+    if (stockAdjustmentReason !== undefined) data.stockAdjustmentReason = stockAdjustmentReason
 
     const product = await updateProduct(id, data)
     res.status(200).json({ success: true, data: product })

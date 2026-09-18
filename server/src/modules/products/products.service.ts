@@ -138,11 +138,14 @@ export const updateProduct = async (
     categoryId?: string;
     requiresInstallation?: boolean;
     isActive?: boolean;
+    stockAdjustmentReason?: string;
   }
 ) => {
+  const { stockAdjustmentReason, ...productData } = data;
+
   return prisma.$transaction(async (tx) => {
     const before = await tx.product.findUniqueOrThrow({ where: { id } });
-    const updated = await tx.product.update({ where: { id }, data });
+    const updated = await tx.product.update({ where: { id }, data: productData });
 
     if (data.stock !== undefined && data.stock !== before.stock) {
       const diff = data.stock - before.stock;
@@ -151,7 +154,7 @@ export const updateProduct = async (
           productId: id,
           type: diff > 0 ? 'IN' : 'OUT',
           quantity: Math.abs(diff),
-          reason: 'Ajuste manual de stock desde el panel de administración',
+          reason: stockAdjustmentReason?.trim() || 'Ajuste manual de stock desde el panel de administración',
         },
       });
     }
