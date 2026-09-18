@@ -175,10 +175,16 @@ export const downloadBudgetAdvanceReceipt = async (req: AuthRequest, res: Respon
     )[0]
     const budgetAdvanceConfirmedAt = mostRecentBudgetSubmission?.confirmedAt ?? null
 
+    const movements = await getPartsUsedInOrder(id)
+    const partsUsed = movements
+      .filter((m) => !m.reversedAt)
+      .map((m) => ({ productName: m.product.name, quantity: m.quantity, unitPriceAtUse: m.unitPriceAtUse }))
+
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="recibo-pago-presupuesto-${order.orderNumber}.pdf"`)
     const doc = generateBudgetAdvanceReceipt({
       ...order,
+      partsUsed,
       budgetAdvanceConfirmedAt,
       budgetAdvanceAmount,
       finalPaymentDetails: mostRecentBudgetSubmission?.paymentDetails as Record<string, string>,

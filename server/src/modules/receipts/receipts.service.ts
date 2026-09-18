@@ -385,10 +385,18 @@ const addCostBreakdown = (doc: PDFKit.PDFDocument, order: OrderForReceipt, payme
 // Presupuesto").
 const addBudgetPaymentTable = (
   doc: PDFKit.PDFDocument,
-  order: Pick<OrderForReceipt, 'budget' | 'budgetAdvanceAmount'>
+  order: Pick<OrderForReceipt, 'budget' | 'budgetAdvanceAmount' | 'partsUsed'>
 ) => {
   const saldoPendiente = Number(order.budget ?? 0) - Number(order.budgetAdvanceAmount ?? 0)
   drawBoxedBlock(doc, (target, contentX, contentWidth) => {
+    if (order.partsUsed && order.partsUsed.length > 0) {
+      target.font('Helvetica-Bold').fontSize(11).text('Repuestos usados:', contentX, target.y, { width: contentWidth })
+      for (const part of order.partsUsed) {
+        const lineTotal = part.quantity * Number(part.unitPriceAtUse ?? 0)
+        addBoxRow(target, `  ${part.productName} (x${part.quantity})`, `$${lineTotal.toFixed(2)}`, contentX, contentWidth)
+      }
+      target.moveDown(0.2)
+    }
     addBoxRow(target, 'Monto Total', formatMoney(order.budget), contentX, contentWidth)
     addBoxRow(target, 'Monto Abonado', formatMoney(order.budgetAdvanceAmount), contentX, contentWidth)
     target.moveDown(0.2)
