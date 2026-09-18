@@ -11,6 +11,8 @@ interface Movement {
   createdAt: string
   product: { id: string; name: string }
   user: { id: string; name: string; lastName: string | null } | null
+  lossReportedAt: string | null
+  lossDescription: string | null
 }
 
 const CHANNEL_LABELS: Record<Movement['channel'], string> = {
@@ -108,7 +110,15 @@ export default function InventoryMovements() {
                       </span>
                     </td>
                     <td data-label="Cantidad">{m.quantity}</td>
-                    <td data-label="Motivo">{m.reason}</td>
+                    <td data-label="Motivo">
+                      {m.reason}
+                      {m.lossReportedAt && (
+                        <>
+                          <br />
+                          <span className="badge badge-danger">🔴 Merma: {m.lossDescription}</span>
+                        </>
+                      )}
+                    </td>
                     <td data-label="Canal">{CHANNEL_LABELS[m.channel]}</td>
                     <td data-label="Quién">{m.user ? `${m.user.name} ${m.user.lastName ?? ''}`.trim() : '—'}</td>
                   </tr>
