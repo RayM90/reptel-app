@@ -170,6 +170,9 @@ function StatusTimeline({ history }: { history: StatusHistoryEntry[] }) {
                   {new Date(entry.createdAt).toLocaleString('es-VE')}
                   {durationLabel && ` · ${durationLabel}`}
                 </p>
+                {entry.comment && (
+                  <p className="form-hint status-timeline-comment">{entry.comment}</p>
+                )}
               </div>
             </div>
           )
