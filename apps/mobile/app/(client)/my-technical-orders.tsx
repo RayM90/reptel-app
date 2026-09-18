@@ -609,21 +609,6 @@ export default function MyTechnicalOrdersScreen() {
                         </View>
                       )}
 
-                      {/* Comprar repuesto vinculado a esta orden — disponible con
-                          cualquier presupuesto (incluido $0, ej. "no es la laptop,
-                          es el cargador" y el cliente quiere comprarlo ya mismo) */}
-                      {order.budget != null && (
-                        <TouchableOpacity
-                          style={styles.linkedProductBtn}
-                          onPress={(e) => {
-                            e.stopPropagation()
-                            showToast('Esta función estará disponible pronto.', 'info')
-                          }}
-                        >
-                          <Text style={styles.linkedProductBtnText}>🔧 Comprar repuesto para esta orden</Text>
-                        </TouchableOpacity>
-                      )}
-
                       {/* Motivo de rechazo del pago final, si aplica */}
                       {order.finalPaymentRejectionReason && (
                         <View style={styles.rejectionCard}>
