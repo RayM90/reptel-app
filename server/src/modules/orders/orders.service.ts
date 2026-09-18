@@ -224,16 +224,29 @@ export const getOrderByNumber = async (orderNumber: string) => {
 }
 
 export const getOrdersByClient = async (clientId: string) => {
-  return await prisma.order.findMany({
+  const orders = await prisma.order.findMany({
     where: { clientId },
     include: {
       device: true,
       technician: { select: { id: true, name: true } },
       statusHistory: { orderBy: { createdAt: 'desc' } },
       advancePaymentSubmissions: { orderBy: { createdAt: 'desc' } },
+      inventoryMovements: {
+        where: { channel: 'SERVICIO_TECNICO', reversedAt: null },
+        include: { product: { select: { name: true } } },
+      },
     },
     orderBy: { receivedAt: 'desc' },
   })
+
+  return orders.map(({ inventoryMovements, ...order }) => ({
+    ...order,
+    partsUsed: inventoryMovements.map((m) => ({
+      productName: m.product.name,
+      quantity: m.quantity,
+      unitPriceAtUse: m.unitPriceAtUse,
+    })),
+  }))
 }
 
 // ─────────────────────────────────────────────

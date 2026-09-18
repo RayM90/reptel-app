@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma'
-import { useProductInOrder, revertProductUsage, getPartsUsedInOrder } from '../modules/orders/orders.service'
+import { useProductInOrder, revertProductUsage, getPartsUsedInOrder, getOrdersByClient } from '../modules/orders/orders.service'
 import { createProduct } from '../modules/products/products.service'
 
 let category: { id: string }
@@ -108,5 +108,27 @@ describe('getPartsUsedInOrder', () => {
     expect(parts.length).toBeGreaterThan(0)
     expect(parts[0].product.name).toBe('Repuesto Test')
     expect(parts[0].channel).toBe('SERVICIO_TECNICO')
+  })
+})
+
+describe('getOrdersByClient — repuestos usados', () => {
+  it('incluye partsUsed (producto, cantidad, precio) y excluye movimientos revertidos', async () => {
+    const used = await useProductInOrder(order.id, product.id, 3, technician.email)
+
+    const orders = await getOrdersByClient(client.id)
+    const found = orders.find((o) => o.id === order.id)
+
+    expect(found).toBeDefined()
+    expect(found!.partsUsed.length).toBeGreaterThan(0)
+    const matching = found!.partsUsed.find((p) => p.productName === 'Repuesto Test' && p.quantity === 3)
+    expect(matching).toBeDefined()
+    expect(Number(matching!.unitPriceAtUse)).toBe(20)
+
+    await revertProductUsage(used.movement.id, technician.email)
+    const ordersAfterRevert = await getOrdersByClient(client.id)
+    const foundAfterRevert = ordersAfterRevert.find((o) => o.id === order.id)!
+    expect(
+      foundAfterRevert.partsUsed.some((p) => p.quantity === 3 && p.productName === 'Repuesto Test')
+    ).toBe(false)
   })
 })
