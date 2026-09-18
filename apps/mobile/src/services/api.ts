@@ -100,4 +100,7 @@ export const ordersAPI = {
 
   disputeZeroBudgetDiagnosis: (id: string, note?: string) =>
     api.post(`/api/orders/${id}/dispute-zero-budget-diagnosis`, { note }),
+
+  confirmDelivery: (id: string) =>
+    api.post(`/api/orders/${id}/confirm-delivery`),
 }
