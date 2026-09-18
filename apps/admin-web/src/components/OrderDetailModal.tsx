@@ -548,7 +548,11 @@ export default function OrderDetailModal({
   // cierre por cancelación), y siempre debe quedar accesible.
   const phase2Unlocked = order.status !== 'PENDING_PAYMENT' && order.status !== 'RECEIVED'
   const phase3Unlocked = phase2Unlocked && order.status !== 'DIAGNOSING'
-  const phase4Unlocked = order.status !== 'PENDING_PAYMENT'
+  // Fase 4 debe estar accesible DESDE PENDING_PAYMENT: es justo ahí donde el
+  // admin revisa y confirma los comprobantes de anticipo (self-service) que
+  // hacen que la orden salga de ese estado. Bloquearla mientras el status es
+  // PENDING_PAYMENT dejaba el checkbox de confirmar pago inalcanzable.
+  const phase4Unlocked = true
   const phase5Unlocked = ['APPROVED', 'REPAIRING', 'WAITING_PART', 'READY', 'PAID_PENDING_DELIVERY', 'DELIVERED'].includes(order.status)
   const phase6Unlocked = ['READY', 'PAID_PENDING_DELIVERY', 'DELIVERED', 'REJECTED_PENDING_PICKUP', 'CANCELLED'].includes(order.status)
 
@@ -698,9 +702,20 @@ export default function OrderDetailModal({
                 </button>
               )}
               {order.status === 'PAID_PENDING_DELIVERY' && (
-                <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onMarkDelivered(order)}>
-                  Marcar como entregado
-                </button>
+                order.deliveryAmount != null ? (
+                  <>
+                    <span className="form-hint" style={{ width: '100%' }}>
+                      📱 Orden a domicilio — esperando que el cliente confirme la recepción desde la app.
+                    </span>
+                    <button className="btn btn-outline" disabled={pendingIds.has(order.id)} onClick={() => onMarkDelivered(order)}>
+                      Marcar como entregado manualmente (el cliente no confirmó)
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onMarkDelivered(order)}>
+                    Marcar como entregado
+                  </button>
+                )
               )}
               {showFinalReceipt && (
                 <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'final')}>
