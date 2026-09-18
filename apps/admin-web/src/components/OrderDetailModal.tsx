@@ -588,6 +588,12 @@ export default function OrderDetailModal({
           <button className="btn btn-outline" onClick={onClose} aria-label="Cerrar">✕</button>
         </div>
 
+        {order.status === 'REJECTED_PENDING_PICKUP' && (
+          <p className="alert-error" style={{ marginBottom: 16 }}>
+            ❌ El cliente rechazó el presupuesto de ${order.budget}. Motivo: {order.budgetRejectionReason}
+          </p>
+        )}
+
         <OrderPhase number={1} title="Recepción" state={phaseState(1, true)}>
           <h4>Cliente</h4>
           <p><strong>Nombre:</strong> {formatFullName(order.client.name, order.client.lastName)}</p>
