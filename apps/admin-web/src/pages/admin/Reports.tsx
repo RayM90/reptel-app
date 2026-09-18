@@ -2,6 +2,9 @@ import { useEffect, useState, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 import { formatFullName } from '../../utils/formatName'
+import { getStatusBadge } from '../../utils/statusBadge'
+
+const CHANNEL_LABELS: Record<'WEB' | 'APK', string> = { WEB: 'Mostrador', APK: 'App' }
 
 interface TechnicianRow {
   technicianId: string
@@ -371,7 +374,7 @@ export default function Reports() {
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">Todos</option>
               {ORDER_STATUSES.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>{getStatusBadge('order', s).label}</option>
               ))}
             </select>
           </div>
@@ -379,8 +382,8 @@ export default function Reports() {
             <label>Canal</label>
             <select value={channel} onChange={(e) => setChannel(e.target.value as '' | 'WEB' | 'APK')}>
               <option value="">Todos</option>
-              <option value="WEB">Web</option>
-              <option value="APK">APK</option>
+              <option value="WEB">{CHANNEL_LABELS.WEB}</option>
+              <option value="APK">{CHANNEL_LABELS.APK}</option>
             </select>
           </div>
           <button className="btn btn-primary" onClick={handleFilter}>Filtrar</button>
@@ -446,7 +449,7 @@ export default function Reports() {
                           <td data-label="Orden">{h.orderNumber}</td>
                           <td data-label="Fecha">{formatDate(h.receivedAt)}</td>
                           <td data-label="Equipo">{h.deviceLabel}</td>
-                          <td data-label="Estado">{h.status}</td>
+                          <td data-label="Estado">{getStatusBadge('order', h.status).label}</td>
                           <td className="money" data-label="Monto">${h.totalAmount.toFixed(2)}</td>
                         </tr>
                       ))}
@@ -526,7 +529,7 @@ export default function Reports() {
                         <td data-label="Orden">{o.orderNumber}</td>
                         <td data-label="Cliente">{o.clientName} — {o.clientIdNumber}</td>
                         <td data-label="Técnico">{o.technicianName}</td>
-                        <td data-label="Canal">{o.channel}</td>
+                        <td data-label="Canal">{CHANNEL_LABELS[o.channel]}</td>
                         <td className="money" data-label="Presupuesto">${o.budget.toFixed(2)}</td>
                         <td className="money" data-label="Comisión">${o.technicianCommission.toFixed(2)}</td>
                         <td data-label="Entregado">{formatDate(o.deliveredAt)}</td>
@@ -565,8 +568,8 @@ export default function Reports() {
                           <td data-label="Entrega">{formatDate(o.deliveredAt)}</td>
                           <td data-label="Cliente">{o.clientName} — {o.clientIdNumber}</td>
                           <td data-label="Técnico">{o.technicianName}</td>
-                          <td data-label="Estado">{o.status}</td>
-                          <td data-label="Canal">{o.channel}</td>
+                          <td data-label="Estado">{getStatusBadge('order', o.status).label}</td>
+                          <td data-label="Canal">{CHANNEL_LABELS[o.channel]}</td>
                           <td className="money" data-label="Monto">${o.totalAmount.toFixed(2)}</td>
                           <td data-label="Detalle" className="no-print">
                             <button

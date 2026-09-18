@@ -88,6 +88,11 @@ interface TechOrder {
     name: string
   } | null
   statusHistory: StatusHistoryEntry[]
+  partsUsed?: {
+    productName: string
+    quantity: number
+    unitPriceAtUse: number | null
+  }[]
 }
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -259,6 +264,26 @@ export default function MyTechnicalOrdersScreen() {
       fetchOrders()
     } catch (error: any) {
       showToast(error?.response?.data?.message || 'Error al confirmar el diagnóstico', 'error')
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [order.id]: false }))
+    }
+  }
+
+  const handleConfirmDelivery = async (order: TechOrder) => {
+    const confirmed = await confirmDialog({
+      title: 'Confirmar recepción del equipo',
+      message: 'Al confirmar, das por recibido tu equipo y se finaliza el servicio. ¿Confirmas?',
+      confirmLabel: 'Confirmar',
+    })
+    if (!confirmed) return
+
+    setActionLoading((prev) => ({ ...prev, [order.id]: true }))
+    try {
+      await ordersAPI.confirmDelivery(order.id)
+      showToast('✅ Servicio finalizado. ¡Gracias por confiar en RepTel!', 'success')
+      fetchOrders()
+    } catch (error: any) {
+      showToast(error?.response?.data?.message || 'Error al confirmar la recepción', 'error')
     } finally {
       setActionLoading((prev) => ({ ...prev, [order.id]: false }))
     }
@@ -467,6 +492,20 @@ export default function MyTechnicalOrdersScreen() {
                         </View>
                       )}
 
+                      {/* Repuestos que el técnico usó/usará en la reparación —
+                          visible en cualquier estado desde que quedan
+                          registrados, no solo mientras se decide el presupuesto */}
+                      {order.partsUsed && order.partsUsed.length > 0 && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Repuestos a utilizar</Text>
+                          {order.partsUsed.map((part, index) => (
+                            <Text key={index} style={styles.detailValue}>
+                              {part.productName} (x{part.quantity}) — ${(part.quantity * Number(part.unitPriceAtUse ?? 0)).toFixed(2)}
+                            </Text>
+                          ))}
+                        </View>
+                      )}
+
                       {/* Técnico asignado */}
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Técnico asignado</Text>
@@ -609,21 +648,6 @@ export default function MyTechnicalOrdersScreen() {
                         </View>
                       )}
 
-                      {/* Comprar repuesto vinculado a esta orden — disponible con
-                          cualquier presupuesto (incluido $0, ej. "no es la laptop,
-                          es el cargador" y el cliente quiere comprarlo ya mismo) */}
-                      {order.budget != null && (
-                        <TouchableOpacity
-                          style={styles.linkedProductBtn}
-                          onPress={(e) => {
-                            e.stopPropagation()
-                            showToast('Esta función estará disponible pronto.', 'info')
-                          }}
-                        >
-                          <Text style={styles.linkedProductBtnText}>🔧 Comprar repuesto para esta orden</Text>
-                        </TouchableOpacity>
-                      )}
-
                       {/* Motivo de rechazo del pago final, si aplica */}
                       {order.finalPaymentRejectionReason && (
                         <View style={styles.rejectionCard}>
@@ -668,6 +692,20 @@ export default function MyTechnicalOrdersScreen() {
                               ? '💰 Reenviar datos de pago final'
                               : '💰 Pagar saldo final'}
                           </Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Aceptar entrega a domicilio — reemplaza el "marcar
+                          entregado" del admin para self-service+delivery: el
+                          cliente es quien puede confirmar que el equipo
+                          llegó, el admin no está presente en la entrega. */}
+                      {status === 'PAID_PENDING_DELIVERY' && order.deliveryAmount != null && (
+                        <TouchableOpacity
+                          style={styles.approveBtn}
+                          onPress={(e) => { e.stopPropagation(); handleConfirmDelivery(order) }}
+                          disabled={actionLoading[order.id]}
+                        >
+                          <Text style={styles.approveBtnText}>✅ Aceptar y finalizar servicio</Text>
                         </TouchableOpacity>
                       )}
 

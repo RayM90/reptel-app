@@ -170,6 +170,9 @@ function StatusTimeline({ history }: { history: StatusHistoryEntry[] }) {
                   {new Date(entry.createdAt).toLocaleString('es-VE')}
                   {durationLabel && ` · ${durationLabel}`}
                 </p>
+                {entry.comment && (
+                  <p className="form-hint status-timeline-comment">{entry.comment}</p>
+                )}
               </div>
             </div>
           )
@@ -192,7 +195,7 @@ function CounterFinalPaymentForm({
   disabled: boolean
   onSubmit: (paymentDetails: Record<string, string>) => void
 }) {
-  const [method, setMethod] = useState<'TRANSFER' | 'BINANCE'>('TRANSFER')
+  const [method, setMethod] = useState<'TRANSFER' | 'BINANCE' | 'CASH'>('TRANSFER')
   const [banco, setBanco] = useState('')
   const [telefono, setTelefono] = useState('')
   const [referencia, setReferencia] = useState('')
@@ -201,9 +204,12 @@ function CounterFinalPaymentForm({
   const [nombre, setNombre] = useState('')
 
   const handleSubmit = () => {
-    const details: Record<string, string> = method === 'BINANCE'
-      ? { correo, uid, nombre }
-      : { banco, telefono, referencia }
+    const details: Record<string, string> =
+      method === 'BINANCE'
+        ? { correo, uid, nombre }
+        : method === 'CASH'
+          ? { metodo: 'Efectivo' }
+          : { banco, telefono, referencia }
     onSubmit(details)
   }
 
@@ -211,9 +217,10 @@ function CounterFinalPaymentForm({
     <div style={{ marginTop: 8 }}>
       <div className="form-group">
         <label>Método de pago</label>
-        <select value={method} onChange={(e) => setMethod(e.target.value as 'TRANSFER' | 'BINANCE')}>
+        <select value={method} onChange={(e) => setMethod(e.target.value as 'TRANSFER' | 'BINANCE' | 'CASH')}>
           <option value="TRANSFER">Transferencia / Pago Móvil</option>
           <option value="BINANCE">Binance</option>
+          <option value="CASH">Efectivo</option>
         </select>
       </div>
       {method === 'BINANCE' ? (
@@ -231,7 +238,7 @@ function CounterFinalPaymentForm({
             <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} />
           </div>
         </>
-      ) : (
+      ) : method === 'CASH' ? null : (
         <>
           <div className="form-group">
             <label>Banco</label>
@@ -274,7 +281,7 @@ function CounterBudgetPaymentForm({
   disabled: boolean
   onSubmit: (paymentDetails: Record<string, string>, amount: number) => void
 }) {
-  const [method, setMethod] = useState<'TRANSFER' | 'BINANCE'>('TRANSFER')
+  const [method, setMethod] = useState<'TRANSFER' | 'BINANCE' | 'CASH'>('TRANSFER')
   const [monto, setMonto] = useState(suggestedAmount.toFixed(2))
   const [banco, setBanco] = useState('')
   const [telefono, setTelefono] = useState('')
@@ -284,9 +291,12 @@ function CounterBudgetPaymentForm({
   const [nombre, setNombre] = useState('')
 
   const handleSubmit = () => {
-    const details: Record<string, string> = method === 'BINANCE'
-      ? { correo, uid, nombre }
-      : { banco, telefono, referencia }
+    const details: Record<string, string> =
+      method === 'BINANCE'
+        ? { correo, uid, nombre }
+        : method === 'CASH'
+          ? { metodo: 'Efectivo' }
+          : { banco, telefono, referencia }
     onSubmit(details, Number(monto))
   }
 
@@ -301,9 +311,10 @@ function CounterBudgetPaymentForm({
       </div>
       <div className="form-group">
         <label>Método de pago</label>
-        <select value={method} onChange={(e) => setMethod(e.target.value as 'TRANSFER' | 'BINANCE')}>
+        <select value={method} onChange={(e) => setMethod(e.target.value as 'TRANSFER' | 'BINANCE' | 'CASH')}>
           <option value="TRANSFER">Transferencia / Pago Móvil</option>
           <option value="BINANCE">Binance</option>
+          <option value="CASH">Efectivo</option>
         </select>
       </div>
       {method === 'BINANCE' ? (
@@ -321,7 +332,7 @@ function CounterBudgetPaymentForm({
             <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} />
           </div>
         </>
-      ) : (
+      ) : method === 'CASH' ? null : (
         <>
           <div className="form-group">
             <label>Banco</label>
@@ -345,7 +356,7 @@ function CounterBudgetPaymentForm({
         </>
       )}
       <button className="btn btn-primary" disabled={disabled || !monto || Number(monto) <= 0} onClick={handleSubmit}>
-        Registrar anticipo
+        Registrar pago
       </button>
     </div>
   )
@@ -548,7 +559,11 @@ export default function OrderDetailModal({
   // cierre por cancelación), y siempre debe quedar accesible.
   const phase2Unlocked = order.status !== 'PENDING_PAYMENT' && order.status !== 'RECEIVED'
   const phase3Unlocked = phase2Unlocked && order.status !== 'DIAGNOSING'
-  const phase4Unlocked = order.status !== 'PENDING_PAYMENT'
+  // Fase 4 debe estar accesible DESDE PENDING_PAYMENT: es justo ahí donde el
+  // admin revisa y confirma los comprobantes de anticipo (self-service) que
+  // hacen que la orden salga de ese estado. Bloquearla mientras el status es
+  // PENDING_PAYMENT dejaba el checkbox de confirmar pago inalcanzable.
+  const phase4Unlocked = true
   const phase5Unlocked = ['APPROVED', 'REPAIRING', 'WAITING_PART', 'READY', 'PAID_PENDING_DELIVERY', 'DELIVERED'].includes(order.status)
   const phase6Unlocked = ['READY', 'PAID_PENDING_DELIVERY', 'DELIVERED', 'REJECTED_PENDING_PICKUP', 'CANCELLED'].includes(order.status)
 
@@ -572,6 +587,12 @@ export default function OrderDetailModal({
           <h3 id="order-detail-title">Orden {order.orderNumber}</h3>
           <button className="btn btn-outline" onClick={onClose} aria-label="Cerrar">✕</button>
         </div>
+
+        {order.status === 'REJECTED_PENDING_PICKUP' && (
+          <p className="alert-error" style={{ marginBottom: 16 }}>
+            ❌ El cliente rechazó el presupuesto de ${order.budget}. Motivo: {order.budgetRejectionReason}
+          </p>
+        )}
 
         <OrderPhase number={1} title="Recepción" state={phaseState(1, true)}>
           <h4>Cliente</h4>
@@ -666,6 +687,15 @@ export default function OrderDetailModal({
               )}
             </>
           )}
+          {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') &&
+            order.budget != null &&
+            Number(order.budget) <= Number(order.revisionAmount ?? 15) && (
+              <p style={{ marginTop: 8 }}>
+                <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onCloseZeroBudgetOrder(order)}>
+                  Marcar como entregada
+                </button>
+              </p>
+            )}
         </OrderPhase>
 
         <OrderPhase number={5} title="Reparación y Pruebas" state={phaseState(5, phase5Unlocked)}>
@@ -673,6 +703,34 @@ export default function OrderDetailModal({
         </OrderPhase>
 
         <OrderPhase number={6} title="Pago Final y Entrega" state={phaseState(6, phase6Unlocked)}>
+          {order.status === 'READY' && (
+            <p style={{ marginBottom: 8 }}>
+              <button
+                className="btn btn-primary"
+                onClick={() => onApproveFinalPayment(order)}
+                disabled={!order.finalPaymentDetails || pendingIds.has(order.id)}
+              >
+                Aprobar pago final
+              </button>{' '}
+              <button className="btn btn-danger" disabled={pendingIds.has(order.id)} onClick={() => onRejectFinalPayment(order)}>
+                Rechazar
+              </button>
+            </p>
+          )}
+          {order.status === 'REJECTED_PENDING_PICKUP' && (
+            <p style={{ marginBottom: 8 }}>
+              <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onMarkPickedUpUnrepaired(order)}>
+                Marcar como entregado sin reparar
+              </button>
+            </p>
+          )}
+          {showClosureReceipt && (
+            <p style={{ marginBottom: 8 }}>
+              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'closure')}>
+                📄 Recibo de Cierre
+              </button>
+            </p>
+          )}
           <h4>Pago final</h4>
           {order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15) && !finalPaidInFull && (
             <p className="form-hint">Saldo pendiente al entregar: ${Math.max(finalRemaining, 0).toFixed(2)}</p>
@@ -698,9 +756,20 @@ export default function OrderDetailModal({
                 </button>
               )}
               {order.status === 'PAID_PENDING_DELIVERY' && (
-                <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onMarkDelivered(order)}>
-                  Marcar como entregado
-                </button>
+                order.deliveryAmount != null ? (
+                  <>
+                    <span className="form-hint" style={{ width: '100%' }}>
+                      📱 Orden a domicilio — esperando que el cliente confirme la recepción desde la app.
+                    </span>
+                    <button className="btn btn-outline" disabled={pendingIds.has(order.id)} onClick={() => onMarkDelivered(order)}>
+                      Marcar como entregado manualmente (el cliente no confirmó)
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onMarkDelivered(order)}>
+                    Marcar como entregado
+                  </button>
+                )
               )}
               {showFinalReceipt && (
                 <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'final')}>
@@ -711,43 +780,6 @@ export default function OrderDetailModal({
           )}
         </OrderPhase>
 
-        <p>
-          <strong>Acciones:</strong>{' '}
-          {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') &&
-          order.budget != null &&
-          Number(order.budget) <= Number(order.revisionAmount ?? 15) ? (
-            <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onCloseZeroBudgetOrder(order)}>
-              Marcar como entregada
-            </button>
-          ) : order.status === 'READY' ? (
-            <>
-              <button
-                className="btn btn-primary"
-                onClick={() => onApproveFinalPayment(order)}
-                disabled={!order.finalPaymentDetails || pendingIds.has(order.id)}
-              >
-                Aprobar pago final
-              </button>{' '}
-              <button className="btn btn-danger" disabled={pendingIds.has(order.id)} onClick={() => onRejectFinalPayment(order)}>
-                Rechazar
-              </button>
-            </>
-          ) : order.status === 'REJECTED_PENDING_PICKUP' ? (
-            <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onMarkPickedUpUnrepaired(order)}>
-              Marcar como entregado sin reparar
-            </button>
-          ) : (
-            '—'
-          )}
-          {showClosureReceipt && (
-            <>
-              {' '}
-              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'closure')}>
-                📄 Recibo de Cierre
-              </button>
-            </>
-          )}
-        </p>
       </div>
     </div>
   )

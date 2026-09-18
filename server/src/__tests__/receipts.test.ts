@@ -433,6 +433,27 @@ describe('generateBudgetAdvanceReceipt — título estricto y tabla financiera',
     expect(texts.some((t) => t.startsWith('$7.50'))).toBe(true)
     expect(texts).toContain('Saldo Pendiente: $42.50')
   })
+
+  it('lista los repuestos usados dentro de la caja cuando existen', () => {
+    const orderConRepuestos = {
+      ...fakeOrder,
+      partsUsed: [
+        { productName: 'RAM DDR4 8GB', quantity: 2, unitPriceAtUse: 20 },
+      ],
+    }
+    const calls = captureTextXs(() => generateBudgetAdvanceReceipt(orderConRepuestos as any))
+    const texts = calls.map((c) => c.text)
+
+    expect(texts).toContain('Repuestos usados:')
+    expect(texts.some((t) => t.includes('RAM DDR4 8GB (x2)'))).toBe(true)
+    expect(texts.some((t) => t.includes('$40.00'))).toBe(true)
+  })
+
+  it('no muestra la sección de repuestos cuando no hay ninguno', () => {
+    const calls = captureTextXs(() => generateBudgetAdvanceReceipt(fakeOrder as any))
+    const texts = calls.map((c) => c.text)
+    expect(texts).not.toContain('Repuestos usados:')
+  })
 })
 
 describe('generateFinalReceipt — relabel de observaciones de entrega', () => {

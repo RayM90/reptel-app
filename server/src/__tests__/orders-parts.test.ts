@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma'
-import { useProductInOrder, revertProductUsage, getPartsUsedInOrder } from '../modules/orders/orders.service'
+import { useProductInOrder, revertProductUsage, getPartsUsedInOrder, getOrdersByClient, reportPartLoss } from '../modules/orders/orders.service'
 import { createProduct } from '../modules/products/products.service'
 
 let category: { id: string }
@@ -108,5 +108,84 @@ describe('getPartsUsedInOrder', () => {
     expect(parts.length).toBeGreaterThan(0)
     expect(parts[0].product.name).toBe('Repuesto Test')
     expect(parts[0].channel).toBe('SERVICIO_TECNICO')
+  })
+})
+
+describe('getOrdersByClient — repuestos usados', () => {
+  it('incluye partsUsed (producto, cantidad, precio) y excluye movimientos revertidos', async () => {
+    const used = await useProductInOrder(order.id, product.id, 3, technician.email)
+
+    const orders = await getOrdersByClient(client.id)
+    const found = orders.find((o) => o.id === order.id)
+
+    expect(found).toBeDefined()
+    expect(found!.partsUsed.length).toBeGreaterThan(0)
+    const matching = found!.partsUsed.find((p) => p.productName === 'Repuesto Test' && p.quantity === 3)
+    expect(matching).toBeDefined()
+    expect(Number(matching!.unitPriceAtUse)).toBe(20)
+
+    await revertProductUsage(used.movement.id, technician.email)
+    const ordersAfterRevert = await getOrdersByClient(client.id)
+    const foundAfterRevert = ordersAfterRevert.find((o) => o.id === order.id)!
+    expect(
+      foundAfterRevert.partsUsed.some((p) => p.quantity === 3 && p.productName === 'Repuesto Test')
+    ).toBe(false)
+  })
+})
+
+describe('reportPartLoss', () => {
+  it('descuenta budget, NO restaura stock, marca los campos de merma y registra el historial', async () => {
+    const used = await useProductInOrder(order.id, product.id, 2, technician.email)
+    const productBefore = await prisma.product.findUniqueOrThrow({ where: { id: product.id } })
+    const orderBefore = await prisma.order.findUniqueOrThrow({ where: { id: order.id } })
+
+    const result = await reportPartLoss(used.movement.id, technician.email, 'Se rompió el conector al instalarlo')
+
+    expect(Number(result.order.budget)).toBe(Number(orderBefore.budget) - 40) // 2 x $20
+    const productAfter = await prisma.product.findUniqueOrThrow({ where: { id: product.id } })
+    expect(productAfter.stock).toBe(productBefore.stock) // el stock NO vuelve
+
+    const movement = await prisma.inventoryMovement.findUniqueOrThrow({ where: { id: used.movement.id } })
+    expect(movement.lossReportedAt).not.toBeNull()
+    expect(movement.lossDescription).toBe('Se rompió el conector al instalarlo')
+    expect(movement.reversedAt).toBeNull()
+  })
+
+  it('rechaza si no hay descripción', async () => {
+    const used = await useProductInOrder(order.id, product.id, 1, technician.email)
+    await expect(reportPartLoss(used.movement.id, technician.email, '')).rejects.toThrow(/descripción/)
+  })
+
+  it('rechaza si el movimiento ya fue revertido', async () => {
+    const used = await useProductInOrder(order.id, product.id, 1, technician.email)
+    await revertProductUsage(used.movement.id, technician.email)
+    await expect(reportPartLoss(used.movement.id, technician.email, 'motivo')).rejects.toThrow(/ya fue revertido/)
+  })
+
+  it('rechaza si el actor no es el técnico asignado', async () => {
+    const used = await useProductInOrder(order.id, product.id, 1, technician.email)
+    await expect(reportPartLoss(used.movement.id, otherTechnician.email, 'motivo')).rejects.toThrow(/Solo el técnico asignado/)
+  })
+
+  it('getPartsUsedInOrder sigue listando el movimiento aunque tenga merma (es historial completo, no solo activos)', async () => {
+    const used = await useProductInOrder(order.id, product.id, 1, technician.email)
+    await reportPartLoss(used.movement.id, technician.email, 'motivo')
+    const parts = await getPartsUsedInOrder(order.id)
+    expect(parts.some((p) => p.id === used.movement.id)).toBe(true)
+  })
+
+  it('getOrdersByClient EXCLUYE de partsUsed un movimiento con merma reportada', async () => {
+    // Compara el conteo de partsUsed antes/después en vez de buscar una
+    // cantidad fija — otros tests de este archivo dejan movimientos activos
+    // con quantity 1 sueltos, así que "no hay ningún quantity:1" no sirve.
+    const before = await getOrdersByClient(client.id)
+    const countBefore = before.find((o) => o.id === order.id)!.partsUsed.length
+
+    const used = await useProductInOrder(order.id, product.id, 1, technician.email)
+    await reportPartLoss(used.movement.id, technician.email, 'motivo')
+
+    const after = await getOrdersByClient(client.id)
+    const countAfter = after.find((o) => o.id === order.id)!.partsUsed.length
+    expect(countAfter).toBe(countBefore)
   })
 })

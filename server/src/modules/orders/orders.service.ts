@@ -224,16 +224,29 @@ export const getOrderByNumber = async (orderNumber: string) => {
 }
 
 export const getOrdersByClient = async (clientId: string) => {
-  return await prisma.order.findMany({
+  const orders = await prisma.order.findMany({
     where: { clientId },
     include: {
       device: true,
       technician: { select: { id: true, name: true } },
       statusHistory: { orderBy: { createdAt: 'desc' } },
       advancePaymentSubmissions: { orderBy: { createdAt: 'desc' } },
+      inventoryMovements: {
+        where: { channel: 'SERVICIO_TECNICO', reversedAt: null, lossReportedAt: null },
+        include: { product: { select: { name: true } } },
+      },
     },
     orderBy: { receivedAt: 'desc' },
   })
+
+  return orders.map(({ inventoryMovements, ...order }) => ({
+    ...order,
+    partsUsed: inventoryMovements.map((m) => ({
+      productName: m.product.name,
+      quantity: m.quantity,
+      unitPriceAtUse: m.unitPriceAtUse,
+    })),
+  }))
 }
 
 // ─────────────────────────────────────────────
@@ -737,11 +750,16 @@ export const confirmAdvancePaymentInstallment = async (
               status: 'DIAGNOSING',
               statusHistory: {
                 create: [
-                  {
-                    status: 'RECEIVED',
-                    comment: `Anticipo de $${total} completado mediante abonos — confirmado por el administrador`,
-                    userId: actor?.id,
-                  },
+                  // La orden de mostrador ya nace en RECEIVED (createCounterOrder) —
+                  // repetir el status acá dejaba dos "Recibido" en el historial.
+                  // Solo agregarlo si esta es la transición real desde PENDING_PAYMENT.
+                  ...(order.status === 'PENDING_PAYMENT'
+                    ? [{
+                        status: 'RECEIVED' as const,
+                        comment: `Anticipo de $${total} completado mediante abonos — confirmado por el administrador`,
+                        userId: actor?.id,
+                      }]
+                    : []),
                   {
                     status: 'DIAGNOSING',
                     comment: 'Pago confirmado — técnico autorizado a proceder con la revisión',
@@ -1191,6 +1209,28 @@ export const confirmFinalPayment = async (
 // paso solo cierra el ciclo físico.
 // ─────────────────────────────────────────────
 
+const closeOrderAsDelivered = async (id: string, comment: string) => {
+  return prisma.order.update({
+    where: { id },
+    data: {
+      status: 'DELIVERED',
+      deliveredAt: new Date(),
+      statusHistory: {
+        create: {
+          status: 'DELIVERED',
+          comment,
+        },
+      },
+    },
+    include: {
+      client: true,
+      device: true,
+      technician: { select: { id: true, name: true } },
+      statusHistory: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+}
+
 export const markOrderDelivered = async (id: string) => {
   const order = await prisma.order.findUnique({
     where: { id },
@@ -1204,27 +1244,31 @@ export const markOrderDelivered = async (id: string) => {
     throw new Error('Esta acción solo aplica a órdenes pagadas, pendientes de entrega')
   }
 
-  const updatedOrder = await prisma.order.update({
-    where: { id },
-    data: {
-      status: 'DELIVERED',
-      deliveredAt: new Date(),
-      statusHistory: {
-        create: {
-          status: 'DELIVERED',
-          comment: 'Equipo entregado al cliente.',
-        },
-      },
-    },
-    include: {
-      client: true,
-      device: true,
-      technician: { select: { id: true, name: true } },
-      statusHistory: { orderBy: { createdAt: 'desc' } },
-    },
-  })
+  return closeOrderAsDelivered(id, 'Equipo entregado al cliente.')
+}
 
-  return updatedOrder
+// ─────────────────────────────────────────────
+// CLIENTE — Confirma la recepción del equipo (solo órdenes a domicilio).
+// Reemplaza al "Marcar como entregado" del admin para self-service+delivery:
+// el admin no está presente en la entrega física, la hace el técnico en la
+// casa del cliente — quien puede confirmarla de verdad es el cliente.
+// ─────────────────────────────────────────────
+
+export const confirmDeliveryByClient = async (id: string, email: string) => {
+  const user = await prisma.user.findUnique({ where: { email }, select: { clientId: true } })
+  if (!user || !user.clientId) throw new Error('Cliente no encontrado para este usuario')
+
+  const order = await prisma.order.findFirst({ where: { id, clientId: user.clientId } })
+  if (!order) throw new Error('Orden no encontrada')
+
+  if (order.deliveryAmount == null) {
+    throw new Error('Esta acción solo aplica a órdenes con entrega a domicilio')
+  }
+  if (order.status !== 'PAID_PENDING_DELIVERY') {
+    throw new Error('Esta acción solo aplica a órdenes pagadas, pendientes de entrega')
+  }
+
+  return closeOrderAsDelivered(id, 'Cliente confirmó la recepción del equipo desde la app — entrega finalizada.')
 }
 
 // ─────────────────────────────────────────────
@@ -1654,6 +1698,63 @@ export const revertProductUsage = async (movementId: string, actorEmail: string)
         orderId: movement.orderId!,
         status: updatedOrder.status,
         comment: `Repuesto revertido: ${product.name} (x${movement.quantity}) — -$${revertedCost.toFixed(2)}`,
+        userId: actor.id,
+      },
+    })
+
+    return { movement: updatedMovement, order: updatedOrder }
+  })
+}
+
+export const reportPartLoss = async (movementId: string, actorEmail: string, description: string) => {
+  if (!description || !description.trim()) {
+    throw new Error('La descripción de la merma es requerida')
+  }
+
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const movement = await prisma.inventoryMovement.findUnique({ where: { id: movementId } })
+  if (!movement) throw new Error('Movimiento no encontrado')
+  if (movement.channel !== 'SERVICIO_TECNICO' || !movement.orderId) {
+    throw new Error('Este movimiento no corresponde a un repuesto de orden de servicio')
+  }
+  if (movement.reversedAt) {
+    throw new Error('Este repuesto ya fue revertido')
+  }
+  if (movement.lossReportedAt) {
+    throw new Error('Este repuesto ya fue reportado como merma')
+  }
+
+  const order = await prisma.order.findUnique({ where: { id: movement.orderId } })
+  if (!order) throw new Error('Orden no encontrada')
+  if (order.technicianId !== actor.id) {
+    throw new Error('Solo el técnico asignado a esta orden puede reportar esta merma')
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const product = await tx.product.findUniqueOrThrow({ where: { id: movement.productId } })
+
+    const lostCost = Number(movement.unitPriceAtUse ?? 0) * movement.quantity
+    const updatedOrder = await tx.order.update({
+      where: { id: movement.orderId! },
+      data: { budget: { decrement: lostCost } },
+    })
+
+    const updatedMovement = await tx.inventoryMovement.update({
+      where: { id: movementId },
+      data: {
+        lossReportedAt: new Date(),
+        lossDescription: description.trim(),
+        lossReportedByUserId: actor.id,
+      },
+    })
+
+    await tx.orderStatusHistory.create({
+      data: {
+        orderId: movement.orderId!,
+        status: updatedOrder.status,
+        comment: `Repuesto reportado como merma: ${product.name} (x${movement.quantity}) — ${description.trim()} — no se cobra al cliente`,
         userId: actor.id,
       },
     })

@@ -5,6 +5,15 @@ import { mapPaymentMethod } from '../../lib/paymentMethod'
 import { broadcastOrderUpdate } from '../../websocket'
 import prisma from '../../lib/prisma'
 
+// Traduce el error crudo de Prisma (unique constraint) a un mensaje que el
+// cliente pueda entender, en vez de filtrar el stack trace de la query SQL.
+const translateOrderCreationError = (error: any): string | null => {
+  if (error?.code === 'P2002' && String(error?.meta?.target ?? '').includes('serialNumber')) {
+    return 'Ya existe un equipo registrado con ese número de serie. Verifica el número o deja el campo vacío si no lo tienes a mano.'
+  }
+  return null
+}
+
 export const getOrders = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const orders = await ordersService.getAllOrders()
@@ -142,7 +151,7 @@ export const createMyOrder = async (req: AuthRequest, res: Response): Promise<vo
     res.status(201).json({ success: true, data: order })
   } catch (error: any) {
     console.error('ERROR CREAR ORDEN (CLIENTE):', error)
-    res.status(400).json({ success: false, message: error.message || 'Error al crear la orden' })
+    res.status(400).json({ success: false, message: translateOrderCreationError(error) || error.message || 'Error al crear la orden' })
   }
 }
 
@@ -225,7 +234,7 @@ export const createCounterOrder = async (req: AuthRequest, res: Response): Promi
     res.status(201).json({ success: true, data: order })
   } catch (error: any) {
     console.error('ERROR CREAR ORDEN (RECEPCIÓN):', error)
-    res.status(400).json({ success: false, message: error.message || 'Error al crear la orden' })
+    res.status(400).json({ success: false, message: translateOrderCreationError(error) || error.message || 'Error al crear la orden' })
   }
 }
 
@@ -684,6 +693,25 @@ export const confirmZeroBudgetDiagnosis = async (req: AuthRequest, res: Response
   }
 }
 
+export const confirmDeliveryByClient = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+    const id = String(req.params.id)
+    const order = await ordersService.confirmDeliveryByClient(id, email)
+
+    broadcastOrderUpdate({ type: 'ORDER_STATUS_UPDATED', data: order })
+
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR CONFIRMAR ENTREGA (CLIENTE):', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al confirmar la entrega' })
+  }
+}
+
 export const disputeZeroBudgetDiagnosis = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const email = req.user?.email
@@ -787,6 +815,28 @@ export const revertProductUsageHandler = async (req: AuthRequest, res: Response)
     }
     console.error('ERROR REVERTIR REPUESTO:', error)
     res.status(400).json({ success: false, message: error.message || 'Error al revertir el repuesto' })
+  }
+}
+
+export const reportPartLossHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const movementId = String(req.params.movementId)
+    const { description } = req.body
+    const result = await ordersService.reportPartLoss(movementId, email, description)
+    res.status(200).json({ success: true, data: result })
+  } catch (error: any) {
+    if (error.message?.includes('Solo el técnico asignado')) {
+      res.status(403).json({ success: false, message: error.message })
+      return
+    }
+    console.error('ERROR REPORTAR MERMA:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al reportar la merma' })
   }
 }
 

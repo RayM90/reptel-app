@@ -22,10 +22,15 @@ export default function InventoryForm() {
   const [categoryId, setCategoryId] = useState('')
   const [requiresInstallation, setRequiresInstallation] = useState(false)
   const [isActive, setIsActive] = useState(true)
+  const [originalStock, setOriginalStock] = useState<number | null>(null)
+  const [stockAdjustmentReason, setStockAdjustmentReason] = useState('Venta en tienda')
+  const [stockAdjustmentReasonOther, setStockAdjustmentReasonOther] = useState('')
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(!isEditMode)
+
+  const stockChanged = isEditMode && originalStock !== null && Number(stock) !== originalStock
 
   useEffect(() => {
     fetchCategories()
@@ -58,6 +63,7 @@ export default function InventoryForm() {
       setDescription(p.description || '')
       setPrice(String(p.price))
       setStock(String(p.stock))
+      setOriginalStock(p.stock)
       setMinStock(String(p.minStock))
       setImageUrl(p.imageUrl || '')
       setCategoryId(p.category.id)
@@ -84,6 +90,12 @@ export default function InventoryForm() {
         categoryId,
         requiresInstallation,
         ...(isEditMode ? { isActive } : {}),
+        ...(stockChanged
+          ? {
+              stockAdjustmentReason:
+                stockAdjustmentReason === 'Otro' ? stockAdjustmentReasonOther : stockAdjustmentReason,
+            }
+          : {}),
       }
       if (isEditMode) {
         await api.put(`/api/products/${id}`, payload)
@@ -143,6 +155,27 @@ export default function InventoryForm() {
             <label>Stock</label>
             <input type="number" min="0" value={stock} onChange={(e) => setStock(e.target.value)} />
           </div>
+
+          {stockChanged && (
+            <div className="form-group">
+              <label>Motivo del ajuste</label>
+              <select value={stockAdjustmentReason} onChange={(e) => setStockAdjustmentReason(e.target.value)}>
+                <option value="Venta en tienda">Venta en tienda</option>
+                <option value="Corrección de conteo">Corrección de conteo</option>
+                <option value="Producto dañado al recibir">Producto dañado al recibir</option>
+                <option value="Otro">Otro</option>
+              </select>
+              {stockAdjustmentReason === 'Otro' && (
+                <input
+                  type="text"
+                  placeholder="Describe el motivo"
+                  value={stockAdjustmentReasonOther}
+                  onChange={(e) => setStockAdjustmentReasonOther(e.target.value)}
+                  style={{ marginTop: 6 }}
+                />
+              )}
+            </div>
+          )}
 
           <div className="form-group">
             <label>Stock mínimo</label>

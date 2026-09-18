@@ -334,6 +334,14 @@ model InventoryMovement {
   reversedAt    DateTime?
   reversedByUserId String?
 
+  // Merma: el repuesto se dañó en manos del técnico al instalarlo. A
+  // diferencia de reversedAt (stock vuelve, fue un error de selección), acá
+  // el stock NO vuelve (la pieza ya no sirve) — solo se descuenta del
+  // presupuesto lo que se le había cobrado al cliente.
+  lossReportedAt       DateTime?
+  lossDescription      String?   @db.Text
+  lossReportedByUserId String?
+
   @@map("inventorymovement")
 }
 

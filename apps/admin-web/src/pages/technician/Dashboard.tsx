@@ -217,6 +217,28 @@ export default function TechnicianDashboard() {
     }
   }
 
+  const [lossFormOpenFor, setLossFormOpenFor] = useState<string | null>(null)
+  const [lossDescriptionText, setLossDescriptionText] = useState<Record<string, string>>({})
+
+  const handleReportLoss = async (orderId: string, movementId: string) => {
+    const description = (lossDescriptionText[movementId] || '').trim()
+    if (!description) {
+      showToast('Describe qué pasó con el repuesto antes de reportar la merma', 'error')
+      return
+    }
+    try {
+      await api.post(`/api/orders/${orderId}/parts/${movementId}/report-loss`, { description })
+      showToast('✅ Merma reportada — no se le cobra al cliente', 'success')
+      setLossFormOpenFor(null)
+      setLossDescriptionText((prev) => ({ ...prev, [movementId]: '' }))
+      const freshParts = await fetchParts(orderId)
+      recomputeBudget(orderId, catalogSelection[orderId] || '', manualExtraText[orderId] || '', freshParts)
+      fetchData(true)
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al reportar la merma', 'error')
+    }
+  }
+
   const fetchData = async (isPoll = false) => {
     if (!isPoll) {
       setLoading(true)
@@ -620,6 +642,23 @@ export default function TechnicianDashboard() {
                             <p className="form-hint">
                               Si es un repuesto, usá la sección "Repuestos" de abajo — este ajuste es para cualquier otro costo imprevisto.
                             </p>
+                            <div className="form-group" style={{ minWidth: 220 }}>
+                              <label>Servicio del catálogo (opcional)</label>
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  const service = catalog.find((c) => c.id === e.target.value)
+                                  if (!service) return
+                                  setAdjustmentAmountText((prev) => ({ ...prev, [order.id]: service.basePrice }))
+                                  setAdjustmentReasonText((prev) => ({ ...prev, [order.id]: service.name }))
+                                }}
+                              >
+                                <option value="">— Elegir para autocompletar —</option>
+                                {catalog.map((c) => (
+                                  <option key={c.id} value={c.id}>{c.name} — ${Number(c.basePrice).toFixed(2)}</option>
+                                ))}
+                              </select>
+                            </div>
                             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                               <div style={{ width: 120 }}>
                                 <input
@@ -798,7 +837,23 @@ export default function TechnicianDashboard() {
                                     <td data-label="Acciones">
                                       <button className="btn btn-danger" onClick={() => handleRevertPart(order.id, p.id)}>
                                         Revertir
+                                      </button>{' '}
+                                      <button className="btn btn-outline" onClick={() => setLossFormOpenFor(lossFormOpenFor === p.id ? null : p.id)}>
+                                        Reportar merma
                                       </button>
+                                      {lossFormOpenFor === p.id && (
+                                        <div style={{ marginTop: 6, display: 'flex', gap: 6, minWidth: 220 }}>
+                                          <input
+                                            type="text"
+                                            placeholder="¿Qué pasó con el repuesto?"
+                                            value={lossDescriptionText[p.id] || ''}
+                                            onChange={(e) => setLossDescriptionText((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                                          />
+                                          <button className="btn btn-danger" onClick={() => handleReportLoss(order.id, p.id)}>
+                                            Confirmar
+                                          </button>
+                                        </div>
+                                      )}
                                     </td>
                                   </tr>
                                 ))}
