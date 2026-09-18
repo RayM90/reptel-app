@@ -620,6 +620,23 @@ export default function TechnicianDashboard() {
                             <p className="form-hint">
                               Si es un repuesto, usá la sección "Repuestos" de abajo — este ajuste es para cualquier otro costo imprevisto.
                             </p>
+                            <div className="form-group" style={{ minWidth: 220 }}>
+                              <label>Servicio del catálogo (opcional)</label>
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  const service = catalog.find((c) => c.id === e.target.value)
+                                  if (!service) return
+                                  setAdjustmentAmountText((prev) => ({ ...prev, [order.id]: service.basePrice }))
+                                  setAdjustmentReasonText((prev) => ({ ...prev, [order.id]: service.name }))
+                                }}
+                              >
+                                <option value="">— Elegir para autocompletar —</option>
+                                {catalog.map((c) => (
+                                  <option key={c.id} value={c.id}>{c.name} — ${Number(c.basePrice).toFixed(2)}</option>
+                                ))}
+                              </select>
+                            </div>
                             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                               <div style={{ width: 120 }}>
                                 <input
