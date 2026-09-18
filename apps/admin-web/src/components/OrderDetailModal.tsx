@@ -681,6 +681,15 @@ export default function OrderDetailModal({
               )}
             </>
           )}
+          {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') &&
+            order.budget != null &&
+            Number(order.budget) <= Number(order.revisionAmount ?? 15) && (
+              <p style={{ marginTop: 8 }}>
+                <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onCloseZeroBudgetOrder(order)}>
+                  Marcar como entregada
+                </button>
+              </p>
+            )}
         </OrderPhase>
 
         <OrderPhase number={5} title="Reparación y Pruebas" state={phaseState(5, phase5Unlocked)}>
@@ -688,6 +697,34 @@ export default function OrderDetailModal({
         </OrderPhase>
 
         <OrderPhase number={6} title="Pago Final y Entrega" state={phaseState(6, phase6Unlocked)}>
+          {order.status === 'READY' && (
+            <p style={{ marginBottom: 8 }}>
+              <button
+                className="btn btn-primary"
+                onClick={() => onApproveFinalPayment(order)}
+                disabled={!order.finalPaymentDetails || pendingIds.has(order.id)}
+              >
+                Aprobar pago final
+              </button>{' '}
+              <button className="btn btn-danger" disabled={pendingIds.has(order.id)} onClick={() => onRejectFinalPayment(order)}>
+                Rechazar
+              </button>
+            </p>
+          )}
+          {order.status === 'REJECTED_PENDING_PICKUP' && (
+            <p style={{ marginBottom: 8 }}>
+              <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onMarkPickedUpUnrepaired(order)}>
+                Marcar como entregado sin reparar
+              </button>
+            </p>
+          )}
+          {showClosureReceipt && (
+            <p style={{ marginBottom: 8 }}>
+              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'closure')}>
+                📄 Recibo de Cierre
+              </button>
+            </p>
+          )}
           <h4>Pago final</h4>
           {order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15) && !finalPaidInFull && (
             <p className="form-hint">Saldo pendiente al entregar: ${Math.max(finalRemaining, 0).toFixed(2)}</p>
@@ -737,43 +774,6 @@ export default function OrderDetailModal({
           )}
         </OrderPhase>
 
-        <p>
-          <strong>Acciones:</strong>{' '}
-          {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') &&
-          order.budget != null &&
-          Number(order.budget) <= Number(order.revisionAmount ?? 15) ? (
-            <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onCloseZeroBudgetOrder(order)}>
-              Marcar como entregada
-            </button>
-          ) : order.status === 'READY' ? (
-            <>
-              <button
-                className="btn btn-primary"
-                onClick={() => onApproveFinalPayment(order)}
-                disabled={!order.finalPaymentDetails || pendingIds.has(order.id)}
-              >
-                Aprobar pago final
-              </button>{' '}
-              <button className="btn btn-danger" disabled={pendingIds.has(order.id)} onClick={() => onRejectFinalPayment(order)}>
-                Rechazar
-              </button>
-            </>
-          ) : order.status === 'REJECTED_PENDING_PICKUP' ? (
-            <button className="btn btn-primary" disabled={pendingIds.has(order.id)} onClick={() => onMarkPickedUpUnrepaired(order)}>
-              Marcar como entregado sin reparar
-            </button>
-          ) : (
-            '—'
-          )}
-          {showClosureReceipt && (
-            <>
-              {' '}
-              <button className="btn btn-outline" onClick={() => onDownloadReceipt(order, 'closure')}>
-                📄 Recibo de Cierre
-              </button>
-            </>
-          )}
-        </p>
       </div>
     </div>
   )
