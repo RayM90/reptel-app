@@ -107,5 +107,6 @@ router.post('/:id/mark-picked-up-unrepaired', authenticate, authorize('ADMIN'), 
 router.get('/:id/parts', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.getPartsUsedInOrderHandler)
 router.post('/:id/parts', authenticate, authorize('TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.useProductInOrderHandler)
 router.delete('/:id/parts/:movementId', authenticate, authorize('TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.revertProductUsageHandler)
+router.post('/:id/parts/:movementId/report-loss', authenticate, authorize('TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.reportPartLossHandler)
 
 export default router

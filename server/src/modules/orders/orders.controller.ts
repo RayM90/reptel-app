@@ -818,6 +818,28 @@ export const revertProductUsageHandler = async (req: AuthRequest, res: Response)
   }
 }
 
+export const reportPartLossHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+
+    const movementId = String(req.params.movementId)
+    const { description } = req.body
+    const result = await ordersService.reportPartLoss(movementId, email, description)
+    res.status(200).json({ success: true, data: result })
+  } catch (error: any) {
+    if (error.message?.includes('Solo el técnico asignado')) {
+      res.status(403).json({ success: false, message: error.message })
+      return
+    }
+    console.error('ERROR REPORTAR MERMA:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al reportar la merma' })
+  }
+}
+
 export const getPartsUsedInOrderHandler = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const orderId = String(req.params.id)
