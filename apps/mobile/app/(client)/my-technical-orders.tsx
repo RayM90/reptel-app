@@ -88,6 +88,11 @@ interface TechOrder {
     name: string
   } | null
   statusHistory: StatusHistoryEntry[]
+  partsUsed?: {
+    productName: string
+    quantity: number
+    unitPriceAtUse: number | null
+  }[]
 }
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -464,6 +469,20 @@ export default function MyTechnicalOrdersScreen() {
                         <View style={styles.detailRow}>
                           <Text style={styles.detailLabel}>Diagnóstico del técnico</Text>
                           <Text style={styles.detailValue}>{order.diagnosis}</Text>
+                        </View>
+                      )}
+
+                      {/* Repuestos que el técnico usó/usará en la reparación —
+                          visible en cualquier estado desde que quedan
+                          registrados, no solo mientras se decide el presupuesto */}
+                      {order.partsUsed && order.partsUsed.length > 0 && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Repuestos a utilizar</Text>
+                          {order.partsUsed.map((part, index) => (
+                            <Text key={index} style={styles.detailValue}>
+                              {part.productName} (x{part.quantity}) — ${(part.quantity * Number(part.unitPriceAtUse ?? 0)).toFixed(2)}
+                            </Text>
+                          ))}
                         </View>
                       )}
 
