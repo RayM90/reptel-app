@@ -13,6 +13,7 @@ interface Movement {
   user: { id: string; name: string; lastName: string | null } | null
   lossReportedAt: string | null
   lossDescription: string | null
+  order: { deliveryAmount: string | null } | null
 }
 
 const CHANNEL_LABELS: Record<Movement['channel'], string> = {
@@ -30,6 +31,7 @@ function formatDate(dateStr: string) {
 export default function InventoryMovements() {
   const [movements, setMovements] = useState<Movement[]>([])
   const [channel, setChannel] = useState('')
+  const [origin, setOrigin] = useState<'' | 'MOSTRADOR' | 'APP'>('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
@@ -53,6 +55,10 @@ export default function InventoryMovements() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const visibleMovements = origin
+    ? movements.filter((m) => (origin === 'APP' ? m.order?.deliveryAmount != null : m.order?.deliveryAmount == null))
+    : movements
+
   return (
     <div className="page-container">
       <div className="page-header">
@@ -66,15 +72,24 @@ export default function InventoryMovements() {
       <div className="form-group" style={{ maxWidth: 250 }}>
         <label>Canal</label>
         <select
-          value={channel}
+          value={origin ? `SERVICIO_TECNICO_${origin}` : channel}
           onChange={(e) => {
-            setChannel(e.target.value)
-            fetchMovements(e.target.value)
+            const value = e.target.value
+            if (value === 'SERVICIO_TECNICO_MOSTRADOR' || value === 'SERVICIO_TECNICO_APP') {
+              setOrigin(value === 'SERVICIO_TECNICO_APP' ? 'APP' : 'MOSTRADOR')
+              setChannel('SERVICIO_TECNICO')
+              fetchMovements('SERVICIO_TECNICO')
+            } else {
+              setOrigin('')
+              setChannel(value)
+              fetchMovements(value)
+            }
           }}
         >
           <option value="">Todos</option>
           <option value="MOSTRADOR">Mostrador</option>
-          <option value="SERVICIO_TECNICO">Servicio técnico</option>
+          <option value="SERVICIO_TECNICO_MOSTRADOR">Servicio técnico – Mostrador</option>
+          <option value="SERVICIO_TECNICO_APP">Servicio técnico – App</option>
           <option value="AJUSTE_MANUAL">Ajuste manual</option>
         </select>
       </div>
@@ -97,10 +112,10 @@ export default function InventoryMovements() {
               </tr>
             </thead>
             <tbody>
-              {movements.length === 0 ? (
+              {visibleMovements.length === 0 ? (
                 <tr><td colSpan={7}>No hay movimientos registrados</td></tr>
               ) : (
-                movements.map((m) => (
+                visibleMovements.map((m) => (
                   <tr key={m.id}>
                     <td data-label="Fecha">{formatDate(m.createdAt)}</td>
                     <td data-label="Producto">{m.product.name}</td>
@@ -119,7 +134,11 @@ export default function InventoryMovements() {
                         </>
                       )}
                     </td>
-                    <td data-label="Canal">{CHANNEL_LABELS[m.channel]}</td>
+                    <td data-label="Canal">
+                      {m.channel === 'SERVICIO_TECNICO'
+                        ? `Servicio técnico – ${m.order?.deliveryAmount != null ? 'App' : 'Mostrador'}`
+                        : CHANNEL_LABELS[m.channel]}
+                    </td>
                     <td data-label="Quién">{m.user ? `${m.user.name} ${m.user.lastName ?? ''}`.trim() : '—'}</td>
                   </tr>
                 ))
