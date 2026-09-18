@@ -217,6 +217,28 @@ export default function TechnicianDashboard() {
     }
   }
 
+  const [lossFormOpenFor, setLossFormOpenFor] = useState<string | null>(null)
+  const [lossDescriptionText, setLossDescriptionText] = useState<Record<string, string>>({})
+
+  const handleReportLoss = async (orderId: string, movementId: string) => {
+    const description = (lossDescriptionText[movementId] || '').trim()
+    if (!description) {
+      showToast('Describe qué pasó con el repuesto antes de reportar la merma', 'error')
+      return
+    }
+    try {
+      await api.post(`/api/orders/${orderId}/parts/${movementId}/report-loss`, { description })
+      showToast('✅ Merma reportada — no se le cobra al cliente', 'success')
+      setLossFormOpenFor(null)
+      setLossDescriptionText((prev) => ({ ...prev, [movementId]: '' }))
+      const freshParts = await fetchParts(orderId)
+      recomputeBudget(orderId, catalogSelection[orderId] || '', manualExtraText[orderId] || '', freshParts)
+      fetchData(true)
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al reportar la merma', 'error')
+    }
+  }
+
   const fetchData = async (isPoll = false) => {
     if (!isPoll) {
       setLoading(true)
@@ -815,7 +837,23 @@ export default function TechnicianDashboard() {
                                     <td data-label="Acciones">
                                       <button className="btn btn-danger" onClick={() => handleRevertPart(order.id, p.id)}>
                                         Revertir
+                                      </button>{' '}
+                                      <button className="btn btn-outline" onClick={() => setLossFormOpenFor(lossFormOpenFor === p.id ? null : p.id)}>
+                                        Reportar merma
                                       </button>
+                                      {lossFormOpenFor === p.id && (
+                                        <div style={{ marginTop: 6, display: 'flex', gap: 6, minWidth: 220 }}>
+                                          <input
+                                            type="text"
+                                            placeholder="¿Qué pasó con el repuesto?"
+                                            value={lossDescriptionText[p.id] || ''}
+                                            onChange={(e) => setLossDescriptionText((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                                          />
+                                          <button className="btn btn-danger" onClick={() => handleReportLoss(order.id, p.id)}>
+                                            Confirmar
+                                          </button>
+                                        </div>
+                                      )}
                                     </td>
                                   </tr>
                                 ))}
