@@ -750,11 +750,16 @@ export const confirmAdvancePaymentInstallment = async (
               status: 'DIAGNOSING',
               statusHistory: {
                 create: [
-                  {
-                    status: 'RECEIVED',
-                    comment: `Anticipo de $${total} completado mediante abonos — confirmado por el administrador`,
-                    userId: actor?.id,
-                  },
+                  // La orden de mostrador ya nace en RECEIVED (createCounterOrder) —
+                  // repetir el status acá dejaba dos "Recibido" en el historial.
+                  // Solo agregarlo si esta es la transición real desde PENDING_PAYMENT.
+                  ...(order.status === 'PENDING_PAYMENT'
+                    ? [{
+                        status: 'RECEIVED' as const,
+                        comment: `Anticipo de $${total} completado mediante abonos — confirmado por el administrador`,
+                        userId: actor?.id,
+                      }]
+                    : []),
                   {
                     status: 'DIAGNOSING',
                     comment: 'Pago confirmado — técnico autorizado a proceder con la revisión',
