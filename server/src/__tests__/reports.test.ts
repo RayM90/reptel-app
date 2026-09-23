@@ -336,6 +336,42 @@ describe('reports.service — getAuditReport', () => {
   })
 })
 
+describe('reports — monto de una orden con presupuesto rechazado', () => {
+  it('muestra solo lo cobrado (revisión + delivery), no el presupuesto rechazado', async () => {
+    const { getAuditReport, getClientHistoryReport } = await import('../modules/reports/reports.service')
+    const suffix = Date.now()
+
+    const client = await prisma.client.create({
+      data: { name: 'Cliente', lastName: 'Rechazo', idNumber: `TEST-RECHAZO-${suffix}`, phone: '0000000006' },
+    })
+    const dev = await prisma.device.create({ data: { type: 'LAPTOP', brand: 'HP', model: 'Rechazo' } })
+    const order = await prisma.order.create({
+      data: {
+        orderNumber: `REP-RECHAZO-${suffix}`,
+        status: 'CANCELLED',
+        problem: 'Test rechazo',
+        budget: 65, revisionAmount: 15, deliveryAmount: 10,
+        budgetApproved: false, budgetRejectionReason: 'No quiere reparar',
+        clientId: client.id,
+        deviceId: dev.id,
+        receivedAt: IN_RANGE,
+      },
+    })
+
+    try {
+      const audit = await getAuditReport({ from: RANGE_FROM, to: RANGE_TO, clientId: client.id })
+      expect(audit[0].totalAmount).toBe(25)
+
+      const history = await getClientHistoryReport(client.idNumber)
+      expect(history!.history[0].totalAmount).toBe(25)
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } }).catch(() => {})
+      await prisma.device.delete({ where: { id: dev.id } }).catch(() => {})
+      await prisma.client.delete({ where: { id: client.id } }).catch(() => {})
+    }
+  })
+})
+
 describe('GET /api/reports/audit', () => {
   it('sin token retorna 401', async () => {
     const res = await request(app).get('/api/reports/audit?from=2026-06-01&to=2026-06-30')

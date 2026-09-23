@@ -150,9 +150,7 @@ export const getAuditReport = async ({ from, to, status, channel, technicianId, 
     technicianName: o.technician?.name ?? 'Sin asignar',
     technicianCommission: Number(o.technicianCommission ?? 0),
     diagnosis: o.diagnosis,
-    totalAmount: o.budget != null
-      ? Number(o.budget)
-      : Number(o.revisionAmount ?? 0) + Number(o.deliveryAmount ?? 0),
+    totalAmount: orderTotalAmount(o),
     partsUsed: o.inventoryMovements.map((m) => ({
       productName: m.product.name,
       quantity: m.quantity,
@@ -165,8 +163,15 @@ const ACTIVE_ORDER_STATUSES = new Set([
   'APPROVED', 'REPAIRING', 'WAITING_PART', 'READY', 'PAID_PENDING_DELIVERY',
 ])
 
-const orderTotalAmount = (o: { budget: unknown; revisionAmount: unknown; deliveryAmount: unknown }) =>
-  o.budget != null
+// Con presupuesto rechazado solo se cobró la revisión (+ delivery si vino
+// por la app) — el presupuesto nunca se cobró, así que no es el monto real.
+const orderTotalAmount = (o: {
+  budget: unknown
+  revisionAmount: unknown
+  deliveryAmount: unknown
+  budgetRejectionReason: string | null
+}) =>
+  o.budget != null && o.budgetRejectionReason == null
     ? Number(o.budget)
     : Number(o.revisionAmount ?? 0) + Number(o.deliveryAmount ?? 0)
 

@@ -55,7 +55,7 @@ export default function InventoryList() {
         const lowStock = products.filter((p) => p.isActive && p.stock <= p.minStock)
         return lowStock.length > 0 ? (
           <p className="alert-error">
-            ⚠️ Repostar: {lowStock.map((p) => `${p.name} (${p.stock}/${p.minStock})`).join(', ')}
+            ⚠️ Stock bajo: {lowStock.map((p) => `${p.name} (${p.stock}/${p.minStock})`).join(', ')}
           </p>
         ) : null
       })()}
