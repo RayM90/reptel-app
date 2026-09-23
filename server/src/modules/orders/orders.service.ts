@@ -232,7 +232,7 @@ export const getOrdersByClient = async (clientId: string) => {
       statusHistory: { orderBy: { createdAt: 'desc' } },
       advancePaymentSubmissions: { orderBy: { createdAt: 'desc' } },
       inventoryMovements: {
-        where: { channel: 'SERVICIO_TECNICO', reversedAt: null, lossReportedAt: null },
+        where: { type: 'OUT', channel: 'SERVICIO_TECNICO', reversedAt: null, lossReportedAt: null },
         include: { product: { select: { name: true } } },
       },
     },

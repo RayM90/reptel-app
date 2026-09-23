@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma'
 import { rejectBudget, rejectBudgetByAdmin, confirmZeroBudgetDiagnosis, disputeZeroBudgetDiagnosis } from '../modules/orders/orders.service'
-import { submitDiagnosis, getPartsUsedInOrder } from '../modules/orders/orders.service'
+import { submitDiagnosis, getPartsUsedInOrder, getOrdersByClient } from '../modules/orders/orders.service'
 
 let clientA: { id: string }
 let userA: { id: string; email: string }
@@ -199,6 +199,11 @@ describe('orders.service — rejectBudgetByAdmin', () => {
     // La entrada de reposición no cuenta como repuesto usado en la orden
     const parts = await getPartsUsedInOrder(order.id)
     expect(parts.every((p) => p.type === 'OUT')).toBe(true)
+
+    // Ni en la app del cliente: la batería devuelta no es un repuesto usado
+    const clientOrders = await getOrdersByClient(clientA.id)
+    const clientOrder = clientOrders.find((o) => o.id === order.id)
+    expect(clientOrder?.partsUsed).toEqual([])
   })
 
   it('lanza error si el status no es WAITING_APPROVAL', async () => {
