@@ -674,6 +674,33 @@ export const rejectBudget = async (req: AuthRequest, res: Response): Promise<voi
   }
 }
 
+// ADMIN — Registrar el rechazo del presupuesto en nombre del cliente
+export const rejectBudgetByAdmin = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+    const id = String(req.params.id)
+    const { reason } = req.body
+
+    if (!reason || typeof reason !== 'string' || !reason.trim()) {
+      res.status(400).json({ success: false, message: 'reason es requerido' })
+      return
+    }
+
+    const order = await ordersService.rejectBudgetByAdmin(id, email, reason.trim())
+
+    broadcastOrderUpdate({ type: 'ORDER_STATUS_UPDATED', data: order })
+
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR RECHAZAR PRESUPUESTO (ADMIN):', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al rechazar el presupuesto' })
+  }
+}
+
 export const confirmZeroBudgetDiagnosis = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const email = req.user?.email

@@ -427,6 +427,7 @@ interface OrderDetailModalProps {
   onRejectAdvanceInstallment: (submissionId: string, amount: string) => void
   onApproveFinalPayment: (order: Order) => void
   onRejectFinalPayment: (order: Order) => void
+  onRejectBudget: (order: Order) => void
   onCloseZeroBudgetOrder: (order: Order) => void
   onMarkDelivered: (order: Order) => void
   onMarkPickedUpUnrepaired: (order: Order) => void
@@ -455,6 +456,7 @@ export default function OrderDetailModal({
   onRejectAdvanceInstallment,
   onApproveFinalPayment,
   onRejectFinalPayment,
+  onRejectBudget,
   onCloseZeroBudgetOrder,
   onMarkDelivered,
   onMarkPickedUpUnrepaired,
@@ -680,6 +682,13 @@ export default function OrderDetailModal({
                 </p>
               )}
             </>
+          )}
+          {canRegisterCounterBudgetPayment && (
+            <p style={{ marginTop: 16 }}>
+              <button className="btn btn-danger" disabled={pendingIds.has(order.id)} onClick={() => onRejectBudget(order)}>
+                Cliente no acepta el presupuesto
+              </button>
+            </p>
           )}
           {(order.status === 'READY' || order.status === 'WAITING_APPROVAL') &&
             order.budget != null &&

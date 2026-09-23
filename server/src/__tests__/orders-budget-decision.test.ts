@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma'
-import { rejectBudget, confirmZeroBudgetDiagnosis, disputeZeroBudgetDiagnosis } from '../modules/orders/orders.service'
+import { rejectBudget, rejectBudgetByAdmin, confirmZeroBudgetDiagnosis, disputeZeroBudgetDiagnosis } from '../modules/orders/orders.service'
 import { submitDiagnosis } from '../modules/orders/orders.service'
 
 let clientA: { id: string }
@@ -7,6 +7,7 @@ let userA: { id: string; email: string }
 let clientB: { id: string }
 let userB: { id: string; email: string }
 let technician: { id: string }
+let admin: { id: string; email: string }
 let device: { id: string }
 
 const makeOrder = async (overrides: Partial<{ status: string; budget: number | undefined }> = {}) => {
@@ -66,6 +67,13 @@ beforeAll(async () => {
     },
   })
 
+  admin = await prisma.user.create({
+    data: {
+      name: 'Admin Presupuesto', email: `admin-budget-${suffix}@test.com`,
+      password: 'x', role: 'ADMIN',
+    },
+  })
+
   device = await prisma.device.create({
     data: { type: 'LAPTOP', brand: 'HP', model: 'Pavilion 15' },
   })
@@ -78,6 +86,7 @@ afterAll(async () => {
   await prisma.user.delete({ where: { id: userA.id } }).catch((e) => console.error('USER A DELETE FAILED', e))
   await prisma.user.delete({ where: { id: userB.id } }).catch((e) => console.error('USER B DELETE FAILED', e))
   await prisma.user.delete({ where: { id: technician.id } }).catch((e) => console.error('TECH DELETE FAILED', e))
+  await prisma.user.delete({ where: { id: admin.id } }).catch((e) => console.error('ADMIN DELETE FAILED', e))
   await prisma.client.delete({ where: { id: clientA.id } }).catch((e) => console.error('CLIENT A DELETE FAILED', e))
   await prisma.client.delete({ where: { id: clientB.id } }).catch((e) => console.error('CLIENT B DELETE FAILED', e))
 })
@@ -119,6 +128,32 @@ describe('orders.service — rejectBudget', () => {
   it('lanza error si la orden no pertenece al cliente', async () => {
     const order = await makeOrder()
     await expect(rejectBudget(order.id, userB.email, 'Otro')).rejects.toThrow('Orden no encontrada')
+  })
+})
+
+describe('orders.service — rejectBudgetByAdmin', () => {
+  it('el admin rechaza en nombre del cliente: REJECTED_PENDING_PICKUP, comisión fija, historial con el admin', async () => {
+    const order = await makeOrder({ budget: 65 })
+    const result = await rejectBudgetByAdmin(order.id, admin.email, 'No quiere reparar')
+
+    expect(result.status).toBe('REJECTED_PENDING_PICKUP')
+    expect(Number(result.technicianCommission)).toBe(16) // 10 + 0.4*15
+    expect(result.budgetRejectionReason).toBe('No quiere reparar')
+
+    const history = await prisma.orderStatusHistory.findFirst({
+      where: { orderId: order.id, status: 'REJECTED_PENDING_PICKUP' },
+      orderBy: { createdAt: 'desc' },
+    })
+    expect(history?.userId).toBe(admin.id)
+    expect(history?.comment).toContain('administrador')
+    expect(history?.comment).toContain('No quiere reparar')
+  })
+
+  it('lanza error si el status no es WAITING_APPROVAL', async () => {
+    const order = await makeOrder({ status: 'REPAIRING' })
+    await expect(rejectBudgetByAdmin(order.id, admin.email, 'Otro')).rejects.toThrow(
+      'Esta acción solo aplica a órdenes esperando aprobación de presupuesto'
+    )
   })
 })
 

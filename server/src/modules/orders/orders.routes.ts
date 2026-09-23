@@ -101,6 +101,8 @@ router.post('/:id/confirm-final-payment', authenticate, authorize('ADMIN'), orde
 router.post('/:id/close-zero-budget', authenticate, authorize('ADMIN'), ordersController.closeZeroBudgetOrder)
 router.post('/:id/mark-delivered', authenticate, authorize('ADMIN'), ordersController.markDelivered)
 router.post('/:id/mark-picked-up-unrepaired', authenticate, authorize('ADMIN'), ordersController.markPickedUpUnrepaired)
+// ADMIN registra que el cliente no acepta el presupuesto (mostrador / aviso por teléfono)
+router.post('/:id/admin-reject-budget', authenticate, authorize('ADMIN'), ordersController.rejectBudgetByAdmin)
 
 // Repuestos de inventario usados en la orden — solo el técnico asignado
 // (la validación fina "es tu orden" vive dentro del service)

@@ -251,6 +251,29 @@ export default function Dashboard() {
     }
   }
 
+  // ── Cliente no acepta el presupuesto (lo registra el admin) ──
+  const handleRejectBudget = async (order: Order) => {
+    if (pendingIds.has(order.id)) return
+    const reason = await confirmDialog({
+      title: 'Cliente no acepta el presupuesto',
+      message: `Orden ${order.orderNumber} — ${formatFullName(order.client.name, order.client.lastName)}. La orden pasará a "Rechazado, pendiente de retiro".`,
+      requireText: true,
+      textLabel: 'Motivo del rechazo',
+      confirmLabel: 'Rechazar presupuesto',
+    })
+    if (!reason) return
+    setBusy(order.id, true)
+    try {
+      await api.post(`/api/orders/${order.id}/admin-reject-budget`, { reason })
+      showToast('✅ Presupuesto rechazado — la orden queda pendiente de retiro.', 'success')
+      fetchData()
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || '❌ Error al rechazar el presupuesto', 'error')
+    } finally {
+      setBusy(order.id, false)
+    }
+  }
+
   // ── Marcar retiro sin reparar (presupuesto rechazado) ──
   const handleMarkPickedUpUnrepaired = async (order: Order) => {
     if (pendingIds.has(order.id)) return
@@ -453,6 +476,7 @@ export default function Dashboard() {
           onRejectAdvanceInstallment={handleRejectAdvanceInstallment}
           onApproveFinalPayment={handleApproveFinalPayment}
           onRejectFinalPayment={handleRejectFinalPayment}
+          onRejectBudget={handleRejectBudget}
           onCloseZeroBudgetOrder={handleCloseZeroBudgetOrder}
           onMarkDelivered={handleMarkDelivered}
           onMarkPickedUpUnrepaired={handleMarkPickedUpUnrepaired}

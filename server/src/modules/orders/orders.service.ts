@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client'
+import { Prisma, type Order } from '@prisma/client'
 import prisma from '../../lib/prisma'
 import { InsufficientStockError } from '../products/products.service'
 
@@ -1420,6 +1420,42 @@ export const rejectBudget = async (id: string, email: string, reason: string) =>
   if (!order) {
     throw new Error('Orden no encontrada')
   }
+
+  return applyBudgetRejection(
+    order,
+    user.id,
+    reason,
+    (commission) =>
+      `Cliente rechazó el presupuesto de $${order.budget}. Motivo: ${reason}. Comisión del técnico: $${commission.toFixed(2)} (delivery + 40% revisión).`
+  )
+}
+
+// ADMIN registra el rechazo en nombre del cliente (mostrador, o el cliente
+// avisó por teléfono/en persona). Misma regla que rejectBudget; solo cambia
+// que no se filtra por cliente y el historial queda a nombre del admin.
+export const rejectBudgetByAdmin = async (id: string, actorEmail: string, reason: string) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const order = await prisma.order.findUnique({ where: { id } })
+  if (!order) throw new Error('Orden no encontrada')
+
+  return applyBudgetRejection(
+    order,
+    actor.id,
+    reason,
+    (commission) =>
+      `Rechazo registrado por el administrador. Presupuesto $${order.budget}. Motivo: ${reason}. Comisión del técnico: $${commission.toFixed(2)} (delivery + 40% revisión).`
+  )
+}
+
+const applyBudgetRejection = async (
+  order: Order,
+  actorUserId: string,
+  reason: string,
+  buildComment: (commission: number) => string
+) => {
+  const id = order.id
   if (order.status !== 'WAITING_APPROVAL') {
     throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
   }
@@ -1438,8 +1474,8 @@ export const rejectBudget = async (id: string, email: string, reason: string) =>
       statusHistory: {
         create: {
           status: 'REJECTED_PENDING_PICKUP',
-          comment: `Cliente rechazó el presupuesto de $${order.budget}. Motivo: ${reason}. Comisión del técnico: $${commission.toFixed(2)} (delivery + 40% revisión).`,
-          userId: user.id,
+          comment: buildComment(commission),
+          userId: actorUserId,
         },
       },
     },
