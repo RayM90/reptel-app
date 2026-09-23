@@ -1021,6 +1021,7 @@ export const submitCounterFinalPayment = async (
   if (!order) {
     throw new Error('Orden no encontrada')
   }
+  assertCounterOrder(order)
   if (order.status !== 'READY') {
     throw new Error('Esta acción solo aplica a órdenes listas para entrega')
   }
@@ -1431,6 +1432,14 @@ export const rejectBudget = async (id: string, email: string, reason: string) =>
   )
 }
 
+// Órdenes de la app (self-service, con delivery): el cliente paga y
+// rechaza desde la app — el personal solo aprueba/rechaza lo que el cliente
+// envía. Las acciones "de mostrador" aplican solo a órdenes de recepción.
+const APP_ORDER_ERROR = 'Las órdenes de la app las gestiona el cliente desde la app'
+const assertCounterOrder = (order: { deliveryAmount: unknown }) => {
+  if (order.deliveryAmount != null) throw new Error(APP_ORDER_ERROR)
+}
+
 // ADMIN registra el rechazo en nombre del cliente (mostrador, o el cliente
 // avisó por teléfono/en persona). Misma regla que rejectBudget; solo cambia
 // que no se filtra por cliente y el historial queda a nombre del admin.
@@ -1440,6 +1449,7 @@ export const rejectBudgetByAdmin = async (id: string, actorEmail: string, reason
 
   const order = await prisma.order.findUnique({ where: { id } })
   if (!order) throw new Error('Orden no encontrada')
+  assertCounterOrder(order)
 
   return applyBudgetRejection(
     order,
@@ -1916,6 +1926,7 @@ export const submitCounterBudgetInstallment = async (
     },
   })
   if (!order) throw new Error('Orden no encontrada')
+  assertCounterOrder(order)
 
   if (order.status !== 'WAITING_APPROVAL') {
     throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')

@@ -5,14 +5,14 @@ let client: { id: string }
 let technician: { id: string }
 let device: { id: string }
 
-const makeOrder = async (overrides: Partial<{ status: string; budget: number; finalPaymentDetails: Record<string, string> | null }> = {}) => {
+const makeOrder = async (overrides: Partial<{ status: string; budget: number; finalPaymentDetails: Record<string, string> | null; deliveryAmount: number | null }> = {}) => {
   return prisma.order.create({
     data: {
       orderNumber: `REP-TEST-FP-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       status: (overrides.status ?? 'READY') as any,
       problem: 'Pantalla dañada — test pago final',
       budget: overrides.budget ?? 100,
-      deliveryAmount: 10,
+      deliveryAmount: 'deliveryAmount' in overrides ? overrides.deliveryAmount : 10,
       revisionAmount: 15,
       finalPaymentDetails: 'finalPaymentDetails' in overrides ? (overrides.finalPaymentDetails as any) : { monto: '100', metodo: 'Pago Móvil' },
       clientId: client.id,
@@ -115,7 +115,7 @@ describe('orders.service — markOrderPickedUpUnrepaired', () => {
 
 describe('orders.service — submitCounterFinalPayment', () => {
   it('desde READY sin pago final aún: guarda finalPaymentDetails', async () => {
-    const order = await makeOrder({ status: 'READY', finalPaymentDetails: null })
+    const order = await makeOrder({ status: 'READY', finalPaymentDetails: null, deliveryAmount: null })
     const result = await submitCounterFinalPayment(order.id, { banco: 'Bancaribe', telefono: '04121234567', referencia: '9999' })
 
     expect(result.finalPaymentDetails).toEqual({ banco: 'Bancaribe', telefono: '04121234567', referencia: '9999' })
@@ -123,10 +123,17 @@ describe('orders.service — submitCounterFinalPayment', () => {
   })
 
   it('lanza error si el status no es READY', async () => {
-    const order = await makeOrder({ status: 'DIAGNOSING', finalPaymentDetails: null })
+    const order = await makeOrder({ status: 'DIAGNOSING', finalPaymentDetails: null, deliveryAmount: null })
     await expect(
       submitCounterFinalPayment(order.id, { banco: 'Bancaribe', telefono: '04121234567', referencia: '9999' })
     ).rejects.toThrow('Esta acción solo aplica a órdenes listas para entrega')
+  })
+
+  it('lanza error si la orden es de la app (el cliente paga desde la app)', async () => {
+    const order = await makeOrder({ status: 'READY', finalPaymentDetails: null, deliveryAmount: 10 })
+    await expect(
+      submitCounterFinalPayment(order.id, { banco: 'Bancaribe', telefono: '04121234567', referencia: '9999' })
+    ).rejects.toThrow('Las órdenes de la app las gestiona el cliente desde la app')
   })
 
   it('lanza error si la orden no existe', async () => {

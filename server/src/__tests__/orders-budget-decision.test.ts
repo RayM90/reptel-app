@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma'
-import { rejectBudget, rejectBudgetByAdmin, confirmZeroBudgetDiagnosis, disputeZeroBudgetDiagnosis } from '../modules/orders/orders.service'
+import { rejectBudget, rejectBudgetByAdmin, submitCounterBudgetInstallment, confirmZeroBudgetDiagnosis, disputeZeroBudgetDiagnosis } from '../modules/orders/orders.service'
 import { submitDiagnosis, getPartsUsedInOrder, getOrdersByClient } from '../modules/orders/orders.service'
 
 let clientA: { id: string }
@@ -11,14 +11,14 @@ let admin: { id: string; email: string }
 let device: { id: string }
 let category: { id: string }
 
-const makeOrder = async (overrides: Partial<{ status: string; budget: number | undefined }> = {}) => {
+const makeOrder = async (overrides: Partial<{ status: string; budget: number | undefined; deliveryAmount: number | null }> = {}) => {
   return prisma.order.create({
     data: {
       orderNumber: `REP-TEST-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       status: (overrides.status ?? 'WAITING_APPROVAL') as any,
       problem: 'Pantalla dañada — test automatizado',
       budget: 'budget' in overrides ? overrides.budget : 50,
-      deliveryAmount: 10,
+      deliveryAmount: 'deliveryAmount' in overrides ? overrides.deliveryAmount : 10,
       revisionAmount: 15,
       clientId: clientA.id,
       deviceId: device.id,
@@ -139,11 +139,11 @@ describe('orders.service — rejectBudget', () => {
 
 describe('orders.service — rejectBudgetByAdmin', () => {
   it('el admin rechaza en nombre del cliente: REJECTED_PENDING_PICKUP, comisión fija, historial con el admin', async () => {
-    const order = await makeOrder({ budget: 65 })
+    const order = await makeOrder({ budget: 65, deliveryAmount: null })
     const result = await rejectBudgetByAdmin(order.id, admin.email, 'No quiere reparar')
 
     expect(result.status).toBe('REJECTED_PENDING_PICKUP')
-    expect(Number(result.technicianCommission)).toBe(16) // 10 + 0.4*15
+    expect(Number(result.technicianCommission)).toBe(6) // 0.4*15 (mostrador, sin delivery)
     expect(result.budgetRejectionReason).toBe('No quiere reparar')
 
     const history = await prisma.orderStatusHistory.findFirst({
@@ -156,7 +156,7 @@ describe('orders.service — rejectBudgetByAdmin', () => {
   })
 
   it('devuelve los repuestos al stock con un movimiento de entrada, sin tocar el presupuesto', async () => {
-    const order = await makeOrder({ budget: 65 })
+    const order = await makeOrder({ budget: 65, deliveryAmount: null })
     const product = await prisma.product.create({
       data: { name: 'Batería test rechazo', price: 35, stock: 4, categoryId: category.id },
     })
@@ -207,10 +207,26 @@ describe('orders.service — rejectBudgetByAdmin', () => {
   })
 
   it('lanza error si el status no es WAITING_APPROVAL', async () => {
-    const order = await makeOrder({ status: 'REPAIRING' })
+    const order = await makeOrder({ status: 'REPAIRING', deliveryAmount: null })
     await expect(rejectBudgetByAdmin(order.id, admin.email, 'Otro')).rejects.toThrow(
       'Esta acción solo aplica a órdenes esperando aprobación de presupuesto'
     )
+  })
+
+  it('lanza error si la orden es de la app (el cliente rechaza desde la app)', async () => {
+    const order = await makeOrder({ budget: 65, deliveryAmount: 10 })
+    await expect(rejectBudgetByAdmin(order.id, admin.email, 'Otro')).rejects.toThrow(
+      'Las órdenes de la app las gestiona el cliente desde la app'
+    )
+  })
+})
+
+describe('orders.service — submitCounterBudgetInstallment en órdenes de la app', () => {
+  it('lanza error: el anticipo de presupuesto lo paga el cliente desde la app', async () => {
+    const order = await makeOrder({ budget: 65, deliveryAmount: 10 })
+    await expect(
+      submitCounterBudgetInstallment(order.id, admin.email, { banco: 'Bancaribe' }, 25)
+    ).rejects.toThrow('Las órdenes de la app las gestiona el cliente desde la app')
   })
 })
 

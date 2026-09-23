@@ -522,11 +522,17 @@ export default function OrderDetailModal({
   const showPaymentReceipt = order.finalPaymentConfirmed && order.budget != null && Number(order.budget) > 0
   const showFinalReceipt = order.status === 'DELIVERED'
   const showClosureReceipt = order.status === 'CANCELLED'
+  // Órdenes de la app: el cliente paga y rechaza desde la app — el admin solo
+  // aprueba/rechaza lo que el cliente envía. Los formularios "de mostrador"
+  // aplican solo a órdenes de recepción (mismo bloqueo en el backend).
+  const isAppOrder = order.deliveryAmount != null
   const canRegisterCounterFinalPayment =
+    !isAppOrder &&
     order.status === 'READY' && order.finalPaymentDetails == null && order.budget != null && Number(order.budget) > 0
   // Mismo umbral que el backend: si budget <= revisionAmount no hay
   // anticipo que cobrar (caso "sin costo adicional", ver Acciones).
   const canRegisterCounterBudgetPayment =
+    !isAppOrder &&
     order.status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15)
   const budgetAdvanceSuggestedAmount = canRegisterCounterBudgetPayment
     ? 0.5 * (Number(order.budget) - Number(order.revisionAmount ?? 15))
