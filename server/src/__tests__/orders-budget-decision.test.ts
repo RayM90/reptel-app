@@ -86,6 +86,7 @@ afterAll(async () => {
   await prisma.inventoryMovement.deleteMany({ where: { product: { categoryId: category.id } } })
   await prisma.product.deleteMany({ where: { categoryId: category.id } })
   await prisma.productCategory.delete({ where: { id: category.id } }).catch((e) => console.error('CATEGORY DELETE FAILED', e))
+  await prisma.advancePaymentSubmission.deleteMany({ where: { order: { clientId: { in: [clientA.id, clientB.id] } } } })
   await prisma.orderStatusHistory.deleteMany({ where: { order: { clientId: { in: [clientA.id, clientB.id] } } } })
   await prisma.order.deleteMany({ where: { clientId: { in: [clientA.id, clientB.id] } } })
   await prisma.device.delete({ where: { id: device.id } }).catch((e) => console.error('DEVICE DELETE FAILED', e))
