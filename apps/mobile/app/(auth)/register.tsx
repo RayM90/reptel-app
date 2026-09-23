@@ -260,6 +260,7 @@ export default function RegisterScreen() {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!verPassword}
+                  autoCapitalize="none"
                   returnKeyType="next"
                 />
                 <TouchableOpacity
@@ -284,6 +285,7 @@ export default function RegisterScreen() {
                   value={confirmar}
                   onChangeText={setConfirmar}
                   secureTextEntry={!verConfirmar}
+                  autoCapitalize="none"
                   returnKeyType="done"
                 />
                 <TouchableOpacity
