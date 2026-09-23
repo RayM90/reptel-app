@@ -118,36 +118,42 @@ cd server && npm test
 |---|---|
 | 🙋 **Cliente** | Solicita reparaciones, compra repuestos/accesorios, hace seguimiento, paga desde la app |
 | 🛠️ **Administrador** | Supervisa ambos flujos de negocio, aprueba/rechaza pagos, ve reportes |
-| 🔧 **Técnico** | Diagnostica equipos, define presupuesto, repara, gana comisión por servicio completado |
-| 🛵 **Motorizado** | Entrega pedidos de tienda y repuestos vinculados a órdenes de servicio |
+| 🔧 **Técnico** | Diagnostica equipos, define presupuesto, repara y gana comisión por servicio completado (órdenes recibidas por mostrador) |
+| 🛵 **Técnico Motorizado** | Mismo panel y capacidades que el Técnico (diagnostica, presupuesta, repara, gana comisión), aplicadas a las órdenes de auto-servicio — además gestiona la recogida y entrega a domicilio de esas órdenes |
 
 ---
 
 ## ✨ Funcionalidades principales
 
 ### Para el cliente (mobile)
-- 🔐 Autenticación real con AWS Cognito
+- 🔐 Autenticación real con AWS Cognito, con recuperación de contraseña
 - 🛒 Catálogo de tienda con carrito de compras persistente
 - 🔩 Solicitud de servicio técnico (self-service), con pago anticipado de delivery + revisión
 - 🧾 Formularios de pago en texto (Pago Móvil, Transferencia, Binance) — validados contra el monto real, con aviso si falta dinero
 - 🔗 Compra de repuestos vinculados a una orden de servicio en curso
 - 📦 Historial completo de pedidos y órdenes, con seguimiento de estado en tiempo real
 - ✅❌ Aprobación o rechazo del presupuesto de reparación, y confirmación/disputa del diagnóstico sin costo ($0)
+- 🏢 Registro como persona natural o jurídica (empresa/gobierno con persona de contacto), con segunda dirección de envío opcional
 
 ### Para el administrador (web)
 - 📊 Dashboard con todos los servicios técnicos y pedidos de tienda activos
 - ✅❌ Aprobación o rechazo de pagos (anticipado y final), con notificación automática al cliente
 - 🛵 Asignación automática del motorizado con menor carga de trabajo
 - 👤 Creación de usuarios de personal (técnico/motorizado) con contraseña temporal
+- 🔑 Resolución de solicitudes de recuperación de contraseña del personal
+- 🧮 Ajuste de presupuesto desde el detalle de la orden
+- 📈 Reportes consolidados: filtro por canal (Web/APK) y por cédula, expediente de cliente, auditoría con drill-down y KPI de mermas
 
-### Para el técnico (web)
-- 📋 Panel con todas sus órdenes asignadas
+### Para el técnico / técnico motorizado (web)
+Ambos roles comparten el mismo panel y las mismas capacidades de reparación — la diferencia es qué órdenes reciben: el Técnico atiende las de mostrador, el Técnico Motorizado las de auto-servicio (que además requieren recogida/entrega).
+
+- 📋 Panel con todas sus órdenes asignadas, con vista cronológica de 6 fases por orden
 - 🔍 Registro de diagnóstico y presupuesto, con catálogo de servicios frecuentes
 - 💬 Comentarios de progreso en cada orden
+- 🏁 Finalización de la reparación, con salto directo a "pagada" si no queda saldo pendiente
+- 🧾 Recibos con membrete, historial de pagos y firma del cliente
 - 💰 Comisión calculada automáticamente al completar cada servicio, con corte semanal (lunes a sábado)
-
-### Para el motorizado (web)
-- 🛵 Panel con las entregas asignadas y su estado en tiempo real (recogida, traslado, entrega)
+- 🛵 *(Técnico Motorizado)* Gestión de la recogida y entrega a domicilio de sus órdenes de auto-servicio asignadas
 
 ---
 
@@ -172,7 +178,17 @@ La mano de obra se calcula descontando el anticipo de revisión ya pagado, para 
 - [x] Panel del Motorizado (web)
 - [x] Gestión de usuarios de personal desde el panel de Administrador
 - [x] Aprobar/rechazar presupuesto y confirmar/disputar diagnóstico sin costo ($0)
+- [x] Recuperación de contraseña para personal (técnico/motorizado), resuelta por el Administrador
+- [x] Registro de clientes empresa/gobierno con persona de contacto y segunda dirección de envío
+- [x] Reportes consolidados con filtro por canal, expediente de cliente y auditoría con drill-down
+- [x] Stepper cronológico y ajuste de presupuesto en el detalle de la orden (panel del técnico/admin)
+- [x] Recibos PDF con membrete, historial de pagos y firma del cliente
 - [ ] Diseño visual definitivo del panel web (paleta de colores institucional)
+
+### 🔄 En desarrollo (ramas locales, aún sin mergear a `main`)
+- [ ] Formulario dedicado para creación de personal
+- [ ] Gestión de inventario con historial de estados
+- [ ] Fixes críticos de una auditoría de base de datos en curso
 
 ---
 
