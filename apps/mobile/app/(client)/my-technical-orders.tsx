@@ -16,6 +16,8 @@ import { ordersAPI, API_URL } from '../../src/services/api'
 import { useAuthStore } from '../../src/store/auth.store'
 import { useToastStore } from '../../src/store/toast.store'
 import { useConfirm } from '../../src/hooks/useConfirm'
+import OrderProgress from '../../src/components/OrderProgress'
+import { getOrderProgress, clientStatusLabel, clientHistoryComment } from '../../src/utils/orderProgress'
 
 // El backend guarda el método de pago con el enum de Prisma (MOBILE_PAYMENT,
 // TRANSFER, BINANCE), pero la pantalla de pago espera los literales que usa
@@ -56,6 +58,7 @@ interface TechOrder {
   diagnosis?: string | null
   budget?: number | null
   budgetApproved?: boolean | null
+  budgetRejectionReason?: string | null
   deliveryAmount?: number | null
   revisionAmount?: number | null
   // Viene del backend como enum de Prisma (MOBILE_PAYMENT/TRANSFER/BINANCE),
@@ -154,6 +157,7 @@ export default function MyTechnicalOrdersScreen() {
   const [disputeNote, setDisputeNote] = useState<Record<string, string>>({})
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({})
   const [downloadingReceipt, setDownloadingReceipt] = useState<string | null>(null)
+  const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({})
   const token = useAuthStore((state) => state.token)
 
   const fetchOrders = useCallback(async () => {
@@ -383,7 +387,7 @@ export default function MyTechnicalOrdersScreen() {
                   <View style={styles.statusRow}>
                     <View style={[styles.statusBadge, { backgroundColor: STATUS_BG[status] }]}>
                       <Text style={[styles.statusText, { color: STATUS_COLOR[status] }]}>
-                        {STATUS_LABEL[status]}
+                        {clientStatusLabel(status, order, STATUS_LABEL)}
                       </Text>
                     </View>
                     {status === 'WAITING_APPROVAL' && order.budget != null && (
@@ -404,6 +408,10 @@ export default function MyTechnicalOrdersScreen() {
                   {/* Detalle expandible */}
                   {isExpanded && (
                     <View style={styles.expandedContent}>
+                      {/* Seguimiento por pasos */}
+                      <Text style={styles.itemsTitle}>📍 Seguimiento</Text>
+                      <OrderProgress steps={getOrderProgress(order)} />
+
                       {/* Tipo y color */}
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Equipo</Text>
@@ -746,19 +754,31 @@ export default function MyTechnicalOrdersScreen() {
                         </View>
                       )}
 
-                      {/* Historial de estados */}
-                      <Text style={styles.itemsTitle}>📋 Historial</Text>
-                      {order.statusHistory.map((entry) => (
-                        <View key={entry.id} style={styles.itemRow}>
-                          <View style={styles.itemInfo}>
-                            <Text style={styles.itemName}>{STATUS_LABEL[entry.status]}</Text>
-                            {entry.comment && (
-                              <Text style={styles.itemQty}>{entry.comment}</Text>
-                            )}
+                      {/* Historial detallado — plegado; el seguimiento de arriba es el resumen */}
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation()
+                          setHistoryOpen((prev) => ({ ...prev, [order.id]: !prev[order.id] }))
+                        }}
+                      >
+                        <Text style={styles.itemsTitle}>
+                          📋 {historyOpen[order.id] ? 'Ocultar detalle ▲' : 'Ver detalle ▼'}
+                        </Text>
+                      </TouchableOpacity>
+                      {historyOpen[order.id] && order.statusHistory.map((entry) => {
+                        const comment = entry.comment ? clientHistoryComment(entry.comment) : ''
+                        return (
+                          <View key={entry.id} style={styles.itemRow}>
+                            <View style={styles.itemInfo}>
+                              <Text style={styles.itemName}>{clientStatusLabel(entry.status, order, STATUS_LABEL)}</Text>
+                              {comment !== '' && (
+                                <Text style={styles.itemQty}>{comment}</Text>
+                              )}
+                            </View>
+                            <Text style={styles.historyDate}>{formatDate(entry.createdAt)}</Text>
                           </View>
-                          <Text style={styles.historyDate}>{formatDate(entry.createdAt)}</Text>
-                        </View>
-                      ))}
+                        )
+                      })}
                     </View>
                   )}
                 </TouchableOpacity>
