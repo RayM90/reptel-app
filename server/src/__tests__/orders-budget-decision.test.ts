@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma'
 import { rejectBudget, rejectBudgetByAdmin, confirmZeroBudgetDiagnosis, disputeZeroBudgetDiagnosis } from '../modules/orders/orders.service'
-import { submitDiagnosis } from '../modules/orders/orders.service'
+import { submitDiagnosis, getPartsUsedInOrder } from '../modules/orders/orders.service'
 
 let clientA: { id: string }
 let userA: { id: string; email: string }
@@ -9,6 +9,7 @@ let userB: { id: string; email: string }
 let technician: { id: string }
 let admin: { id: string; email: string }
 let device: { id: string }
+let category: { id: string }
 
 const makeOrder = async (overrides: Partial<{ status: string; budget: number | undefined }> = {}) => {
   return prisma.order.create({
@@ -74,12 +75,17 @@ beforeAll(async () => {
     },
   })
 
+  category = await prisma.productCategory.create({ data: { name: `Categoria Rechazo ${suffix}` } })
+
   device = await prisma.device.create({
     data: { type: 'LAPTOP', brand: 'HP', model: 'Pavilion 15' },
   })
 }, 20000)
 
 afterAll(async () => {
+  await prisma.inventoryMovement.deleteMany({ where: { product: { categoryId: category.id } } })
+  await prisma.product.deleteMany({ where: { categoryId: category.id } })
+  await prisma.productCategory.delete({ where: { id: category.id } }).catch((e) => console.error('CATEGORY DELETE FAILED', e))
   await prisma.orderStatusHistory.deleteMany({ where: { order: { clientId: { in: [clientA.id, clientB.id] } } } })
   await prisma.order.deleteMany({ where: { clientId: { in: [clientA.id, clientB.id] } } })
   await prisma.device.delete({ where: { id: device.id } }).catch((e) => console.error('DEVICE DELETE FAILED', e))
@@ -147,6 +153,52 @@ describe('orders.service — rejectBudgetByAdmin', () => {
     expect(history?.userId).toBe(admin.id)
     expect(history?.comment).toContain('administrador')
     expect(history?.comment).toContain('No quiere reparar')
+  })
+
+  it('devuelve los repuestos al stock con un movimiento de entrada, sin tocar el presupuesto', async () => {
+    const order = await makeOrder({ budget: 65 })
+    const product = await prisma.product.create({
+      data: { name: 'Batería test rechazo', price: 35, stock: 4, categoryId: category.id },
+    })
+    const used = await prisma.inventoryMovement.create({
+      data: {
+        productId: product.id, type: 'OUT', channel: 'SERVICIO_TECNICO', quantity: 1,
+        reason: `Repuesto usado en orden ${order.orderNumber}`, userId: technician.id,
+        orderId: order.id, unitPriceAtUse: 35,
+      },
+    })
+    const lost = await prisma.inventoryMovement.create({
+      data: {
+        productId: product.id, type: 'OUT', channel: 'SERVICIO_TECNICO', quantity: 1,
+        reason: `Repuesto usado en orden ${order.orderNumber}`, userId: technician.id,
+        orderId: order.id, unitPriceAtUse: 35, lossReportedAt: new Date(), lossDescription: 'Se dañó',
+      },
+    })
+
+    const result = await rejectBudgetByAdmin(order.id, admin.email, 'No quiere reparar')
+
+    expect(Number(result.budget)).toBe(65)
+    const productAfter = await prisma.product.findUnique({ where: { id: product.id } })
+    expect(productAfter?.stock).toBe(5) // solo vuelve la batería sana, la merma no
+
+    const usedAfter = await prisma.inventoryMovement.findUnique({ where: { id: used.id } })
+    expect(usedAfter?.reversedAt).not.toBeNull()
+    expect(usedAfter?.reversedByUserId).toBe(admin.id)
+    const lostAfter = await prisma.inventoryMovement.findUnique({ where: { id: lost.id } })
+    expect(lostAfter?.reversedAt).toBeNull()
+
+    const entry = await prisma.inventoryMovement.findFirst({
+      where: { productId: product.id, type: 'IN', orderId: order.id },
+    })
+    expect(entry?.quantity).toBe(1)
+    expect(entry?.channel).toBe('SERVICIO_TECNICO')
+    expect(entry?.userId).toBe(admin.id)
+    expect(entry?.reason).toContain(order.orderNumber)
+    expect(entry?.reason).toContain('administrador')
+
+    // La entrada de reposición no cuenta como repuesto usado en la orden
+    const parts = await getPartsUsedInOrder(order.id)
+    expect(parts.every((p) => p.type === 'OUT')).toBe(true)
   })
 
   it('lanza error si el status no es WAITING_APPROVAL', async () => {

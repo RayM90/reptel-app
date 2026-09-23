@@ -1425,6 +1425,7 @@ export const rejectBudget = async (id: string, email: string, reason: string) =>
     order,
     user.id,
     reason,
+    'el cliente',
     (commission) =>
       `Cliente rechazó el presupuesto de $${order.budget}. Motivo: ${reason}. Comisión del técnico: $${commission.toFixed(2)} (delivery + 40% revisión).`
   )
@@ -1444,6 +1445,7 @@ export const rejectBudgetByAdmin = async (id: string, actorEmail: string, reason
     order,
     actor.id,
     reason,
+    'el administrador',
     (commission) =>
       `Rechazo registrado por el administrador. Presupuesto $${order.budget}. Motivo: ${reason}. Comisión del técnico: $${commission.toFixed(2)} (delivery + 40% revisión).`
   )
@@ -1453,6 +1455,7 @@ const applyBudgetRejection = async (
   order: Order,
   actorUserId: string,
   reason: string,
+  rejectedBy: 'el cliente' | 'el administrador',
   buildComment: (commission: number) => string
 ) => {
   const id = order.id
@@ -1464,27 +1467,59 @@ const applyBudgetRejection = async (
   const revisionAmount = order.revisionAmount ? Number(order.revisionAmount) : 0
   const commission = deliveryAmount + 0.4 * revisionAmount
 
-  const updatedOrder = await prisma.order.update({
-    where: { id },
-    data: {
-      budgetApproved: false,
-      budgetRejectionReason: reason,
-      technicianCommission: commission,
-      status: 'REJECTED_PENDING_PICKUP',
-      statusHistory: {
-        create: {
-          status: 'REJECTED_PENDING_PICKUP',
-          comment: buildComment(commission),
+  const updatedOrder = await prisma.$transaction(async (tx) => {
+    // Los repuestos que el técnico registró en el diagnóstico no se llegaron
+    // a instalar: vuelven al stock con una entrada propia en el historial de
+    // inventario. El presupuesto NO se descuenta (a diferencia de
+    // revertProductUsage) — el monto rechazado se conserva para el historial
+    // y el Recibo de Cierre. Las mermas no vuelven: la pieza se dañó.
+    const partsToReturn = await tx.inventoryMovement.findMany({
+      where: { orderId: id, type: 'OUT', channel: 'SERVICIO_TECNICO', reversedAt: null, lossReportedAt: null },
+    })
+    for (const part of partsToReturn) {
+      await tx.product.update({
+        where: { id: part.productId },
+        data: { stock: { increment: part.quantity } },
+      })
+      await tx.inventoryMovement.update({
+        where: { id: part.id },
+        data: { reversedAt: new Date(), reversedByUserId: actorUserId },
+      })
+      await tx.inventoryMovement.create({
+        data: {
+          productId: part.productId,
+          type: 'IN',
+          channel: 'SERVICIO_TECNICO',
+          quantity: part.quantity,
+          reason: `Reposición — presupuesto de la orden ${order.orderNumber} rechazado por ${rejectedBy}`,
           userId: actorUserId,
+          orderId: id,
+        },
+      })
+    }
+
+    return tx.order.update({
+      where: { id },
+      data: {
+        budgetApproved: false,
+        budgetRejectionReason: reason,
+        technicianCommission: commission,
+        status: 'REJECTED_PENDING_PICKUP',
+        statusHistory: {
+          create: {
+            status: 'REJECTED_PENDING_PICKUP',
+            comment: buildComment(commission),
+            userId: actorUserId,
+          },
         },
       },
-    },
-    include: {
-      client: true,
-      device: true,
-      technician: { select: { id: true, name: true } },
-      statusHistory: { orderBy: { createdAt: 'desc' } },
-    },
+      include: {
+        client: true,
+        device: true,
+        technician: { select: { id: true, name: true } },
+        statusHistory: { orderBy: { createdAt: 'desc' } },
+      },
+    })
   })
 
   // Anular cualquier abono BUDGET todavía PENDING — la orden ya se cerró con
@@ -1801,7 +1836,7 @@ export const reportPartLoss = async (movementId: string, actorEmail: string, des
 
 export const getPartsUsedInOrder = async (orderId: string) => {
   return await prisma.inventoryMovement.findMany({
-    where: { orderId, channel: 'SERVICIO_TECNICO' },
+    where: { orderId, type: 'OUT', channel: 'SERVICIO_TECNICO' },
     include: {
       product: { select: { id: true, name: true } },
       user: { select: { id: true, name: true, lastName: true } },

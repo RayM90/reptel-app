@@ -131,7 +131,7 @@ export const getAuditReport = async ({ from, to, status, channel, technicianId, 
       client: { select: { id: true, name: true, lastName: true, idNumber: true } },
       technician: { select: { id: true, name: true } },
       inventoryMovements: {
-        where: { channel: 'SERVICIO_TECNICO', reversedAt: null },
+        where: { type: 'OUT', channel: 'SERVICIO_TECNICO', reversedAt: null },
         include: { product: { select: { name: true } } },
       },
     },
