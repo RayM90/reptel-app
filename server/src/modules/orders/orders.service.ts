@@ -31,91 +31,86 @@ const ADVANCE_REVISION_AMOUNT = 15
 // otro cargo tiene gente libre. Si nadie del cargo correcto está disponible
 // (ni siquiera ocupado bajo su límite), la orden queda sin asignar — pasa a
 // "en cola", ver hasPendingAssignment/statusBadge.ts en el frontend.
-// Prioridad 1: AVAILABLE (menos carga)
-// Prioridad 2: BUSY bajo su límite (menos carga)
-// Prioridad 3: null → en cola, esperando que alguien de ese cargo se libere
+// Se elige al de menos carga entre los que están bajo su límite; si nadie
+// lo está → null (en cola, esperando que alguien de ese cargo se libere).
+//
+// La carga se CUENTA desde las órdenes reales (syncTechnicianLoad), no se
+// suma y resta: un contador incremental se desfasa si una orden se borra a
+// mano o un test deja datos a medias, y el técnico queda "SATURATED" sin
+// tener nada (incidente del 2026-09-23).
 // ─────────────────────────────────────────────
 
+// Estados en los que la orden ya no ocupa al técnico — los mismos puntos en
+// los que antes se llamaba a decrementTechnicianLoad (pago completo, rechazo
+// del presupuesto, entrega, cancelación).
+const LOAD_RELEASED_STATUSES = ['PAID_PENDING_DELIVERY', 'REJECTED_PENDING_PICKUP', 'DELIVERED', 'CANCELLED'] as const
+
+export const syncTechnicianLoad = async (technicianId: string) => {
+  const technician = await prisma.user.findUnique({
+    where: { id: technicianId },
+  })
+
+  if (!technician) return null
+
+  const activeOrderCount = await prisma.order.count({
+    where: { technicianId, status: { notIn: [...LOAD_RELEASED_STATUSES] } },
+  })
+  // ABSENT lo fija una persona, no la carga — se respeta.
+  const technicianStatus =
+    technician.technicianStatus === 'ABSENT'
+      ? 'ABSENT'
+      : activeOrderCount === 0
+        ? 'AVAILABLE'
+        : activeOrderCount >= technician.maxOrderCapacity
+          ? 'SATURATED'
+          : 'BUSY'
+
+  return await prisma.user.update({
+    where: { id: technicianId },
+    data: { activeOrderCount, technicianStatus },
+  })
+}
+
 const assignTechnician = async (role: 'TECHNICIAN' | 'TECHNICIAN_DELIVERY'): Promise<string | null> => {
-  const available = await prisma.user.findMany({
-    where: {
-      role,
-      isActive: true,
-      technicianStatus: 'AVAILABLE',
-    },
-    orderBy: [
-      { activeOrderCount: 'asc' },
-      { updatedAt: 'asc' },
-    ],
+  const technicians = await prisma.user.findMany({
+    where: { role, isActive: true },
+    orderBy: { updatedAt: 'asc' },
+    select: { id: true },
   })
 
-  if (available.length > 0) {
-    return available[0].id
+  const synced = []
+  for (const t of technicians) {
+    const s = await syncTechnicianLoad(t.id)
+    if (s) synced.push(s)
   }
 
-  const busy = await prisma.user.findMany({
-    where: {
-      role,
-      isActive: true,
-      technicianStatus: 'BUSY',
-    },
-    orderBy: { activeOrderCount: 'asc' },
-  })
+  // sort es estable: a igual carga gana el que lleva más tiempo sin cambios.
+  const candidates = synced
+    .filter((t) => t.technicianStatus !== 'ABSENT' && t.activeOrderCount < t.maxOrderCapacity)
+    .sort((a, b) => a.activeOrderCount - b.activeOrderCount)
 
-  const underCapacity = busy.filter(
-    (t) => t.activeOrderCount < t.maxOrderCapacity
-  )
-
-  if (underCapacity.length > 0) {
-    return underCapacity[0].id
-  }
-
-  return null
+  return candidates[0]?.id ?? null
 }
 
 const incrementTechnicianLoad = async (technicianId: string) => {
-  const technician = await prisma.user.findUnique({
-    where: { id: technicianId },
-  })
-
-  if (!technician) return
-
-  const newCount = technician.activeOrderCount + 1
-  const newStatus =
-    newCount >= technician.maxOrderCapacity ? 'SATURATED' : 'BUSY'
-
-  await prisma.user.update({
-    where: { id: technicianId },
-    data: {
-      activeOrderCount: newCount,
-      technicianStatus: newStatus,
-    },
-  })
+  await syncTechnicianLoad(technicianId)
 }
 
 export const decrementTechnicianLoad = async (technicianId: string) => {
-  const technician = await prisma.user.findUnique({
-    where: { id: technicianId },
-  })
+  const technician = await syncTechnicianLoad(technicianId)
 
   if (!technician) return
-
-  const newCount = Math.max(0, technician.activeOrderCount - 1)
-  const newStatus = newCount === 0 ? 'AVAILABLE' : 'BUSY'
-
-  await prisma.user.update({
-    where: { id: technicianId },
-    data: {
-      activeOrderCount: newCount,
-      technicianStatus: newStatus,
-    },
-  })
 
   // Este técnico acaba de liberar capacidad — si hay una orden de su mismo
   // cargo esperando en cola (sin técnico asignado porque nadie estaba libre
   // cuando se creó), se la asignamos ahora mismo, sin esperar a que un
-  // admin lo note. FIFO: la más antigua primero.
-  if (technician.role === 'TECHNICIAN' || technician.role === 'TECHNICIAN_DELIVERY') {
+  // admin lo note. FIFO: la más antigua primero. Solo si de verdad tiene
+  // cupo según sus órdenes reales.
+  if (
+    (technician.role === 'TECHNICIAN' || technician.role === 'TECHNICIAN_DELIVERY') &&
+    technician.technicianStatus !== 'ABSENT' &&
+    technician.activeOrderCount < technician.maxOrderCapacity
+  ) {
     await tryAssignQueuedOrder(technicianId, technician.role)
   }
 }
