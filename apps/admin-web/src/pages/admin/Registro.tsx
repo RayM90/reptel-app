@@ -90,7 +90,7 @@ export default function Registro() {
   const [showDevicePassword, setShowDevicePassword] = useState(false)
   const [paymentDetails, setPaymentDetails] = useState({ banco: '', telefono: '', referencia: '', correo: '', uid: '', nombre: '' })
   const [paymentAmount, setPaymentAmount] = useState('15')
-  const [pendingAbono, setPendingAbono] = useState<{ orderId: string; orderNumber: string; remaining: number } | null>(null)
+  const [pendingAbono, setPendingAbono] = useState<{ orderId: string; orderNumber: string; remaining: number; method: string } | null>(null)
   const [abonoAmount, setAbonoAmount] = useState('')
   const [submittingAbono, setSubmittingAbono] = useState(false)
   const [creatingOrder, setCreatingOrder] = useState(false)
@@ -224,6 +224,22 @@ export default function Registro() {
     }
   }
 
+  // Efectivo no lleva datos bancarios — mismo formato que el pago final en
+  // OrderDetailModal ({ metodo: 'Efectivo' }).
+  const buildPaymentDetails = (method: string): { details?: Record<string, string>; error?: string } => {
+    if (method === 'EFECTIVO') return { details: { metodo: 'Efectivo' } }
+    if (method === 'BINANCE') {
+      if (!paymentDetails.correo || !paymentDetails.uid || !paymentDetails.nombre) {
+        return { error: 'Correo, UID y nombre de Binance son requeridos para confirmar el pago' }
+      }
+      return { details: { correo: paymentDetails.correo, uid: paymentDetails.uid, nombre: paymentDetails.nombre } }
+    }
+    if (!paymentDetails.banco || !paymentDetails.telefono || !paymentDetails.referencia) {
+      return { error: 'Banco, teléfono y referencia son requeridos para confirmar el pago' }
+    }
+    return { details: { banco: paymentDetails.banco, telefono: paymentDetails.telefono, referencia: paymentDetails.referencia } }
+  }
+
   const handleCreateOrder = async () => {
     if (!activeClient) return
     if (!orderForm.brand || !orderForm.model || !orderForm.color || !orderForm.accessories) {
@@ -235,19 +251,10 @@ export default function Registro() {
       return
     }
 
-    let details: Record<string, string>
-    if (orderForm.advancePaymentMethod === 'BINANCE') {
-      if (!paymentDetails.correo || !paymentDetails.uid || !paymentDetails.nombre) {
-        setOrderError('Correo, UID y nombre de Binance son requeridos para confirmar el pago')
-        return
-      }
-      details = { correo: paymentDetails.correo, uid: paymentDetails.uid, nombre: paymentDetails.nombre }
-    } else {
-      if (!paymentDetails.banco || !paymentDetails.telefono || !paymentDetails.referencia) {
-        setOrderError('Banco, teléfono y referencia son requeridos para confirmar el pago')
-        return
-      }
-      details = { banco: paymentDetails.banco, telefono: paymentDetails.telefono, referencia: paymentDetails.referencia }
+    const { details, error } = buildPaymentDetails(orderForm.advancePaymentMethod)
+    if (error) {
+      setOrderError(error)
+      return
     }
 
     const amountNumber = Number(paymentAmount)
@@ -281,7 +288,9 @@ export default function Registro() {
       setLastCreatedTechnician(technicianName)
       const remaining = 15 - amountNumber
       if (remaining > 0.009) {
-        setPendingAbono({ orderId: response.data.data.id, orderNumber: response.data.data.orderNumber, remaining })
+        // El formulario de la orden se limpia abajo — el abono sigue con el
+        // método elegido para esta orden.
+        setPendingAbono({ orderId: response.data.data.id, orderNumber: response.data.data.orderNumber, remaining, method: orderForm.advancePaymentMethod })
         setAbonoAmount(remaining.toFixed(2))
         showToast(`✅ Orden ${response.data.data.orderNumber} creada — abono de $${amountNumber} registrado, falta $${remaining.toFixed(2)}`, 'success')
       } else {
@@ -308,19 +317,10 @@ export default function Registro() {
       showToast('El monto del abono debe ser mayor a 0', 'error')
       return
     }
-    let details: Record<string, string>
-    if (orderForm.advancePaymentMethod === 'BINANCE') {
-      if (!paymentDetails.correo || !paymentDetails.uid || !paymentDetails.nombre) {
-        showToast('Correo, UID y nombre de Binance son requeridos', 'error')
-        return
-      }
-      details = { correo: paymentDetails.correo, uid: paymentDetails.uid, nombre: paymentDetails.nombre }
-    } else {
-      if (!paymentDetails.banco || !paymentDetails.telefono || !paymentDetails.referencia) {
-        showToast('Banco, teléfono y referencia son requeridos', 'error')
-        return
-      }
-      details = { banco: paymentDetails.banco, telefono: paymentDetails.telefono, referencia: paymentDetails.referencia }
+    const { details, error } = buildPaymentDetails(pendingAbono.method)
+    if (error) {
+      showToast(error, 'error')
+      return
     }
 
     setSubmittingAbono(true)
@@ -641,7 +641,7 @@ export default function Registro() {
                 <input type="text" value={paymentDetails.nombre} onChange={(e) => setPaymentDetails({ ...paymentDetails, nombre: e.target.value })} />
               </div>
             </>
-          ) : (
+          ) : orderForm.advancePaymentMethod === 'EFECTIVO' ? null : (
             <>
               <div className="form-group">
                 <label>Banco</label>
@@ -690,7 +690,7 @@ export default function Registro() {
                 <label>Monto de este abono ($)</label>
                 <input type="number" min="0.01" step="0.01" value={abonoAmount} onChange={(e) => setAbonoAmount(e.target.value)} />
               </div>
-              {orderForm.advancePaymentMethod === 'BINANCE' ? (
+              {pendingAbono.method === 'BINANCE' ? (
                 <>
                   <div className="form-group">
                     <label>Correo Binance</label>
@@ -705,7 +705,7 @@ export default function Registro() {
                     <input type="text" value={paymentDetails.nombre} onChange={(e) => setPaymentDetails({ ...paymentDetails, nombre: e.target.value })} />
                   </div>
                 </>
-              ) : (
+              ) : pendingAbono.method === 'EFECTIVO' ? null : (
                 <>
                   <div className="form-group">
                     <label>Banco</label>
