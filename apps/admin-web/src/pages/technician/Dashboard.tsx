@@ -6,6 +6,7 @@ import { useToastStore } from '../../store/toast.store'
 import { POLL_INTERVAL_MS } from '../../config/constants'
 import { getStatusBadge, badgeClassName } from '../../utils/statusBadge'
 import { formatFullName } from '../../utils/formatName'
+import { formatClientAddress } from '../admin/dashboard.types'
 
 type OrderStatus =
   | 'PENDING_PAYMENT'
@@ -72,7 +73,16 @@ interface TechOrder {
   deliveredAt: string | null
   finalPaymentDetails: Record<string, string> | null
   finalPaymentConfirmed: boolean
-  client: { name: string; lastName: string }
+  client: {
+    name: string
+    lastName: string
+    phone: string
+    addressState: string | null
+    addressCity: string | null
+    addressNeighborhood: string | null
+    addressStreet: string | null
+    addressBuilding: string | null
+  }
   device: { type: string; brand: string; model: string; color: string; accessories: string; devicePassword: string | null; serialNumber: string | null }
   serviceCatalog: { id: string; name: string; basePrice: string } | null
   statusHistory: StatusHistoryEntry[]
@@ -522,6 +532,11 @@ export default function TechnicianDashboard() {
                     <div className="card" style={{ marginBottom: 12 }}>
                       <p><strong>Cliente:</strong> {formatFullName(order.client.name, order.client.lastName)}{' '}
                         &nbsp;·&nbsp; <strong>Equipo:</strong> {order.device.brand} {order.device.model} · Serial: {order.device.serialNumber ?? '—'}</p>
+                      {/* Orden de la app (con delivery): el motorizado va a buscar el equipo. */}
+                      {order.deliveryAmount != null && (
+                        <p><strong>Dirección de retiro:</strong> {formatClientAddress(order.client) ?? 'El cliente no tiene dirección registrada'}
+                          {' '}&nbsp;·&nbsp; <strong>Teléfono:</strong> <a href={`tel:${order.client.phone}`}>{order.client.phone}</a></p>
+                      )}
                       <p><strong>Falla reportada:</strong> {order.problem}</p>
                       <p><strong>Estado de recepción:</strong> Accesorios: {order.device.accessories || '—'} · Observaciones: {order.observations || '—'}</p>
                     </div>

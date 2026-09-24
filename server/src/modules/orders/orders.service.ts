@@ -1,6 +1,7 @@
 import { Prisma, type Order } from '@prisma/client'
 import prisma from '../../lib/prisma'
 import { InsufficientStockError } from '../products/products.service'
+import { flattenClientAddresses } from '../../lib/clientAddress'
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -150,10 +151,20 @@ const tryAssignQueuedOrder = async (technicianId: string, role: 'TECHNICIAN' | '
 // ÓRDENES — CONSULTAS
 // ─────────────────────────────────────────────
 
+// La dirección del cliente vive en ClientAddress. Se incluye y se aplana la
+// principal en `client` (mismo shape que /api/clients) para que el
+// motorizado sepa a dónde ir y el modal del admin la muestre.
+const CLIENT_WITH_ADDRESSES = { include: { addresses: true } } as const
+
+const withClientAddress = <T extends { client: Record<string, any> }>(order: T) => ({
+  ...order,
+  client: flattenClientAddresses(order.client),
+})
+
 export const getAllOrders = async () => {
-  return await prisma.order.findMany({
+  const orders = await prisma.order.findMany({
     include: {
-      client: true,
+      client: CLIENT_WITH_ADDRESSES,
       technician: { select: { id: true, name: true, email: true } },
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
@@ -161,6 +172,7 @@ export const getAllOrders = async () => {
     },
     orderBy: { receivedAt: 'desc' },
   })
+  return orders.map(withClientAddress)
 }
 
 export const getTodayOrders = async () => {
@@ -170,7 +182,7 @@ export const getTodayOrders = async () => {
   const endOfDay = new Date()
   endOfDay.setHours(23, 59, 59, 999)
 
-  return await prisma.order.findMany({
+  const orders = await prisma.order.findMany({
     where: {
       receivedAt: {
         gte: startOfDay,
@@ -178,26 +190,28 @@ export const getTodayOrders = async () => {
       },
     },
     include: {
-      client: true,
+      client: CLIENT_WITH_ADDRESSES,
       technician: { select: { id: true, name: true } },
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
     },
     orderBy: { receivedAt: 'desc' },
   })
+  return orders.map(withClientAddress)
 }
 
 export const getOrderById = async (id: string) => {
-  return await prisma.order.findUnique({
+  const order = await prisma.order.findUnique({
     where: { id },
     include: {
-      client: true,
+      client: CLIENT_WITH_ADDRESSES,
       technician: { select: { id: true, name: true, email: true } },
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
       advancePaymentSubmissions: { orderBy: { createdAt: 'desc' } },
     },
   })
+  return order ? withClientAddress(order) : null
 }
 
 export const getOrderByNumber = async (orderNumber: string) => {
@@ -1646,10 +1660,10 @@ export const disputeZeroBudgetDiagnosis = async (id: string, email: string, note
 // ─────────────────────────────────────────────
 
 export const getOrdersByTechnician = async (technicianId: string) => {
-  return await prisma.order.findMany({
+  const orders = await prisma.order.findMany({
     where: { technicianId },
     include: {
-      client: true,
+      client: CLIENT_WITH_ADDRESSES,
       device: true,
       serviceCatalog: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
@@ -1660,6 +1674,7 @@ export const getOrdersByTechnician = async (technicianId: string) => {
     },
     orderBy: { receivedAt: 'desc' },
   })
+  return orders.map(withClientAddress)
 }
 // ─────────────────────────────────────────────
 // REPUESTOS DE INVENTARIO USADOS EN LA ORDEN

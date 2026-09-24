@@ -55,7 +55,9 @@ export const isIntakePendingPickup = (order: Order) => order.deliveryAmount != n
 // Construye la dirección completa del cliente a partir de los campos
 // opcionales que existan — cualquiera puede ser null si el registro es viejo
 // o incompleto.
-export const formatClientAddress = (client: Order['client']): string | null => {
+export const formatClientAddress = (
+  client: Pick<Order['client'], 'addressStreet' | 'addressNeighborhood' | 'addressBuilding' | 'addressCity' | 'addressState'>,
+): string | null => {
   const parts = [
     client.addressStreet,
     client.addressNeighborhood,
