@@ -97,6 +97,8 @@ interface TechOrder {
     minimumPercent: number
     minimumAmount: number
     pendingForMinimum: number
+    // Abonos del presupuesto enviados que el local todavía no revisó.
+    pendingReview: number
   } | null
   statusHistory: StatusHistoryEntry[]
   partsUsed?: {
@@ -382,6 +384,14 @@ export default function MyTechnicalOrdersScreen() {
             {orders.map((order) => {
               const isExpanded = expandedId === order.id
               const status = order.status
+              // Lo que el cliente puede pagar descontando los abonos que el
+              // local todavía no revisó — así no vuelve a pagar lo mismo.
+              const pendingReview = order.paymentSummary?.pendingReview ?? 0
+              const payable = {
+                pendingReview,
+                maxAmount: Math.max(0, (order.paymentSummary?.remaining ?? 0) - pendingReview),
+                pendingForMinimum: Math.max(0, (order.paymentSummary?.pendingForMinimum ?? 0) - pendingReview),
+              }
 
               return (
                 <TouchableOpacity
@@ -580,26 +590,32 @@ export default function MyTechnicalOrdersScreen() {
                         <View style={styles.decisionCard}>
                           <Text style={styles.decisionTitle}>¿Qué decides con este presupuesto?</Text>
 
-                          <TouchableOpacity
-                            style={styles.approveBtn}
-                            onPress={(e) => {
-                              e.stopPropagation()
-                              router.push({
-                                pathname: '/(client)/budget-payment',
-                                params: {
-                                  orderId: order.id,
-                                  orderNumber: order.orderNumber,
-                                  budget: String(order.budget ?? 0),
-                                  mode: 'approve',
-                                  minimumPercent: String(order.paymentSummary?.minimumPercent ?? 50),
-                                  pendingForMinimum: String(order.paymentSummary?.pendingForMinimum ?? 0),
-                                  maxAmount: String(order.paymentSummary?.remaining ?? 0),
-                                },
-                              })
-                            }}
-                          >
-                            <Text style={styles.approveBtnText}>✅ Pagar el {order.paymentSummary?.minimumPercent ?? 50}% y aprobar</Text>
-                          </TouchableOpacity>
+                          {payable.pendingReview > 0.009 && (
+                            <Text style={styles.reasonLabel}>Tienes ${payable.pendingReview.toFixed(2)} en revisión por el local.</Text>
+                          )}
+
+                          {payable.pendingForMinimum > 0.009 && (
+                            <TouchableOpacity
+                              style={styles.approveBtn}
+                              onPress={(e) => {
+                                e.stopPropagation()
+                                router.push({
+                                  pathname: '/(client)/budget-payment',
+                                  params: {
+                                    orderId: order.id,
+                                    orderNumber: order.orderNumber,
+                                    budget: String(order.budget ?? 0),
+                                    mode: 'approve',
+                                    minimumPercent: String(order.paymentSummary?.minimumPercent ?? 50),
+                                    pendingForMinimum: String(payable.pendingForMinimum),
+                                    maxAmount: String(payable.maxAmount),
+                                  },
+                                })
+                              }}
+                            >
+                              <Text style={styles.approveBtnText}>✅ Pagar el {order.paymentSummary?.minimumPercent ?? 50}% y aprobar</Text>
+                            </TouchableOpacity>
+                          )}
 
                           <Text style={styles.reasonLabel}>O si prefieres no reparar, indica por qué:</Text>
                           <View style={styles.reasonRow}>
@@ -697,29 +713,36 @@ export default function MyTechnicalOrdersScreen() {
                           <Text style={styles.decisionTitle}>Tu reparación necesita un repuesto adicional</Text>
                           <Text style={styles.reasonLabel}>
                             Presupuesto nuevo: ${order.paymentSummary.budget.toFixed(2)} · Pagado: ${order.paymentSummary.paid.toFixed(2)}.
-                            Paga ${order.paymentSummary.pendingForMinimum.toFixed(2)} para que el técnico continúe.
+                            {payable.pendingForMinimum > 0.009 &&
+                              ` Paga $${payable.pendingForMinimum.toFixed(2)} para que el técnico continúe.`}
                           </Text>
 
-                          <TouchableOpacity
-                            style={styles.approveBtn}
-                            onPress={(e) => {
-                              e.stopPropagation()
-                              router.push({
-                                pathname: '/(client)/budget-payment',
-                                params: {
-                                  orderId: order.id,
-                                  orderNumber: order.orderNumber,
-                                  budget: String(order.budget ?? 0),
-                                  mode: 'extra',
-                                  minimumPercent: String(order.paymentSummary?.minimumPercent ?? 50),
-                                  pendingForMinimum: String(order.paymentSummary?.pendingForMinimum ?? 0),
-                                  maxAmount: String(order.paymentSummary?.remaining ?? 0),
-                                },
-                              })
-                            }}
-                          >
-                            <Text style={styles.approveBtnText}>💳 Pagar ${order.paymentSummary.pendingForMinimum.toFixed(2)} y continuar</Text>
-                          </TouchableOpacity>
+                          {payable.pendingReview > 0.009 && (
+                            <Text style={styles.reasonLabel}>Tienes ${payable.pendingReview.toFixed(2)} en revisión por el local.</Text>
+                          )}
+
+                          {payable.pendingForMinimum > 0.009 && (
+                            <TouchableOpacity
+                              style={styles.approveBtn}
+                              onPress={(e) => {
+                                e.stopPropagation()
+                                router.push({
+                                  pathname: '/(client)/budget-payment',
+                                  params: {
+                                    orderId: order.id,
+                                    orderNumber: order.orderNumber,
+                                    budget: String(order.budget ?? 0),
+                                    mode: 'extra',
+                                    minimumPercent: String(order.paymentSummary?.minimumPercent ?? 50),
+                                    pendingForMinimum: String(payable.pendingForMinimum),
+                                    maxAmount: String(payable.maxAmount),
+                                  },
+                                })
+                              }}
+                            >
+                              <Text style={styles.approveBtnText}>💳 Pagar ${payable.pendingForMinimum.toFixed(2)} y continuar</Text>
+                            </TouchableOpacity>
+                          )}
 
                           <TouchableOpacity
                             style={[styles.rejectBtn, actionLoading[order.id] && styles.actionBtnDisabled]}
@@ -1015,6 +1038,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E7A3D',
     borderRadius: 12,
     paddingVertical: 12,
+    minHeight: 44,
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
   },
@@ -1046,6 +1071,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#B3261E',
     borderRadius: 12,
     paddingVertical: 12,
+    minHeight: 44,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   rejectBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },

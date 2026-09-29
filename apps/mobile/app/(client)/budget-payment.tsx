@@ -74,8 +74,10 @@ export default function BudgetPaymentScreen() {
   const [uid, setUid] = useState('')
   const [nombre, setNombre] = useState('')
 
+  // La clave incluye el modo: un borrador del anticipo no debe reaparecer al
+  // pagar un repuesto adicional de la misma orden (ni al revés).
   const { clearDraft } = usePaymentDraft(
-    'budget-payment',
+    `budget-payment-${mode}`,
     orderId,
     { banco, telefono, referencia, monto, titular, cedulaLetter, cedulaNumber, correo, uid, nombre },
     (loaded) => {
@@ -139,7 +141,7 @@ export default function BudgetPaymentScreen() {
       // navegaba — mostramos el toast de éxito y navegamos directo.
       showToast(
         faltante > 0.009
-          ? `✅ Abono de $${montoNumber.toFixed(2)} enviado. Te falta $${faltante.toFixed(2)} para completar el anticipo — puedes enviarlo cuando quieras desde "Mis Órdenes".`
+          ? `✅ Abono de $${montoNumber.toFixed(2)} enviado. Te falta $${faltante.toFixed(2)} ${isExtra ? 'para que el técnico continúe' : 'para completar el anticipo'} — puedes enviarlo cuando quieras desde "Mis Órdenes".`
           : '✅ Datos enviados. El equipo de RepTel los revisará y confirmará tu pago pronto.',
         'success'
       )
