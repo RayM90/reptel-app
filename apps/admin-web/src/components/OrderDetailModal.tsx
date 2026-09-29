@@ -440,9 +440,8 @@ interface OrderDetailModalProps {
 // Etiqueta de la fase "Reparación y Pruebas" (informativa, sin formularios
 // propios hoy) — deriva del status real de la orden.
 const REPAIR_PHASE_LABEL: Record<string, string> = {
-  APPROVED: 'Presupuesto aprobado, en espera de inicio de reparación',
   REPAIRING: 'En reparación',
-  WAITING_PART: 'Esperando repuesto',
+  WAITING_EXTRA_PAYMENT: 'En pausa — esperando que el cliente pague el repuesto adicional',
   READY: 'Reparación y pruebas terminadas',
   PAID_PENDING_DELIVERY: 'Reparación y pruebas terminadas',
   DELIVERED: 'Reparación y pruebas terminadas',
@@ -516,7 +515,7 @@ export default function OrderDetailModal({
   // el botón de recibo apenas se confirma el anticipo y la orden pasa a
   // REPAIRING.
   const hasBudgetSubmissions = (order.advancePaymentSubmissions ?? []).some((s) => s.kind === 'BUDGET')
-  const pastDiagnosis = order.status !== 'RECEIVED' && order.status !== 'DIAGNOSING' && order.status !== 'PENDING_PAYMENT'
+  const pastDiagnosis = !['PENDING_PAYMENT', 'RECEIVED', 'ON_THE_WAY', 'DIAGNOSING'].includes(order.status)
   const showBudgetAdvanceSection =
     hasBudgetSubmissions || (pastDiagnosis && order.budget != null && Number(order.budget) > 0)
   const showPaymentReceipt = order.finalPaymentConfirmed && order.budget != null && Number(order.budget) > 0
@@ -533,9 +532,12 @@ export default function OrderDetailModal({
   // anticipo que cobrar (caso "sin costo adicional", ver Acciones).
   const canRegisterCounterBudgetPayment =
     !isAppOrder &&
-    order.status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15)
+    (order.status === 'WAITING_APPROVAL' || order.status === 'WAITING_EXTRA_PAYMENT') &&
+    order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15)
+  // Sugerido = lo que falta para el mínimo (50%, o lo que cubra los
+  // repuestos — lo calcula el backend).
   const budgetAdvanceSuggestedAmount = canRegisterCounterBudgetPayment
-    ? 0.5 * (Number(order.budget) - Number(order.revisionAmount ?? 15))
+    ? order.paymentSummary?.pendingForMinimum ?? 0
     : 0
 
   // Saldo real de "Pago final": ya no es un 50% fijo — se calcula contra lo
@@ -565,14 +567,14 @@ export default function OrderDetailModal({
   // scroll largo. "Acciones" queda fuera de las fases: aplica en estados
   // que no siguen el orden lineal (cierre sin costo desde WAITING_APPROVAL,
   // cierre por cancelación), y siempre debe quedar accesible.
-  const phase2Unlocked = order.status !== 'PENDING_PAYMENT' && order.status !== 'RECEIVED'
+  const phase2Unlocked = !['PENDING_PAYMENT', 'RECEIVED', 'ON_THE_WAY'].includes(order.status)
   const phase3Unlocked = phase2Unlocked && order.status !== 'DIAGNOSING'
   // Fase 4 debe estar accesible DESDE PENDING_PAYMENT: es justo ahí donde el
   // admin revisa y confirma los comprobantes de anticipo (self-service) que
   // hacen que la orden salga de ese estado. Bloquearla mientras el status es
   // PENDING_PAYMENT dejaba el checkbox de confirmar pago inalcanzable.
   const phase4Unlocked = true
-  const phase5Unlocked = ['APPROVED', 'REPAIRING', 'WAITING_PART', 'READY', 'PAID_PENDING_DELIVERY', 'DELIVERED'].includes(order.status)
+  const phase5Unlocked = ['REPAIRING', 'WAITING_EXTRA_PAYMENT', 'READY', 'PAID_PENDING_DELIVERY', 'DELIVERED'].includes(order.status)
   const phase6Unlocked = ['READY', 'PAID_PENDING_DELIVERY', 'DELIVERED', 'REJECTED_PENDING_PICKUP', 'CANCELLED'].includes(order.status)
 
   const unlockedByPhase = [true, phase2Unlocked, phase3Unlocked, phase4Unlocked, phase5Unlocked, phase6Unlocked]

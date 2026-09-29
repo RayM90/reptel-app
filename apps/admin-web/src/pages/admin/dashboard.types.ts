@@ -28,6 +28,15 @@ export interface Order {
   finalPaymentDetails: Record<string, string> | null
   technicianCommission: string | null
   statusHistory: StatusHistoryEntry[]
+  // Calculado por el backend (repairMinimum.ts). null si todavía no hay presupuesto.
+  paymentSummary?: {
+    budget: number
+    paid: number
+    remaining: number
+    minimumPercent: number
+    minimumAmount: number
+    pendingForMinimum: number
+  } | null
 }
 
 export interface PaymentSubmission {

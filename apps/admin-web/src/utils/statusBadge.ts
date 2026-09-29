@@ -5,19 +5,22 @@ interface StatusBadgeInfo {
   variant: BadgeVariant
 }
 
+// Mismos nombres en el panel del técnico y del admin (el cliente tiene su
+// propia versión en la app, ver apps/mobile/src/utils/orderProgress.ts).
 const ORDER_STATUS: Record<string, StatusBadgeInfo> = {
-  PENDING_PAYMENT: { label: 'Pago pendiente', variant: 'neutral' },
-  RECEIVED: { label: 'Recibido', variant: 'neutral' },
-  DIAGNOSING: { label: 'En diagnóstico', variant: 'progress' },
-  WAITING_APPROVAL: { label: 'Diagnóstico Listo - Notificar Cliente', variant: 'warning' },
-  APPROVED: { label: 'Aprobado', variant: 'progress' },
+  PENDING_PAYMENT: { label: 'Pago por confirmar', variant: 'neutral' },
+  RECEIVED: { label: 'En tienda — por revisar', variant: 'neutral' },
+  ON_THE_WAY: { label: 'En camino a retirar', variant: 'info' },
+  DIAGNOSING: { label: 'En revisión', variant: 'progress' },
+  WAITING_APPROVAL: { label: 'Esperando decisión del cliente', variant: 'warning' },
+  APPROVED: { label: 'Presupuesto aprobado', variant: 'progress' },
   REPAIRING: { label: 'En reparación', variant: 'progress' },
-  WAITING_PART: { label: 'Esperando repuesto', variant: 'progress' },
-  READY: { label: 'Listo para entrega', variant: 'success' },
-  PAID_PENDING_DELIVERY: { label: 'Pagado, pendiente de entrega', variant: 'info' },
-  REJECTED_PENDING_PICKUP: { label: 'Rechazado, pendiente de retiro', variant: 'danger' },
+  WAITING_EXTRA_PAYMENT: { label: 'Esperando pago de repuesto', variant: 'warning' },
+  READY: { label: 'Reparado — saldo pendiente', variant: 'success' },
+  PAID_PENDING_DELIVERY: { label: 'Pagado — por entregar', variant: 'info' },
+  REJECTED_PENDING_PICKUP: { label: 'Rechazado — por devolver', variant: 'danger' },
   DELIVERED: { label: 'Entregado', variant: 'success' },
-  CANCELLED: { label: 'Cancelado', variant: 'danger' },
+  CANCELLED: { label: 'Cancelada', variant: 'danger' },
 }
 
 const PARTIAL_PAYMENT_STATUS: Record<string, StatusBadgeInfo> = {
