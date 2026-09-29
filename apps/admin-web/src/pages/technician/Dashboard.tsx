@@ -11,29 +11,17 @@ import { formatClientAddress } from '../admin/dashboard.types'
 type OrderStatus =
   | 'PENDING_PAYMENT'
   | 'RECEIVED'
+  | 'ON_THE_WAY'
   | 'DIAGNOSING'
   | 'WAITING_APPROVAL'
   | 'APPROVED'
   | 'REPAIRING'
-  | 'WAITING_PART'
+  | 'WAITING_EXTRA_PAYMENT'
   | 'READY'
+  | 'PAID_PENDING_DELIVERY'
+  | 'REJECTED_PENDING_PICKUP'
   | 'DELIVERED'
   | 'CANCELLED'
-
-// REPAIRING y READY salieron de esta lista en la Tarea 4 (tienen su propio
-// camino: el anticipo de presupuesto confirmado y "Finalizar reparación").
-// DELIVERED sale por el mismo criterio (Finding G, revisión final): era una
-// ruta gratuita a "entregado" que salteaba el cobro del saldo final. La única
-// vía legítima es markOrderDelivered desde el panel admin, que exige
-// PAID_PENDING_DELIVERY — el backend también lo rechaza por esta vía.
-const STATUS_OPTIONS: OrderStatus[] = [
-  'RECEIVED',
-  'DIAGNOSING',
-  'WAITING_APPROVAL',
-  'APPROVED',
-  'WAITING_PART',
-  'CANCELLED',
-]
 
 interface StatusHistoryEntry {
   id: string
@@ -152,7 +140,6 @@ export default function TechnicianDashboard() {
   }
 
   const [commentText, setCommentText] = useState<Record<string, string>>({})
-  const [statusSelection, setStatusSelection] = useState<Record<string, OrderStatus>>({})
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
 
   // ── Finalizar reparación: ajuste de presupuesto + cierre ──
@@ -332,11 +319,10 @@ export default function TechnicianDashboard() {
     }
   }
 
-  const handleSubmitComment = async (orderId: string, currentStatus: OrderStatus) => {
+  const handleSubmitComment = async (orderId: string) => {
     const key = `comment:${orderId}`
     if (pendingIds.has(key)) return
-    const comment = commentText[orderId]
-    const status = statusSelection[orderId] || currentStatus
+    const comment = (commentText[orderId] || '').trim()
 
     if (!comment) {
       showToast('Escribe un comentario antes de enviar.', 'error')
@@ -345,12 +331,31 @@ export default function TechnicianDashboard() {
 
     setPendingIds((prev) => new Set(prev).add(key))
     try {
-      await api.patch(`/api/orders/${orderId}/status`, { status, comment })
+      await api.post(`/api/orders/${orderId}/comments`, { comment })
       showToast('✅ Comentario registrado.', 'success')
       setCommentText((prev) => ({ ...prev, [orderId]: '' }))
       fetchData()
-    } catch (err) {
-      showToast('❌ Error al registrar el comentario', 'error')
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || '❌ Error al registrar el comentario', 'error')
+    } finally {
+      setPendingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+    }
+  }
+
+  const handleStartReview = async (orderId: string) => {
+    const key = `review:${orderId}`
+    if (pendingIds.has(key)) return
+    setPendingIds((prev) => new Set(prev).add(key))
+    try {
+      await api.post(`/api/orders/${orderId}/start-review`)
+      showToast('✅ Revisión iniciada. Ya puedes registrar el diagnóstico.', 'success')
+      fetchData()
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || '❌ Error al iniciar la revisión', 'error')
     } finally {
       setPendingIds((prev) => {
         const next = new Set(prev)
@@ -499,7 +504,7 @@ export default function TechnicianDashboard() {
           activeOrders.map((order) => {
             const isExpanded = expandedId === order.id
             const isNew = newIds.has(order.id)
-            const needsDiagnosis = order.budget == null
+            const needsDiagnosis = order.status === 'DIAGNOSING' && order.budget == null
 
             return (
               <div key={order.id} className="card" style={isNew ? NEW_CARD_STYLE : undefined}>
@@ -557,7 +562,30 @@ export default function TechnicianDashboard() {
                         REPAIRING; ahora es siempre una sola, la que
                         corresponde ahora mismo. ── */}
 
-                    {needsDiagnosis ? (
+                    {order.status === 'PENDING_PAYMENT' ? (
+                      <div className="card card--action">
+                        <span className="card-eyebrow">En espera</span>
+                        <h4>Esperando la confirmación del pago</h4>
+                        <p className="form-hint">Cuando el administrador confirme el anticipo del cliente, podrás salir a buscar el equipo o empezar a revisarlo.</p>
+                      </div>
+                    ) : order.status === 'ON_THE_WAY' || order.status === 'RECEIVED' ? (
+                      <div className="card card--action">
+                        <span className="card-eyebrow">Acción requerida</span>
+                        <h4>{order.status === 'ON_THE_WAY' ? 'Retirar el equipo' : 'Equipo en tienda'}</h4>
+                        <p className="form-hint">
+                          {order.status === 'ON_THE_WAY'
+                            ? 'El cliente ve que vas en camino. Cuando tengas el equipo en tus manos, marca que empezaste a revisarlo.'
+                            : 'Cuando empieces a revisar el equipo, márcalo para que el cliente lo vea.'}
+                        </p>
+                        <button
+                          className="btn btn-primary"
+                          disabled={pendingIds.has(`review:${order.id}`)}
+                          onClick={() => handleStartReview(order.id)}
+                        >
+                          Empecé a revisar
+                        </button>
+                      </div>
+                    ) : needsDiagnosis ? (
                       <div className="card card--action">
                         <span className="card-eyebrow">Acción requerida</span>
                         <h4>Registrar diagnóstico</h4>
@@ -730,28 +758,17 @@ export default function TechnicianDashboard() {
                           Terminé la reparación
                         </button>
                       </div>
-                    ) : (
+                    ) : order.status === 'WAITING_EXTRA_PAYMENT' ? (
                       <div className="card card--action">
-                        <span className="card-eyebrow">Acción requerida</span>
-                        <h4>Agregar comentario de progreso</h4>
-                        <div className="form-group">
-                          <label>Estado</label>
-                          <select
-                            value={statusSelection[order.id] || order.status}
-                            onChange={(e) =>
-                              setStatusSelection((prev) => ({
-                                ...prev,
-                                [order.id]: e.target.value as OrderStatus,
-                              }))
-                            }
-                          >
-                            {STATUS_OPTIONS.map((s) => (
-                              <option key={s} value={s}>
-                                {getStatusBadge('order', s).label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                        <span className="card-eyebrow">En pausa</span>
+                        <h4>Esperando pago del cliente por el repuesto adicional</h4>
+                        <p className="form-hint">La reparación sigue cuando el administrador confirme el pago o el cliente rechace el repuesto. Si el repuesto no hace falta, puedes quitarlo abajo.</p>
+                      </div>
+                    ) : null}
+
+                    {!['DELIVERED', 'CANCELLED'].includes(order.status) && (
+                      <div className="card">
+                        <h4>Comentario de progreso</h4>
                         <div className="form-group">
                           <textarea
                             value={commentText[order.id] || ''}
@@ -762,7 +779,7 @@ export default function TechnicianDashboard() {
                             rows={2}
                           />
                         </div>
-                        <button className="btn btn-primary" disabled={pendingIds.has(`comment:${order.id}`)} onClick={() => handleSubmitComment(order.id, order.status)}>
+                        <button className="btn btn-primary" disabled={pendingIds.has(`comment:${order.id}`)} onClick={() => handleSubmitComment(order.id)}>
                           Guardar comentario
                         </button>
                       </div>
