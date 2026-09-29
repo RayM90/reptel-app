@@ -20,6 +20,19 @@ export const computeRepairMinimum = (base: number, partsCost: number): { percent
   return { percent, amount: round2((base * percent) / 100) }
 }
 
+// ─────────────────────────────────────────────
+// PAUSA POR REPUESTO ADICIONAL (durante la reparación)
+// La reparación se pausa solo si lo confirmado del presupuesto no cubre el
+// costo total de los repuestos activos. No usa el mínimo de arriba: ese rige
+// solo para aprobar (WAITING_APPROVAL → REPAIRING). Los ajustes de
+// presupuesto no suben los repuestos, así que nunca pausan.
+// ─────────────────────────────────────────────
+
+export const computeExtraPartsPending = (partsCost: number, confirmedBudgetPaid: number): { covered: boolean; pending: number } => ({
+  covered: confirmedBudgetPaid + 0.009 >= partsCost,
+  pending: round2(Math.max(0, partsCost - confirmedBudgetPaid)),
+})
+
 export const sumPartsCost = (parts: { quantity: number; unitPriceAtUse: unknown }[]): number =>
   round2(parts.reduce((sum, p) => sum + p.quantity * Number(p.unitPriceAtUse ?? 0), 0))
 
@@ -30,8 +43,11 @@ export interface PaymentSummary {
   remaining: number
   minimumPercent: number
   minimumAmount: number
-  // Lo que falta confirmar del presupuesto para llegar al mínimo.
+  // Lo que falta confirmar del presupuesto para llegar al mínimo — o, con la
+  // orden en pausa por un repuesto adicional, para cubrir los repuestos.
   pendingForMinimum: number
+  // Abonos del presupuesto enviados que el local todavía no revisó.
+  pendingReview: number
 }
 
 export const buildPaymentSummary = (input: {
@@ -39,6 +55,10 @@ export const buildPaymentSummary = (input: {
   revisionAmount: number
   confirmedBudgetPaid: number
   partsCost: number
+  // Abonos BUDGET en PENDING (opcional, 0 por defecto).
+  pendingBudgetPaid?: number
+  // La orden está en WAITING_EXTRA_PAYMENT: el pendiente es el de los repuestos.
+  awaitingExtraPayment?: boolean
 }): PaymentSummary | null => {
   if (input.budget == null) return null
   const budget = Number(input.budget)
@@ -51,6 +71,9 @@ export const buildPaymentSummary = (input: {
     remaining: round2(Math.max(0, budget - paid)),
     minimumPercent: percent,
     minimumAmount: amount,
-    pendingForMinimum: round2(Math.max(0, amount - input.confirmedBudgetPaid)),
+    pendingForMinimum: input.awaitingExtraPayment
+      ? computeExtraPartsPending(input.partsCost, input.confirmedBudgetPaid).pending
+      : round2(Math.max(0, amount - input.confirmedBudgetPaid)),
+    pendingReview: round2(input.pendingBudgetPaid ?? 0),
   }
 }

@@ -189,8 +189,16 @@ describe('mínimo dinámico por repuestos', () => {
     const orders = await getOrdersByClient(client.id)
     const found = orders.find((o) => o.id === order.id)!
     expect(found.paymentSummary).toEqual({
-      budget: 115, paid: 15, remaining: 100, minimumPercent: 70, minimumAmount: 70, pendingForMinimum: 70,
+      budget: 115, paid: 15, remaining: 100, minimumPercent: 70, minimumAmount: 70, pendingForMinimum: 70, pendingReview: 0,
     })
+  })
+
+  it('paymentSummary.pendingReview suma los abonos del presupuesto todavía sin revisar', async () => {
+    const order = await makeOrder({ budget: 115, revisionAmount: 15 })
+    await submitBudgetPaymentInstallment(order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: 'REV1' }, 20)
+    const found = (await getOrdersByClient(client.id)).find((o) => o.id === order.id)!
+    expect(found.paymentSummary?.pendingReview).toBe(20)
+    expect(found.paymentSummary?.paid).toBe(15)
   })
 
   it('acepta abonos de presupuesto en WAITING_EXTRA_PAYMENT', async () => {

@@ -111,6 +111,8 @@ router.post('/:id/mark-delivered', authenticate, authorize('ADMIN'), ordersContr
 router.post('/:id/mark-picked-up-unrepaired', authenticate, authorize('ADMIN'), ordersController.markPickedUpUnrepaired)
 // ADMIN registra que el cliente no acepta el presupuesto (mostrador / aviso por teléfono)
 router.post('/:id/admin-reject-budget', authenticate, authorize('ADMIN'), ordersController.rejectBudgetByAdmin)
+// ADMIN registra que el cliente de mostrador rechaza el repuesto adicional
+router.post('/:id/admin-reject-extra-part', authenticate, authorize('ADMIN'), ordersController.rejectExtraPartByAdmin)
 
 // Repuestos de inventario usados en la orden — solo el técnico asignado
 // (la validación fina "es tu orden" vive dentro del service)

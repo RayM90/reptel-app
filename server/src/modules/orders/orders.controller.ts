@@ -747,6 +747,23 @@ export const rejectBudgetByAdmin = async (req: AuthRequest, res: Response): Prom
   }
 }
 
+// ADMIN — Registrar que el cliente rechaza el repuesto adicional (mostrador)
+export const rejectExtraPartByAdmin = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+    const order = await ordersService.rejectExtraPartByAdmin(String(req.params.id), email)
+    broadcastOrderUpdate({ type: 'ORDER_STATUS_UPDATED', data: order })
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR RECHAZAR REPUESTO ADICIONAL (ADMIN):', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al rechazar el repuesto adicional' })
+  }
+}
+
 export const confirmZeroBudgetDiagnosis = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const email = req.user?.email

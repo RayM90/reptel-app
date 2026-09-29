@@ -2,7 +2,7 @@ import { Prisma, type Order } from '@prisma/client'
 import prisma, { type ExtendedTransactionClient } from '../../lib/prisma'
 import { InsufficientStockError } from '../products/products.service'
 import { flattenClientAddresses } from '../../lib/clientAddress'
-import { computeRepairMinimum, sumPartsCost, buildPaymentSummary } from './repairMinimum'
+import { computeRepairMinimum, computeExtraPartsPending, sumPartsCost, buildPaymentSummary } from './repairMinimum'
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -171,12 +171,13 @@ const ACTIVE_PARTS_WHERE = {
   lossReportedAt: null,
 } satisfies Prisma.InventoryMovementWhereInput
 
-const confirmedBudgetPaid = (subs: { kind: string; status: string; amount: unknown }[]) =>
-  subs.filter((s) => s.kind === 'BUDGET' && s.status === 'CONFIRMED').reduce((sum, s) => sum + Number(s.amount), 0)
+const budgetPaidWithStatus = (subs: { kind: string; status: string; amount: unknown }[], status: string) =>
+  subs.filter((s) => s.kind === 'BUDGET' && s.status === status).reduce((sum, s) => sum + Number(s.amount), 0)
 
 // Resumen "Presupuesto · Pagado · Te falta" + mínimo para reparar — se
 // calcula acá para que la app y el panel no repitan la regla.
 const paymentSummaryFor = (order: {
+  status: string
   budget: unknown
   revisionAmount: unknown
   advancePaymentSubmissions: { kind: string; status: string; amount: unknown }[]
@@ -185,8 +186,10 @@ const paymentSummaryFor = (order: {
   buildPaymentSummary({
     budget: order.budget,
     revisionAmount: Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT),
-    confirmedBudgetPaid: confirmedBudgetPaid(order.advancePaymentSubmissions),
+    confirmedBudgetPaid: budgetPaidWithStatus(order.advancePaymentSubmissions, 'CONFIRMED'),
+    pendingBudgetPaid: budgetPaidWithStatus(order.advancePaymentSubmissions, 'PENDING'),
     partsCost: sumPartsCost(order.inventoryMovements),
+    awaitingExtraPayment: order.status === 'WAITING_EXTRA_PAYMENT',
   })
 
 export const getAllOrders = async () => {
@@ -1072,7 +1075,7 @@ export const startReview = async (orderId: string, actorEmail: string) => {
   // updateMany condicionado al estado: si otra request movió la orden entre
   // la lectura y acá, count da 0 y no se escribe nada.
   const { count } = await prisma.order.updateMany({
-    where: { id: orderId, status: { in: ['ON_THE_WAY', 'RECEIVED'] } },
+    where: { id: orderId, technicianId: actor.id, status: { in: ['ON_THE_WAY', 'RECEIVED'] } },
     data: { status: 'DIAGNOSING', version: { increment: 1 } },
   })
   if (count === 0) {
@@ -1790,10 +1793,11 @@ export const getOrdersByTechnician = async (technicianId: string) => {
   return orders.map(withClientAddress)
 }
 // ─────────────────────────────────────────────
-// COBERTURA DEL MÍNIMO PARA REPARAR
-// Si el técnico agrega un repuesto durante la reparación, el mínimo sube
-// (repairMinimum.ts). Si lo ya confirmado no lo cubre, la orden espera el
-// pago de la diferencia (WAITING_EXTRA_PAYMENT) antes de seguir.
+// COBERTURA DE LOS REPUESTOS DURANTE LA REPARACIÓN
+// Si el técnico agrega un repuesto y lo confirmado del presupuesto ya no
+// cubre el costo total de los repuestos activos, la orden espera el pago de
+// la diferencia (WAITING_EXTRA_PAYMENT) antes de seguir. El mínimo de
+// computeRepairMinimum rige solo para aprobar, no para esta pausa.
 // ─────────────────────────────────────────────
 
 const getRepairCoverage = async (tx: ExtendedTransactionClient, orderId: string) => {
@@ -1804,13 +1808,11 @@ const getRepairCoverage = async (tx: ExtendedTransactionClient, orderId: string)
       inventoryMovements: { where: ACTIVE_PARTS_WHERE },
     },
   })
-  const base = Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
-  const { amount } = computeRepairMinimum(base, sumPartsCost(order.inventoryMovements))
   const confirmed = order.advancePaymentSubmissions.reduce((sum, s) => sum + Number(s.amount), 0)
-  return { order, covered: confirmed + 0.009 >= amount, pending: Math.max(0, amount - confirmed) }
+  return { order, ...computeExtraPartsPending(sumPartsCost(order.inventoryMovements), confirmed) }
 }
 
-// Si la orden estaba en pausa y lo confirmado ya cubre el mínimo (porque
+// Si la orden estaba en pausa y lo confirmado ya cubre los repuestos (porque
 // el cliente pagó, o porque se quitó el repuesto), vuelve a REPAIRING.
 const settleExtraPaymentIfCovered = async (
   tx: ExtendedTransactionClient,
@@ -1896,7 +1898,7 @@ export const useProductInOrder = async (
     })
 
     // Repuesto agregado con la reparación ya autorizada: si lo confirmado
-    // no cubre el nuevo mínimo, la reparación se pausa hasta que el cliente
+    // no cubre el total de repuestos, la reparación se pausa hasta que el cliente
     // pague la diferencia (o rechace el repuesto — rejectExtraPart).
     if (updatedOrder.status === 'REPAIRING' || updatedOrder.status === 'WAITING_EXTRA_PAYMENT') {
       const coverage = await getRepairCoverage(tx, orderId)
@@ -1982,7 +1984,7 @@ export const revertProductUsage = async (movementId: string, actorEmail: string)
       },
     })
 
-    await settleExtraPaymentIfCovered(tx, movement.orderId!, 'Repuesto adicional retirado — el técnico continúa la reparación', actor.id)
+    await settleExtraPaymentIfCovered(tx, movement.orderId!, 'Presupuesto actualizado — el técnico continúa la reparación', actor.id)
     const finalOrder = await tx.order.findUniqueOrThrow({ where: { id: movement.orderId! } })
     return { movement: updatedMovement, order: finalOrder }
   })
@@ -2041,7 +2043,7 @@ export const reportPartLoss = async (movementId: string, actorEmail: string, des
       },
     })
 
-    await settleExtraPaymentIfCovered(tx, movement.orderId!, 'Repuesto adicional retirado — el técnico continúa la reparación', actor.id)
+    await settleExtraPaymentIfCovered(tx, movement.orderId!, 'Presupuesto actualizado — el técnico continúa la reparación', actor.id)
     const finalOrder = await tx.order.findUniqueOrThrow({ where: { id: movement.orderId! } })
     return { movement: updatedMovement, order: finalOrder }
   })
@@ -2057,14 +2059,53 @@ export const rejectExtraPart = async (orderId: string, email: string) => {
 
   const order = await prisma.order.findFirst({ where: { id: orderId, clientId: user.clientId } })
   if (!order) throw new Error('Orden no encontrada')
+
+  return applyExtraPartRejection(
+    order,
+    user.id,
+    (names) =>
+      `El cliente rechazó el repuesto adicional ${names}. La reparación continúa sin él, bajo responsabilidad del cliente; lo ya pagado no se devuelve.`
+  )
+}
+
+// ADMIN registra el rechazo del repuesto en nombre del cliente — solo en
+// órdenes de mostrador (las de la app las decide el cliente desde la app).
+export const rejectExtraPartByAdmin = async (orderId: string, actorEmail: string) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const order = await prisma.order.findUnique({ where: { id: orderId } })
+  if (!order) throw new Error('Orden no encontrada')
+  assertCounterOrder(order)
+
+  // Texto más corto que el del cliente: el comentario del historial es
+  // VARCHAR(191) y el prefijo "Rechazo registrado por el administrador" no
+  // dejaba lugar para el nombre del repuesto.
+  return applyExtraPartRejection(
+    order,
+    actor.id,
+    (names) =>
+      `Rechazo registrado por el administrador: el cliente rechazó el repuesto ${names}. La reparación sigue sin él, bajo su responsabilidad; lo ya pagado no se devuelve.`
+  )
+}
+
+// Tope de orderStatusHistory.comment (String → VARCHAR(191) en MySQL).
+const HISTORY_COMMENT_MAX = 191
+
+const applyExtraPartRejection = async (
+  order: Order,
+  actorUserId: string,
+  buildComment: (names: string) => string
+) => {
+  const orderId = order.id
   if (order.status !== 'WAITING_EXTRA_PAYMENT') {
     throw new Error('Esta acción solo aplica a órdenes esperando el pago de un repuesto adicional')
   }
 
   return await prisma.$transaction(async (tx) => {
     // Reclama la orden con optimistic locking: si otro proceso (confirmación
-    // de pago, otro rejectExtraPart) ya la movió de WAITING_EXTRA_PAYMENT o
-    // le cambió la versión mientras leíamos afuera de la transacción, esto
+    // de pago, otro rechazo) ya la movió de WAITING_EXTRA_PAYMENT o le
+    // cambió la versión mientras leíamos afuera de la transacción, esto
     // no actualiza nada y abortamos en vez de seguir con datos obsoletos.
     const claim = await tx.order.updateMany({
       where: { id: orderId, status: 'WAITING_EXTRA_PAYMENT', version: order.version },
@@ -2087,7 +2128,7 @@ export const rejectExtraPart = async (orderId: string, email: string) => {
       // findMany de arriba y este punto, count será 0 y no se toca el stock.
       const reverted = await tx.inventoryMovement.updateMany({
         where: { id: m.id, reversedAt: null, lossReportedAt: null },
-        data: { reversedAt: new Date(), reversedByUserId: user.id, awaitingClientPayment: false },
+        data: { reversedAt: new Date(), reversedByUserId: actorUserId, awaitingClientPayment: false },
       })
       if (reverted.count === 0) continue
       await tx.product.update({ where: { id: m.productId }, data: { stock: { increment: m.quantity } } })
@@ -2099,6 +2140,14 @@ export const rejectExtraPart = async (orderId: string, email: string) => {
       throw new Error('No hay ningún repuesto adicional pendiente de rechazar — puede que ya se haya revertido o pagado')
     }
 
+    // Nombres largos no entran en el comentario: se reemplazan por la
+    // cantidad (cada repuesto ya quedó con su nombre en "Repuesto usado: …").
+    const listed = buildComment(names.join(', '))
+    const comment =
+      listed.length <= HISTORY_COMMENT_MAX
+        ? listed
+        : buildComment(names.length === 1 ? '(1 repuesto)' : `(${names.length} repuestos)`)
+
     return tx.order.update({
       where: { id: orderId },
       data: {
@@ -2109,8 +2158,8 @@ export const rejectExtraPart = async (orderId: string, email: string) => {
         statusHistory: {
           create: {
             status: 'REPAIRING',
-            comment: `El cliente rechazó el repuesto adicional ${names.join(', ')}. La reparación continúa sin él, bajo responsabilidad del cliente; lo ya pagado no se devuelve.`,
-            userId: user.id,
+            comment,
+            userId: actorUserId,
           },
         },
       },
