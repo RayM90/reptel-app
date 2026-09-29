@@ -1939,6 +1939,19 @@ export const revertProductUsage = async (movementId: string, actorEmail: string)
   }
 
   return await prisma.$transaction(async (tx) => {
+    // Guardia contra doble reversión concurrente (ej. este mismo endpoint
+    // llamado dos veces, o en carrera con rejectExtraPart sobre el mismo
+    // movimiento): reclama el movimiento con reversedAt: null ANTES de tocar
+    // stock/presupuesto. Si otro proceso ya lo revirtió, count es 0 y no se
+    // duplica el ajuste.
+    const claim = await tx.inventoryMovement.updateMany({
+      where: { id: movementId, reversedAt: null },
+      data: { reversedAt: new Date(), reversedByUserId: actor.id, awaitingClientPayment: false },
+    })
+    if (claim.count === 0) {
+      throw new Error('Este repuesto ya fue revertido')
+    }
+
     const product = await tx.product.update({
       where: { id: movement.productId },
       data: { stock: { increment: movement.quantity } },
@@ -1950,10 +1963,7 @@ export const revertProductUsage = async (movementId: string, actorEmail: string)
       data: { budget: { decrement: revertedCost } },
     })
 
-    const updatedMovement = await tx.inventoryMovement.update({
-      where: { id: movementId },
-      data: { reversedAt: new Date(), reversedByUserId: actor.id, awaitingClientPayment: false },
-    })
+    const updatedMovement = await tx.inventoryMovement.findUniqueOrThrow({ where: { id: movementId } })
 
     // Contraparte del registro de useProductInOrder (Finding H): quitar un
     // repuesto baja el presupuesto y también debe quedar asentado.
@@ -2046,32 +2056,54 @@ export const rejectExtraPart = async (orderId: string, email: string) => {
   }
 
   return await prisma.$transaction(async (tx) => {
+    // Reclama la orden con optimistic locking: si otro proceso (confirmación
+    // de pago, otro rejectExtraPart) ya la movió de WAITING_EXTRA_PAYMENT o
+    // le cambió la versión mientras leíamos afuera de la transacción, esto
+    // no actualiza nada y abortamos en vez de seguir con datos obsoletos.
+    const claim = await tx.order.updateMany({
+      where: { id: orderId, status: 'WAITING_EXTRA_PAYMENT', version: order.version },
+      data: { version: { increment: 1 } },
+    })
+    if (claim.count === 0) {
+      throw new Error('La orden cambió mientras se procesaba — recarga e intenta de nuevo')
+    }
+
     const pending = await tx.inventoryMovement.findMany({
       where: { orderId, awaitingClientPayment: true, reversedAt: null, lossReportedAt: null },
       include: { product: { select: { name: true } } },
     })
 
     let revertedCost = 0
+    const names: string[] = []
     for (const m of pending) {
-      await tx.product.update({ where: { id: m.productId }, data: { stock: { increment: m.quantity } } })
-      await tx.inventoryMovement.update({
-        where: { id: m.id },
+      // updateMany con guardia reversedAt: null — si el técnico ya revirtió
+      // este mismo movimiento por su cuenta (revertProductUsage) entre el
+      // findMany de arriba y este punto, count será 0 y no se toca el stock.
+      const reverted = await tx.inventoryMovement.updateMany({
+        where: { id: m.id, reversedAt: null, lossReportedAt: null },
         data: { reversedAt: new Date(), reversedByUserId: user.id, awaitingClientPayment: false },
       })
+      if (reverted.count === 0) continue
+      await tx.product.update({ where: { id: m.productId }, data: { stock: { increment: m.quantity } } })
       revertedCost += Number(m.unitPriceAtUse ?? 0) * m.quantity
+      names.push(`${m.product.name} (x${m.quantity})`)
     }
 
-    const names = pending.map((m) => `${m.product.name} (x${m.quantity})`).join(', ')
+    if (names.length === 0) {
+      throw new Error('No hay ningún repuesto adicional pendiente de rechazar — puede que ya se haya revertido o pagado')
+    }
+
     return tx.order.update({
       where: { id: orderId },
       data: {
         budget: { decrement: revertedCost },
         status: 'REPAIRING',
-        version: { increment: 1 },
+        // La versión ya se incrementó al reclamar la orden arriba — un solo
+        // incremento total por llamada.
         statusHistory: {
           create: {
             status: 'REPAIRING',
-            comment: `El cliente rechazó el repuesto adicional ${names}. La reparación continúa sin él, bajo responsabilidad del cliente; lo ya pagado no se devuelve.`,
+            comment: `El cliente rechazó el repuesto adicional ${names.join(', ')}. La reparación continúa sin él, bajo responsabilidad del cliente; lo ya pagado no se devuelve.`,
             userId: user.id,
           },
         },

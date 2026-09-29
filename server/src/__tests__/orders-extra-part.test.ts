@@ -116,4 +116,47 @@ describe('repuesto adicional durante la reparación', () => {
     const order = await makeRepairingOrder()
     await expect(rejectExtraPart(order.id, clientUser.email)).rejects.toThrow(/repuesto adicional/)
   })
+
+  it('rejectExtraPart tras que el técnico ya revirtió el repuesto: la orden ya está en REPAIRING y no toca el stock', async () => {
+    const order = await makeRepairingOrder()
+    const used = await useProductInOrder(order.id, product.id, 1, technician.email)
+    const reverted = await revertProductUsage(used.movement.id, technician.email)
+    expect(reverted.order.status).toBe('REPAIRING')
+    const stockAfterRevert = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock
+
+    await expect(rejectExtraPart(order.id, clientUser.email)).rejects.toThrow(/repuesto adicional/)
+    const stockFinal = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock
+    expect(stockFinal).toBe(stockAfterRevert)
+  })
+
+  it('rejectExtraPart llamado dos veces: la segunda no vuelve a tocar stock ni presupuesto', async () => {
+    const order = await makeRepairingOrder()
+    await useProductInOrder(order.id, product.id, 1, technician.email)
+    const stockAfterUse = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock
+
+    const first = await rejectExtraPart(order.id, clientUser.email)
+    expect(first.status).toBe('REPAIRING')
+    expect(Number(first.budget)).toBe(115)
+    const stockAfterFirst = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock
+    expect(stockAfterFirst).toBe(stockAfterUse + 1)
+
+    await expect(rejectExtraPart(order.id, clientUser.email)).rejects.toThrow(/repuesto adicional/)
+    const stockAfterSecond = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock
+    expect(stockAfterSecond).toBe(stockAfterFirst)
+  })
+
+  it('revertProductUsage llamado dos veces sobre el mismo movimiento: la segunda falla y no duplica el stock', async () => {
+    const order = await makeRepairingOrder()
+    const used = await useProductInOrder(order.id, product.id, 1, technician.email)
+    const stockAfterUse = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock
+
+    const first = await revertProductUsage(used.movement.id, technician.email)
+    expect(first.order.status).toBe('REPAIRING')
+    const stockAfterFirst = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock
+    expect(stockAfterFirst).toBe(stockAfterUse + 1)
+
+    await expect(revertProductUsage(used.movement.id, technician.email)).rejects.toThrow(/ya fue revertido/)
+    const stockAfterSecond = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock
+    expect(stockAfterSecond).toBe(stockAfterFirst)
+  })
 })
