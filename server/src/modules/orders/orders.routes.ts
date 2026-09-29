@@ -36,6 +36,9 @@ router.post('/:id/counter-budget-payment-installment', authenticate, authorize('
 // Rechazar el presupuesto tras el diagnóstico del técnico
 router.post('/:id/reject-budget', authenticate, authorize('CLIENT'), ordersController.rejectBudget)
 
+// Rechazar el repuesto adicional que el técnico agregó durante la reparación
+router.post('/:id/reject-extra-part', authenticate, authorize('CLIENT'), ordersController.rejectExtraPartHandler)
+
 // Confirmar o disputar un diagnóstico sin costo
 router.post('/:id/confirm-zero-budget-diagnosis', authenticate, authorize('CLIENT'), ordersController.confirmZeroBudgetDiagnosis)
 router.post('/:id/dispute-zero-budget-diagnosis', authenticate, authorize('CLIENT'), ordersController.disputeZeroBudgetDiagnosis)

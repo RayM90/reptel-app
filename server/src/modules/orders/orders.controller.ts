@@ -1061,3 +1061,23 @@ export const finishRepairHandler = async (req: AuthRequest, res: Response): Prom
     res.status(400).json({ success: false, message: error.message || 'Error al terminar la reparación' })
   }
 }
+
+// ─────────────────────────────────────────────
+// CLIENTE — Rechazar el repuesto adicional agregado durante la reparación
+// ─────────────────────────────────────────────
+
+export const rejectExtraPartHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+    const order = await ordersService.rejectExtraPart(String(req.params.id), email)
+    broadcastOrderUpdate({ type: 'ORDER_STATUS_UPDATED', data: order })
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    console.error('ERROR RECHAZAR REPUESTO ADICIONAL:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al rechazar el repuesto adicional' })
+  }
+}
