@@ -582,6 +582,12 @@ export const submitAdvancePaymentInstallment = async (
     throw new Error('Orden no encontrada')
   }
 
+  // Orden de mostrador (sin delivery): la revisión se cobra en el local y la
+  // registra el personal (submitCounterAdvanceInstallment), no el cliente.
+  if (order.deliveryAmount == null) {
+    throw new Error('Las órdenes de mostrador se pagan en el local')
+  }
+
   if (amount == null || amount <= 0) {
     throw new Error('El monto del pago debe ser mayor a cero')
   }

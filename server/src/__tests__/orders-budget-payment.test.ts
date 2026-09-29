@@ -6,7 +6,7 @@ let client: { id: string }
 let clientUser: { id: string; email: string }
 let device: { id: string }
 
-const makeOrder = async (overrides: Partial<{ status: string; budget: number; revisionAmount: number }> = {}) => {
+const makeOrder = async (overrides: Partial<{ status: string; budget: number; revisionAmount: number; deliveryAmount: number }> = {}) => {
   return prisma.order.create({
     data: {
       orderNumber: `REP-TEST-BP-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
@@ -14,6 +14,7 @@ const makeOrder = async (overrides: Partial<{ status: string; budget: number; re
       problem: 'Formateo + respaldo — test anticipo de presupuesto',
       budget: overrides.budget ?? 30,
       revisionAmount: overrides.revisionAmount ?? 15,
+      deliveryAmount: overrides.deliveryAmount,
       clientId: client.id,
       deviceId: device.id,
     },
@@ -42,11 +43,20 @@ afterAll(async () => {
 
 describe('orders.service — submitAdvancePaymentInstallment marca kind REVISION', () => {
   it('el abono de revisión queda con kind REVISION', async () => {
-    const order = await makeOrder({ status: 'RECEIVED', budget: undefined as any })
+    const order = await makeOrder({ status: 'RECEIVED', budget: undefined as any, deliveryAmount: 10 })
     const submission = await submitAdvancePaymentInstallment(
       order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '9999' }, 15
     )
     expect(submission.kind).toBe('REVISION')
+  })
+
+  it('una orden de mostrador (sin delivery) no acepta abonos de revisión desde la app', async () => {
+    const order = await makeOrder({ status: 'PENDING_PAYMENT', budget: undefined as any })
+    await expect(
+      submitAdvancePaymentInstallment(
+        order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: '9998' }, 15
+      )
+    ).rejects.toThrow('Las órdenes de mostrador se pagan en el local')
   })
 })
 

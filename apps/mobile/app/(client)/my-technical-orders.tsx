@@ -444,8 +444,12 @@ export default function MyTechnicalOrdersScreen() {
 
                       {/* Anticipo — solo mientras está pendiente de completarse */}
                       {status === 'PENDING_PAYMENT' && (() => {
-                        const total =
-                          Number(order.deliveryAmount ?? 10) + Number(order.revisionAmount ?? 15)
+                        // Orden de mostrador (sin delivery): solo se cobra la
+                        // revisión, y se paga en el local — no desde la app.
+                        const isCounterOrder = order.deliveryAmount == null
+                        const total = isCounterOrder
+                          ? Number(order.revisionAmount ?? 15)
+                          : Number(order.deliveryAmount) + Number(order.revisionAmount ?? 15)
                         const submissions = order.advancePaymentSubmissions ?? []
                         // "contado" cuenta PENDING + CONFIRMED — se usa para el restante,
                         // así el cliente nunca puede enviar de más aunque haya abonos sin
@@ -475,7 +479,11 @@ export default function MyTechnicalOrdersScreen() {
                                 ))}
                               </View>
                             )}
-                            {restante > 0.009 && (
+                            {isCounterOrder ? (
+                              <Text style={styles.advanceSubmissionRow}>
+                                El pago de la revisión se registra en el local.
+                              </Text>
+                            ) : restante > 0.009 && (
                               <TouchableOpacity
                                 style={styles.advanceBtn}
                                 onPress={(e) => {
