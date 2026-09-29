@@ -126,10 +126,28 @@ describe('Auth — POST /api/auth/staff', () => {
         lastName: 'Nuevo',
         idNumber: existingIdNumber,
         role: 'TECHNICIAN',
+        phone: '04121234567',
       })
 
     expect(res.status).toBe(400)
     expect(res.body.message).toMatch(/cédula/i)
+  })
+
+  it('retorna 400 si falta el teléfono (sin llegar a Cognito)', async () => {
+    const res = await request(app)
+      .post('/api/auth/staff')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        email: 'sin-telefono@reptel.com',
+        password: 'Passw0rd!',
+        name: 'Sin',
+        lastName: 'Telefono',
+        idNumber: `V-${String(Date.now()).slice(-7)}`,
+        role: 'TECHNICIAN',
+      })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/teléfono es obligatorio/)
   })
 })
 
