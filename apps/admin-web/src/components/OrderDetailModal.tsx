@@ -428,6 +428,7 @@ interface OrderDetailModalProps {
   onApproveFinalPayment: (order: Order) => void
   onRejectFinalPayment: (order: Order) => void
   onRejectBudget: (order: Order) => void
+  onRejectExtraPart: (order: Order) => void
   onCloseZeroBudgetOrder: (order: Order) => void
   onMarkDelivered: (order: Order) => void
   onMarkPickedUpUnrepaired: (order: Order) => void
@@ -456,6 +457,7 @@ export default function OrderDetailModal({
   onApproveFinalPayment,
   onRejectFinalPayment,
   onRejectBudget,
+  onRejectExtraPart,
   onCloseZeroBudgetOrder,
   onMarkDelivered,
   onMarkPickedUpUnrepaired,
@@ -667,7 +669,7 @@ export default function OrderDetailModal({
 
           {showBudgetAdvanceSection && (
             <>
-              <h4 style={{ marginTop: 16 }}>Anticipo de presupuesto (mínimo 50%)</h4>
+              <h4 style={{ marginTop: 16 }}>Anticipo de presupuesto (mínimo {order.paymentSummary?.minimumPercent ?? 50}%)</h4>
               <PaymentSubmissionsView
                 submissions={(order.advancePaymentSubmissions ?? []).filter((s) => s.kind === 'BUDGET')}
                 total={String(Number(order.budget ?? 0) - Number(order.revisionAmount ?? 15))}
@@ -691,10 +693,17 @@ export default function OrderDetailModal({
               )}
             </>
           )}
-          {canRegisterCounterBudgetPayment && (
+          {canRegisterCounterBudgetPayment && order.status === 'WAITING_APPROVAL' && (
             <p style={{ marginTop: 16 }}>
               <button className="btn btn-danger" disabled={pendingIds.has(order.id)} onClick={() => onRejectBudget(order)}>
                 Cliente no acepta el presupuesto
+              </button>
+            </p>
+          )}
+          {!isAppOrder && order.status === 'WAITING_EXTRA_PAYMENT' && (
+            <p style={{ marginTop: 16 }}>
+              <button className="btn btn-danger" disabled={pendingIds.has(order.id)} onClick={() => onRejectExtraPart(order)}>
+                Cliente rechaza el repuesto
               </button>
             </p>
           )}

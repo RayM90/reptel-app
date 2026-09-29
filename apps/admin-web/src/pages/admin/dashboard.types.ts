@@ -36,6 +36,8 @@ export interface Order {
     minimumPercent: number
     minimumAmount: number
     pendingForMinimum: number
+    // Abonos del presupuesto enviados que todavía no se revisaron.
+    pendingReview: number
   } | null
 }
 
@@ -56,9 +58,10 @@ export interface StatusHistoryEntry {
   createdAt: string
 }
 
-// Self-service + delivery: RECEIVED solo significa "pago confirmado", no que el
-// técnico ya fue a buscar el equipo. Hasta que haya diagnóstico, el recibo de
-// intake se etiqueta como "anticipo" en vez de "recepción".
+// Self-service + delivery: con el pago confirmado la orden pasa a ON_THE_WAY
+// (el técnico va a buscar el equipo), no a RECEIVED. Hasta que haya
+// diagnóstico, el recibo de intake se etiqueta como "anticipo" en vez de
+// "recepción".
 export const isIntakePendingPickup = (order: Order) => order.deliveryAmount != null && !order.diagnosis
 
 // Construye la dirección completa del cliente a partir de los campos

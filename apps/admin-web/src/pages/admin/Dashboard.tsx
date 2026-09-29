@@ -274,6 +274,27 @@ export default function Dashboard() {
     }
   }
 
+  // ── Cliente de mostrador rechaza el repuesto adicional (lo registra el admin) ──
+  const handleRejectExtraPart = async (order: Order) => {
+    if (pendingIds.has(order.id)) return
+    const confirmed = await confirmDialog({
+      title: 'Cliente rechaza el repuesto',
+      message: 'Si el cliente rechaza el repuesto, la reparación puede no quedar al 100% y es su responsabilidad. Lo que ya pagó no se devuelve. ¿Confirmas?',
+      confirmLabel: 'Rechazar repuesto',
+    })
+    if (!confirmed) return
+    setBusy(order.id, true)
+    try {
+      await api.post(`/api/orders/${order.id}/admin-reject-extra-part`)
+      showToast('✅ Repuesto rechazado — el técnico continúa la reparación.', 'success')
+      fetchData()
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || '❌ Error al rechazar el repuesto', 'error')
+    } finally {
+      setBusy(order.id, false)
+    }
+  }
+
   // ── Marcar retiro sin reparar (presupuesto rechazado) ──
   const handleMarkPickedUpUnrepaired = async (order: Order) => {
     if (pendingIds.has(order.id)) return
@@ -477,6 +498,7 @@ export default function Dashboard() {
           onApproveFinalPayment={handleApproveFinalPayment}
           onRejectFinalPayment={handleRejectFinalPayment}
           onRejectBudget={handleRejectBudget}
+          onRejectExtraPart={handleRejectExtraPart}
           onCloseZeroBudgetOrder={handleCloseZeroBudgetOrder}
           onMarkDelivered={handleMarkDelivered}
           onMarkPickedUpUnrepaired={handleMarkPickedUpUnrepaired}
