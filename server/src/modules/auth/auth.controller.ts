@@ -273,7 +273,14 @@ export const createStaff = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    if (phone && !isValidVenezuelanPhone(phone)) {
+    // El cliente ve este teléfono en la tarjeta del técnico asignado para
+    // coordinar el retiro del equipo — sin él no hay cómo contactarlo.
+    if (!phone) {
+      res.status(400).json({ message: 'El teléfono es obligatorio — el cliente lo usa para comunicarse con el técnico' });
+      return;
+    }
+
+    if (!isValidVenezuelanPhone(phone)) {
       res.status(400).json({ message: 'El teléfono debe ser un número venezolano válido (04XX + 7 dígitos)' });
       return;
     }

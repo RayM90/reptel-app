@@ -66,6 +66,10 @@ export default function CreateStaff() {
     e.preventDefault()
     setError('')
     setSuccess('')
+    if (!phone) {
+      setError('El teléfono es obligatorio — el cliente lo usa para comunicarse con el técnico')
+      return
+    }
     setLoading(true)
     try {
       await api.post('/api/auth/staff', { email, password, name, lastName, idNumber, role, phone })
@@ -128,7 +132,7 @@ export default function CreateStaff() {
             />
           </div>
           <div className="form-group">
-            <label>Teléfono (opcional)</label>
+            <label>Teléfono</label>
             <PhoneInput value={phone} onChange={setPhone} />
           </div>
           <div className="form-group">
