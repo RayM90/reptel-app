@@ -159,8 +159,8 @@ export const getAuditReport = async ({ from, to, status, channel, technicianId, 
 }
 
 const ACTIVE_ORDER_STATUSES = new Set([
-  'PENDING_PAYMENT', 'RECEIVED', 'DIAGNOSING', 'WAITING_APPROVAL',
-  'APPROVED', 'REPAIRING', 'WAITING_PART', 'READY', 'PAID_PENDING_DELIVERY',
+  'PENDING_PAYMENT', 'RECEIVED', 'ON_THE_WAY', 'DIAGNOSING', 'WAITING_APPROVAL',
+  'APPROVED', 'REPAIRING', 'WAITING_EXTRA_PAYMENT', 'READY', 'PAID_PENDING_DELIVERY',
 ])
 
 // Con presupuesto rechazado solo se cobró la revisión (+ delivery si vino

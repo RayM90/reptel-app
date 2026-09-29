@@ -309,7 +309,7 @@ describe('reports.service — getAuditReport', () => {
     const order = await prisma.order.create({
       data: {
         orderNumber: `REP-AUDIT-${suffix}`,
-        status: 'WAITING_PART',
+        status: 'WAITING_EXTRA_PAYMENT',
         problem: 'Test audit',
         clientId: client.id,
         deviceId: dev.id,
@@ -322,7 +322,7 @@ describe('reports.service — getAuditReport', () => {
       expect(all.some((o) => o.orderId === order.id)).toBe(true)
 
       const filtered = await getAuditReport({
-        from: RANGE_FROM, to: RANGE_TO, status: 'WAITING_PART', clientId: client.id,
+        from: RANGE_FROM, to: RANGE_TO, status: 'WAITING_EXTRA_PAYMENT', clientId: client.id,
       })
       expect(filtered).toHaveLength(1)
       expect(filtered[0].clientIdNumber).toBe(client.idNumber)

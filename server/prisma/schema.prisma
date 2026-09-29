@@ -35,11 +35,12 @@ enum DeviceType {
 enum OrderStatus {
   PENDING_PAYMENT
   RECEIVED
+  ON_THE_WAY
   DIAGNOSING
   WAITING_APPROVAL
   APPROVED
   REPAIRING
-  WAITING_PART
+  WAITING_EXTRA_PAYMENT
   READY
   PAID_PENDING_DELIVERY
   REJECTED_PENDING_PICKUP
@@ -341,6 +342,11 @@ model InventoryMovement {
   lossReportedAt       DateTime?
   lossDescription      String?   @db.Text
   lossReportedByUserId String?
+
+  // Repuesto agregado durante la reparación que el cliente todavía no pagó:
+  // mientras quede alguno en true, la orden está en WAITING_EXTRA_PAYMENT.
+  // Si el cliente lo rechaza, estos son los que se revierten.
+  awaitingClientPayment Boolean @default(false)
 
   @@map("inventorymovement")
 }
