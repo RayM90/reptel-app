@@ -399,9 +399,31 @@ export const updateStatus = async (req: AuthRequest, res: Response): Promise<voi
     })
 
     res.json({ success: true, data: order })
-  } catch (error) {
+  } catch (error: any) {
     console.error('ERROR UPDATE STATUS:', error)
-    res.status(500).json({ success: false, message: 'Error al actualizar el estado', error: String(error) })
+    res.status(400).json({ success: false, message: error.message || 'Error al actualizar el estado' })
+  }
+}
+
+export const addOrderCommentHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+    const id = String(req.params.id)
+    const entry = await ordersService.addOrderComment(id, email, String(req.body?.comment ?? ''))
+    const order = await ordersService.getOrderById(id)
+    broadcastOrderUpdate({ type: 'ORDER_STATUS_UPDATED', data: order })
+    res.status(201).json({ success: true, data: entry })
+  } catch (error: any) {
+    if (error.message?.includes('Solo el técnico asignado')) {
+      res.status(403).json({ success: false, message: error.message })
+      return
+    }
+    console.error('ERROR AGREGAR COMENTARIO:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al registrar el comentario' })
   }
 }
 

@@ -72,8 +72,10 @@ router.get('/:id/receipt/budget-advance', authenticate, receiptsController.downl
 // Crear una nueva orden (uso interno/admin — no cliente) — ADMIN
 router.post('/', authenticate, authorize('ADMIN'), ordersController.createOrder)
 
-// Actualizar el estado de una orden (incluye comentarios de progreso del técnico)
-router.patch('/:id/status', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.updateStatus)
+// Cancelar una orden — solo ADMIN (los demás cambios de estado tienen su acción propia)
+router.patch('/:id/status', authenticate, authorize('ADMIN'), ordersController.updateStatus)
+// Comentario de progreso sin cambiar el estado — técnico asignado o ADMIN
+router.post('/:id/comments', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.addOrderCommentHandler)
 // Actualizar presupuesto de una orden — ADMIN
 router.patch('/:id/budget', authenticate, authorize('ADMIN'), ordersController.updateBudget)
 

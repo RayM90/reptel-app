@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma'
-import { confirmAdvancePaymentInstallment, startReview, submitDiagnosis } from '../modules/orders/orders.service'
+import { confirmAdvancePaymentInstallment, startReview, submitDiagnosis, updateOrderStatus, addOrderComment } from '../modules/orders/orders.service'
 
 let client: { id: string }
 let device: { id: string }
@@ -84,5 +84,40 @@ describe('submitDiagnosis', () => {
   it('rechaza el diagnóstico si el técnico no marcó que está revisando', async () => {
     const order = await makeOrder({ status: 'ON_THE_WAY', deliveryAmount: 10 })
     await expect(submitDiagnosis(order.id, 'Pantalla', 50)).rejects.toThrow(/mientras el técnico está revisando/)
+  })
+})
+
+describe('updateOrderStatus — solo cancelar', () => {
+  it('rechaza cualquier estado que no sea CANCELLED', async () => {
+    const order = await makeOrder({ status: 'DIAGNOSING', deliveryAmount: 10 })
+    await expect(updateOrderStatus(order.id, 'APPROVED', 'intento')).rejects.toThrow(/solo se puede cancelar/)
+    await expect(updateOrderStatus(order.id, 'REPAIRING', 'intento')).rejects.toThrow(/solo se puede cancelar/)
+  })
+
+  it('permite cancelar', async () => {
+    const order = await makeOrder({ status: 'DIAGNOSING', deliveryAmount: 10 })
+    const updated = await updateOrderStatus(order.id, 'CANCELLED', 'Cliente desistió')
+    expect(updated.status).toBe('CANCELLED')
+  })
+})
+
+describe('addOrderComment', () => {
+  it('guarda el comentario con el estado actual, sin cambiarlo', async () => {
+    const order = await makeOrder({ status: 'REPAIRING', deliveryAmount: 10 })
+    const entry = await addOrderComment(order.id, technician.email, '  Cambiando el flex  ')
+    expect(entry.status).toBe('REPAIRING')
+    expect(entry.comment).toBe('Cambiando el flex')
+    const after = await prisma.order.findUniqueOrThrow({ where: { id: order.id } })
+    expect(after.status).toBe('REPAIRING')
+  })
+
+  it('rechaza a un técnico que no es el asignado', async () => {
+    const order = await makeOrder({ status: 'REPAIRING', deliveryAmount: 10 })
+    await expect(addOrderComment(order.id, otherTechnician.email, 'hola')).rejects.toThrow(/Solo el técnico asignado/)
+  })
+
+  it('rechaza un comentario vacío', async () => {
+    const order = await makeOrder({ status: 'REPAIRING', deliveryAmount: 10 })
+    await expect(addOrderComment(order.id, technician.email, '   ')).rejects.toThrow(/vacío/)
   })
 })

@@ -25,13 +25,13 @@ afterAll(async () => {
 
 describe('bloqueo optimista en Order', () => {
   it('incrementa version en cada actualización exitosa', async () => {
-    const updated = await updateOrderStatus(order.id, 'DIAGNOSING', 'Paso 1')
+    const updated = await updateOrderStatus(order.id, 'CANCELLED', 'Paso 1')
     expect(updated.version).toBe(1)
   })
 
   it('rechaza la actualización si expectedVersion no coincide (edición concurrente)', async () => {
     await expect(
-      updateOrderStatus(order.id, 'WAITING_APPROVAL', 'Paso 2 con version vieja', undefined, undefined, 0)
+      updateOrderStatus(order.id, 'CANCELLED', 'Paso 2 con version vieja', undefined, undefined, 0)
     ).rejects.toThrow(/modificada por otro usuario/)
   })
 })

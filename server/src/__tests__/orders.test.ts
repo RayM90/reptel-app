@@ -209,7 +209,7 @@ describe('Orders — POST /api/orders', () => {
 // ── PATCH /api/orders/:id/status ──────────────────────────────────────────
 describe('Orders — PATCH /api/orders/:id/status', () => {
 
-  it('debe actualizar el estado de la orden', async () => {
+  it('el admin puede cancelar la orden', async () => {
     if (!createdOrderId) {
       console.warn('Saltando: no hay orden creada')
       return
@@ -218,14 +218,21 @@ describe('Orders — PATCH /api/orders/:id/status', () => {
     const res = await request(app)
       .patch(`/api/orders/${createdOrderId}/status`)
       .set('Authorization', `Bearer ${authToken}`)
-      .send({
-        status: 'DIAGNOSING',
-        comment: 'Iniciando diagnóstico - test',
-      })
+      .send({ status: 'CANCELLED', comment: 'Cancelada - test' })
 
     expect(res.status).toBe(200)
-    expect(res.body.success).toBe(true)
-    expect(res.body.data.status).toBe('DIAGNOSING')
+    expect(res.body.data.status).toBe('CANCELLED')
+  }, 10000)
+
+  it('rechaza cualquier otro estado', async () => {
+    if (!createdOrderId) return
+    const res = await request(app)
+      .patch(`/api/orders/${createdOrderId}/status`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ status: 'DIAGNOSING' })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/solo se puede cancelar/)
   }, 10000)
 
 })

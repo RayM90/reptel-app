@@ -857,31 +857,20 @@ export const updateOrderStatus = async (
 
   const current = await prisma.order.findUniqueOrThrow({
     where: { id },
-    select: { version: true, status: true, budgetApproved: true },
+    select: { version: true },
   })
 
   if (expectedVersion !== undefined && current.version !== expectedVersion) {
     throw new Error('La orden fue modificada por otro usuario, recarga e intenta de nuevo')
   }
 
-  // No se puede saltar de WAITING_APPROVAL a REPAIRING por esta vía genérica
-  // sin el anticipo de presupuesto confirmado — eso solo debe ocurrir vía
-  // confirmAdvancePaymentInstallment (kind BUDGET). Otras transiciones hacia
-  // REPAIRING (ej. WAITING_PART -> REPAIRING) siguen permitidas.
-  if (status === 'REPAIRING' && current.status === 'WAITING_APPROVAL' && current.budgetApproved !== true) {
-    throw new Error(
-      'No se puede pasar a REPAIRING sin el anticipo de presupuesto confirmado — use la aprobación del abono de presupuesto'
-    )
-  }
-
-  // Tampoco se puede marcar la entrega por esta vía genérica (Finding G,
-  // revisión final): saltar a DELIVERED acá salteaba el cobro del saldo final
-  // por completo. La única vía legítima es markOrderDelivered, que exige
-  // PAID_PENDING_DELIVERY (es decir, pago final ya confirmado).
-  if (status === 'DELIVERED') {
-    throw new Error(
-      'No se puede marcar como entregada por esta vía — use la acción de entrega, que exige el pago final confirmado'
-    )
+  // Los estados avanzan solo con sus acciones propias (confirmar pago,
+  // "Empecé a revisar", diagnóstico, repuesto adicional, finalizar,
+  // entrega). Esta vía genérica queda para que el admin cancele la orden.
+  // Antes el técnico tenía un menú libre que permitía aprobar sin pago,
+  // retroceder la orden o saltarse el cobro.
+  if (status !== 'CANCELLED') {
+    throw new Error('Por esta vía solo se puede cancelar la orden — los demás cambios de estado salen de sus acciones propias')
   }
 
   const order = await prisma.order.update({
@@ -913,6 +902,26 @@ export const updateOrderStatus = async (
   }
 
   return order
+}
+
+// Comentario de progreso: se registra con el estado en que ya está la orden,
+// sin moverla. Solo el técnico asignado o un admin.
+export const addOrderComment = async (orderId: string, actorEmail: string, comment: string) => {
+  const text = (comment ?? '').trim()
+  if (!text) throw new Error('El comentario no puede estar vacío')
+
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true, role: true } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const order = await prisma.order.findUnique({ where: { id: orderId }, select: { status: true, technicianId: true } })
+  if (!order) throw new Error('Orden no encontrada')
+  if (actor.role !== 'ADMIN' && order.technicianId !== actor.id) {
+    throw new Error('Solo el técnico asignado a esta orden puede comentar')
+  }
+
+  return prisma.orderStatusHistory.create({
+    data: { orderId, status: order.status, comment: text, userId: actor.id },
+  })
 }
 
 // NOTA (revisión final — Finding 1b): este endpoint editaba el presupuesto Y

@@ -42,20 +42,20 @@ afterAll(async () => {
 
 describe('orders.service — actor en OrderStatusHistory', () => {
   it('registra el userId del actor cuando se pasa actorEmail', async () => {
-    await updateOrderStatus(order.id, 'DIAGNOSING', 'Diagnóstico iniciado', undefined, staffUser.email)
+    await updateOrderStatus(order.id, 'CANCELLED', 'Cancelada por cajera', undefined, staffUser.email)
 
     const history = await prisma.orderStatusHistory.findFirst({
-      where: { orderId: order.id, status: 'DIAGNOSING' },
+      where: { orderId: order.id, status: 'CANCELLED' },
       orderBy: { createdAt: 'desc' },
     })
     expect(history?.userId).toBe(staffUser.id)
   })
 
   it('deja userId en null cuando no se pasa actorEmail (compatibilidad con llamadas existentes)', async () => {
-    await updateOrderStatus(order.id, 'WAITING_APPROVAL', 'Sin actor')
+    await updateOrderStatus(order.id, 'CANCELLED', 'Sin actor')
 
     const history = await prisma.orderStatusHistory.findFirst({
-      where: { orderId: order.id, status: 'WAITING_APPROVAL' },
+      where: { orderId: order.id, status: 'CANCELLED', comment: 'Sin actor' },
       orderBy: { createdAt: 'desc' },
     })
     expect(history?.userId).toBeNull()
