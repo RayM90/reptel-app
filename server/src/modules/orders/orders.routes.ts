@@ -19,7 +19,7 @@ router.post('/self-service', authenticate, authorize('CLIENT'), ordersController
 router.get('/my-orders', authenticate, authorize('CLIENT'), ordersController.getMyTechOrders)
 
 // ─── Recepción — ADMIN o TECHNICIAN ───────────────
-// Crea device + order en transacción, ya en RECEIVED (pago verificado en persona)
+// Crea device + order en transacción, en PENDING_PAYMENT hasta que el admin confirme el pago
 router.post('/counter', authenticate, authorize('ADMIN', 'TECHNICIAN'), ordersController.createCounterOrder)
 
 // Enviar un abono del anticipo (pago en partes — el cliente decide monto y cuántos)
@@ -76,6 +76,9 @@ router.post('/', authenticate, authorize('ADMIN'), ordersController.createOrder)
 router.patch('/:id/status', authenticate, authorize('ADMIN', 'TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.updateStatus)
 // Actualizar presupuesto de una orden — ADMIN
 router.patch('/:id/budget', authenticate, authorize('ADMIN'), ordersController.updateBudget)
+
+// El técnico marca que ya tiene el equipo y empieza a revisarlo
+router.post('/:id/start-review', authenticate, authorize('TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.startReviewHandler)
 
 router.patch('/:id/diagnosis', authenticate, authorize('TECHNICIAN_DELIVERY', 'TECHNICIAN'), ordersController.submitDiagnosis)
 

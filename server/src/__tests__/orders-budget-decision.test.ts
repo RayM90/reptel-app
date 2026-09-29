@@ -233,14 +233,14 @@ describe('orders.service — submitCounterBudgetInstallment en órdenes de la ap
 
 describe('orders.service — submitDiagnosis siempre WAITING_APPROVAL', () => {
   it('con presupuesto > 0 deja WAITING_APPROVAL (sin cambios)', async () => {
-    const order = await makeOrder({ status: 'RECEIVED', budget: undefined as any })
+    const order = await makeOrder({ status: 'DIAGNOSING', budget: undefined as any })
     const result = await submitDiagnosis(order.id, 'Pantalla dañada', 50)
     expect(result.status).toBe('WAITING_APPROVAL')
     expect(result.budgetApproved).toBeNull()
   })
 
   it('con presupuesto = 0 TAMBIÉN deja WAITING_APPROVAL (antes saltaba a READY)', async () => {
-    const order = await makeOrder({ status: 'RECEIVED', budget: undefined as any })
+    const order = await makeOrder({ status: 'DIAGNOSING', budget: undefined as any })
     const result = await submitDiagnosis(order.id, 'No es la laptop, es el cargador', 0)
     expect(result.status).toBe('WAITING_APPROVAL')
     expect(result.budgetApproved).toBeNull() // ya no se auto-aprueba, decide el cliente
@@ -277,20 +277,20 @@ describe('orders.service — confirmZeroBudgetDiagnosis', () => {
 })
 
 describe('orders.service — disputeZeroBudgetDiagnosis', () => {
-  it('vuelve la orden al técnico: RECEIVED, budget y diagnosis en null', async () => {
+  it('vuelve la orden al técnico: DIAGNOSING, budget y diagnosis en null', async () => {
     const order = await makeOrder({ budget: 0 })
 
     const techBefore = await prisma.user.findUnique({ where: { id: technician.id } })
     const result = await disputeZeroBudgetDiagnosis(order.id, userA.email, 'Sigue sin encender')
     const techAfter = await prisma.user.findUnique({ where: { id: technician.id } })
 
-    expect(result.status).toBe('RECEIVED')
+    expect(result.status).toBe('DIAGNOSING')
     expect(result.budget).toBeNull()
     expect(result.diagnosis).toBeNull()
     expect(techAfter?.activeOrderCount).toBe(techBefore?.activeOrderCount) // NO se decrementa NI se incrementa
 
     const history = await prisma.orderStatusHistory.findFirst({
-      where: { orderId: order.id, status: 'RECEIVED' },
+      where: { orderId: order.id, status: 'DIAGNOSING' },
       orderBy: { createdAt: 'desc' },
     })
     expect(history?.comment).toContain('Sigue sin encender')

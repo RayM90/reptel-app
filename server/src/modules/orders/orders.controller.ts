@@ -493,6 +493,30 @@ export const submitDiagnosis = async (req: AuthRequest, res: Response): Promise<
 }
 
 // ─────────────────────────────────────────────
+// TÉCNICO — "Empecé a revisar"
+// ─────────────────────────────────────────────
+
+export const startReviewHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const email = req.user?.email
+    if (!email) {
+      res.status(401).json({ success: false, message: 'Usuario no autenticado' })
+      return
+    }
+    const order = await ordersService.startReview(String(req.params.id), email)
+    broadcastOrderUpdate({ type: 'ORDER_STATUS_UPDATED', data: order })
+    res.json({ success: true, data: order })
+  } catch (error: any) {
+    if (error.message?.includes('Solo el técnico asignado')) {
+      res.status(403).json({ success: false, message: error.message })
+      return
+    }
+    console.error('ERROR INICIAR REVISIÓN:', error)
+    res.status(400).json({ success: false, message: error.message || 'Error al iniciar la revisión' })
+  }
+}
+
+// ─────────────────────────────────────────────
 // CLIENTE — Enviar datos del pago final (saldo restante)
 // ─────────────────────────────────────────────
 

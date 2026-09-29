@@ -131,13 +131,13 @@ describe('orders.service — confirmAdvancePaymentInstallment con kind BUDGET', 
     expect(afterSecond.status).toBe('REPAIRING')
   })
 
-  it('un abono REVISION sigue transicionando RECEIVED -> DIAGNOSING sin cambios', async () => {
-    const order = await makeOrder({ status: 'RECEIVED', budget: undefined as any, revisionAmount: 15 })
+  it('un abono REVISION en mostrador nuevo pasa PENDING_PAYMENT -> RECEIVED', async () => {
+    const order = await makeOrder({ status: 'PENDING_PAYMENT', budget: undefined as any, revisionAmount: 15 })
     const submission = await prisma.advancePaymentSubmission.create({
       data: { orderId: order.id, amount: 15, paymentDetails: { banco: 'Bancaribe' }, kind: 'REVISION' },
     })
     const updated = await confirmAdvancePaymentInstallment(submission.id, true, undefined, undefined)
-    expect(updated.status).toBe('DIAGNOSING')
+    expect(updated.status).toBe('RECEIVED')
   })
 })
 

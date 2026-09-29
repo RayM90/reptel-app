@@ -447,10 +447,9 @@ export const createSelfServiceOrder = async (data: {
 
 // ─────────────────────────────────────────────
 // ÓRDENES — CREACIÓN EN RECEPCIÓN
-// El cliente está presente y ya pagó los $15 de revisión en persona
-// (verificado por el staff), por eso la orden nace directo en RECEIVED
-// — sin AdvancePaymentSubmission ni paso de confirmación posterior. No
-// hay costo de delivery (no hay motorizado en este flujo).
+// El cliente está presente y reporta en persona el pago de la revisión; la
+// orden nace en PENDING_PAYMENT, igual que la de la app, y pasa a RECEIVED
+// cuando el admin confirma el pago. No hay costo de delivery.
 // ─────────────────────────────────────────────
 
 export const createCounterOrder = async (data: {
@@ -500,13 +499,13 @@ export const createCounterOrder = async (data: {
         problem: data.problem,
         observations: data.observations,
         technicianId: resolvedTechnicianId,
-        status: 'RECEIVED',
+        status: 'PENDING_PAYMENT',
         revisionAmount: ADVANCE_REVISION_AMOUNT,
         advancePaymentMethod: data.advancePaymentMethod as any,
         serviceCatalogId: data.serviceCatalogId ?? null,
         statusHistory: {
           create: {
-            status: 'RECEIVED',
+            status: 'PENDING_PAYMENT',
             comment: `Orden creada en Recepción por ${actor ? `${actor.name} ${actor.lastName ?? ''}`.trim() : 'personal de Recepción'} — abono de $${data.amount ?? ADVANCE_REVISION_AMOUNT} reportado, pendiente de confirmar por el administrador`,
             userId: actor?.id,
           },
@@ -790,31 +789,26 @@ export const confirmAdvancePaymentInstallment = async (
               },
             })
           }
-        } else {
-          // Pago completo confirmado por el admin → autoriza al técnico a
-          // proceder de inmediato (revisar en recepción, o ir a buscar el
-          // equipo en delivery — "revisión" incluye ese viaje en ese caso).
+        } else if (order.status === 'PENDING_PAYMENT') {
+          // Pago completo confirmado por el admin → la orden de la app queda
+          // con el técnico en camino a retirar el equipo; la de mostrador,
+          // con el equipo en tienda esperando que el técnico empiece a
+          // revisar. En ningún caso se salta a DIAGNOSING: ese paso lo marca
+          // el técnico con "Empecé a revisar" (startReview).
+          const isAppOrder = order.deliveryAmount != null
+          const nextStatus = isAppOrder ? 'ON_THE_WAY' : 'RECEIVED'
           return await tx.order.update({
             where: { id: order.id },
             data: {
-              status: 'DIAGNOSING',
+              status: nextStatus,
               statusHistory: {
-                create: [
-                  // La orden de mostrador ya nace en RECEIVED (createCounterOrder) —
-                  // repetir el status acá dejaba dos "Recibido" en el historial.
-                  // Solo agregarlo si esta es la transición real desde PENDING_PAYMENT.
-                  ...(order.status === 'PENDING_PAYMENT'
-                    ? [{
-                        status: 'RECEIVED' as const,
-                        comment: `Anticipo de $${total} completado mediante abonos — confirmado por el administrador`,
-                        userId: actor?.id,
-                      }]
-                    : []),
-                  {
-                    status: 'DIAGNOSING',
-                    comment: 'Pago confirmado — técnico autorizado a proceder con la revisión',
-                  },
-                ],
+                create: {
+                  status: nextStatus,
+                  comment: isAppOrder
+                    ? `Anticipo de $${total} confirmado por el administrador — el técnico va en camino a retirar el equipo`
+                    : `Anticipo de $${total} confirmado por el administrador — equipo en tienda, técnico asignado`,
+                  userId: actor?.id,
+                },
               },
             },
             include: {
@@ -825,6 +819,9 @@ export const confirmAdvancePaymentInstallment = async (
             },
           })
         }
+        // Mostrador heredado (creado antes de este cambio, ya en RECEIVED): el
+        // pago queda confirmado arriba y la orden sigue en RECEIVED — no se
+        // repite "Recibido" en el historial.
       }
     }
 
@@ -983,6 +980,12 @@ export const submitDiagnosis = async (
   budget: number,
   serviceCatalogId?: string
 ) => {
+  const current = await prisma.order.findUnique({ where: { id }, select: { status: true } })
+  if (!current) throw new Error('Orden no encontrada')
+  if (current.status !== 'DIAGNOSING') {
+    throw new Error('El diagnóstico solo puede registrarse mientras el técnico está revisando el equipo')
+  }
+
   // El cliente decide siempre, incluso con budget=$0. No hay auto-aprobación.
   const hasCost = budget > 0
   const nextStatus = 'WAITING_APPROVAL'
@@ -1012,6 +1015,39 @@ export const submitDiagnosis = async (
       statusHistory: { orderBy: { createdAt: 'desc' } },
     },
   })
+}
+
+// ─────────────────────────────────────────────
+// TÉCNICO — "Empecé a revisar"
+// El técnico marca que ya tiene el equipo en sus manos (lo retiró en casa
+// del cliente, o lo tomó en tienda). Es el único camino a DIAGNOSING.
+// ─────────────────────────────────────────────
+
+export const startReview = async (orderId: string, actorEmail: string) => {
+  const actor = await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true } })
+  if (!actor) throw new Error('Usuario no encontrado')
+
+  const order = await prisma.order.findUnique({ where: { id: orderId }, select: { technicianId: true } })
+  if (!order) throw new Error('Orden no encontrada')
+  if (order.technicianId !== actor.id) {
+    throw new Error('Solo el técnico asignado a esta orden puede iniciar la revisión')
+  }
+
+  // updateMany condicionado al estado: si otra request movió la orden entre
+  // la lectura y acá, count da 0 y no se escribe nada.
+  const { count } = await prisma.order.updateMany({
+    where: { id: orderId, status: { in: ['ON_THE_WAY', 'RECEIVED'] } },
+    data: { status: 'DIAGNOSING', version: { increment: 1 } },
+  })
+  if (count === 0) {
+    throw new Error('La revisión solo puede iniciarse cuando el técnico va en camino o el equipo está en tienda')
+  }
+
+  await prisma.orderStatusHistory.create({
+    data: { orderId, status: 'DIAGNOSING', comment: 'El técnico comenzó a revisar el equipo', userId: actor.id },
+  })
+
+  return getOrderById(orderId)
 }
 
 // ─────────────────────────────────────────────
@@ -1657,8 +1693,8 @@ export const confirmZeroBudgetDiagnosis = async (id: string, email: string) => {
 }
 
 // Cliente no está de acuerdo con el diagnóstico $0 — la orden vuelve al
-// técnico para una nueva revisión. Se incrementa la carga porque la orden
-// vuelve a estar activa.
+// técnico para una nueva revisión (DIAGNOSING: el equipo ya está en sus
+// manos). Se incrementa la carga porque la orden vuelve a estar activa.
 export const disputeZeroBudgetDiagnosis = async (id: string, email: string, note?: string) => {
   const user = await prisma.user.findUnique({ where: { email }, select: { clientId: true } })
   if (!user || !user.clientId) throw new Error('Cliente no encontrado para este usuario')
@@ -1679,10 +1715,10 @@ export const disputeZeroBudgetDiagnosis = async (id: string, email: string, note
     data: {
       budget: null,
       diagnosis: null,
-      status: 'RECEIVED',
+      status: 'DIAGNOSING',
       statusHistory: {
         create: {
-          status: 'RECEIVED',
+          status: 'DIAGNOSING',
           comment: `Cliente no estuvo de acuerdo con el diagnóstico (sin costo) — solicitó nueva revisión.${note ? ` Nota: ${note}` : ''}`,
         },
       },

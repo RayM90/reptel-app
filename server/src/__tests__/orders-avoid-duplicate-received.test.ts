@@ -5,7 +5,7 @@ let client: { id: string }
 let device: { id: string }
 let admin: { id: string; email: string }
 
-const makeOrderWithSubmission = async (status: 'PENDING_PAYMENT' | 'RECEIVED') => {
+const makeOrderWithSubmission = async (status: 'PENDING_PAYMENT' | 'RECEIVED', deliveryAmount: number | null = null) => {
   const suffix = `${Date.now()}-${Math.floor(Math.random() * 10000)}`
   const order = await prisma.order.create({
     data: {
@@ -15,10 +15,11 @@ const makeOrderWithSubmission = async (status: 'PENDING_PAYMENT' | 'RECEIVED') =
       problem: 'Prueba automatizada — no duplicar Recibido',
       status,
       revisionAmount: 15,
+      deliveryAmount,
     },
   })
   const submission = await prisma.advancePaymentSubmission.create({
-    data: { orderId: order.id, amount: 15, paymentDetails: { banco: 'Test' }, status: 'PENDING' },
+    data: { orderId: order.id, amount: 15 + (deliveryAmount ?? 0), paymentDetails: { banco: 'Test' }, status: 'PENDING' },
   })
   return { order, submission }
 }
@@ -44,25 +45,27 @@ afterAll(async () => {
 })
 
 describe('confirmAdvancePaymentInstallment — no duplicar "Recibido"', () => {
-  it('orden de mostrador (ya RECEIVED): solo agrega DIAGNOSING, no un segundo RECEIVED', async () => {
+  it('mostrador heredado (ya RECEIVED): sigue en RECEIVED sin agregar otro "Recibido"', async () => {
     const { order, submission } = await makeOrderWithSubmission('RECEIVED')
-    await confirmAdvancePaymentInstallment(submission.id, true, undefined, admin.email)
-
+    const updated = await confirmAdvancePaymentInstallment(submission.id, true, undefined, admin.email)
+    expect(updated.status).toBe('RECEIVED')
     const history = await prisma.orderStatusHistory.findMany({ where: { orderId: order.id } })
-    const receivedEntries = history.filter((h) => h.status === 'RECEIVED')
-    const diagnosingEntries = history.filter((h) => h.status === 'DIAGNOSING')
-    expect(receivedEntries.length).toBe(0)
-    expect(diagnosingEntries.length).toBe(1)
+    expect(history.filter((h) => h.status === 'RECEIVED').length).toBe(0)
   })
 
-  it('orden self-service (PENDING_PAYMENT): agrega RECEIVED y DIAGNOSING', async () => {
+  it('mostrador nuevo (PENDING_PAYMENT): agrega un solo RECEIVED', async () => {
     const { order, submission } = await makeOrderWithSubmission('PENDING_PAYMENT')
     await confirmAdvancePaymentInstallment(submission.id, true, undefined, admin.email)
-
     const history = await prisma.orderStatusHistory.findMany({ where: { orderId: order.id } })
-    const receivedEntries = history.filter((h) => h.status === 'RECEIVED')
-    const diagnosingEntries = history.filter((h) => h.status === 'DIAGNOSING')
-    expect(receivedEntries.length).toBe(1)
-    expect(diagnosingEntries.length).toBe(1)
+    expect(history.filter((h) => h.status === 'RECEIVED').length).toBe(1)
+    expect(history.filter((h) => h.status === 'DIAGNOSING').length).toBe(0)
+  })
+
+  it('orden de la app (PENDING_PAYMENT): agrega un solo ON_THE_WAY', async () => {
+    const { order, submission } = await makeOrderWithSubmission('PENDING_PAYMENT', 10)
+    await confirmAdvancePaymentInstallment(submission.id, true, undefined, admin.email)
+    const history = await prisma.orderStatusHistory.findMany({ where: { orderId: order.id } })
+    expect(history.filter((h) => h.status === 'ON_THE_WAY').length).toBe(1)
+    expect(history.filter((h) => h.status === 'RECEIVED').length).toBe(0)
   })
 })

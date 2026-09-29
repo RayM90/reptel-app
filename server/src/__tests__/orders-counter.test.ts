@@ -43,7 +43,7 @@ afterAll(async () => {
 })
 
 describe('Orders — POST /api/orders/counter', () => {
-  it('crea la orden directo en RECEIVED, con AdvancePaymentSubmission PENDING (pendiente de confirmar por el admin)', async () => {
+  it('crea la orden en PENDING_PAYMENT, con AdvancePaymentSubmission PENDING (pendiente de confirmar por el admin)', async () => {
     const res = await request(app)
       .post('/api/orders/counter')
       .set('Authorization', `Bearer ${authToken}`)
@@ -63,7 +63,7 @@ describe('Orders — POST /api/orders/counter', () => {
 
     expect(res.status).toBe(201)
     expect(res.body.success).toBe(true)
-    expect(res.body.data.status).toBe('RECEIVED')
+    expect(res.body.data.status).toBe('PENDING_PAYMENT')
     expect(Number(res.body.data.revisionAmount)).toBe(15)
     expect(res.body.data.deliveryAmount).toBeNull()
     expect(res.body.data.technician).toHaveProperty('name')
@@ -120,7 +120,7 @@ describe('Orders — POST /api/orders/counter', () => {
     expect(updated.confirmedByUserId).toBeTruthy()
 
     const order = await prisma.order.findUniqueOrThrow({ where: { id: createdOrderId } })
-    expect(order.status).toBe('DIAGNOSING') // pago completo confirmado → autoriza al técnico a proceder
+    expect(order.status).toBe('RECEIVED') // pago confirmado → equipo en tienda, técnico asignado
   })
 })
 
