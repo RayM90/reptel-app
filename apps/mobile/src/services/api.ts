@@ -52,8 +52,6 @@ export const ordersAPI = {
   getById: (id: string) => api.get(`/api/orders/${id}`),
   track: (orderNumber: string) => api.get(`/api/orders/track/${orderNumber}`),
   create: (data: any) => api.post('/api/orders', data),
-  updateStatus: (id: string, status: string, comment?: string) =>
-    api.patch(`/api/orders/${id}/status`, { status, comment }),
   updateBudget: (id: string, budget: number, approved: boolean) =>
     api.patch(`/api/orders/${id}/budget`, { budget, approved }),
 
@@ -93,6 +91,9 @@ export const ordersAPI = {
 
   rejectBudget: (id: string, reason: string) =>
     api.post(`/api/orders/${id}/reject-budget`, { reason }),
+
+  rejectExtraPart: (id: string) =>
+    api.post(`/api/orders/${id}/reject-extra-part`),
 
   // Confirmar o disputar diagnóstico sin costo ($0)
   confirmZeroBudgetDiagnosis: (id: string) =>

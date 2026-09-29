@@ -40,22 +40,24 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
 
 export default function BudgetPaymentScreen() {
   const router = useRouter()
-  const { orderId, orderNumber, budget, revisionAmount } = useLocalSearchParams<{
+  const { orderId, orderNumber, budget, mode, minimumPercent, pendingForMinimum, maxAmount } = useLocalSearchParams<{
     orderId: string
     orderNumber: string
     budget: string
-    revisionAmount: string
+    mode: 'approve' | 'extra'
+    minimumPercent: string
+    pendingForMinimum: string
+    maxAmount: string
   }>()
 
+  // Los montos los calcula el backend (paymentSummary): el mínimo para
+  // reparar puede ser más del 50% según el presupuesto. Aquí solo se
+  // muestran — el cliente puede pagar el mínimo o más, hasta lo que falta.
+  const isExtra = mode === 'extra'
   const budgetNumber = budget ? Number(budget) : 0
-  const revisionNumber = revisionAmount ? Number(revisionAmount) : 0
-  // Base = presupuesto - revisión (la revisión ya está pagada). El cliente
-  // debe abonar al menos el 50% de esa base para autorizar la reparación,
-  // pero puede pagar hasta el 100% de una sola vez si lo prefiere — nunca
-  // más de eso. Lo que no se pague aquí se cobra al entregar el equipo.
-  const baseNumber = Math.max(budgetNumber - revisionNumber, 0)
-  const minimumNumber = 0.5 * baseNumber
-  const totalNumber = baseNumber
+  const percentNumber = minimumPercent ? Number(minimumPercent) : 50
+  const minimumNumber = pendingForMinimum ? Number(pendingForMinimum) : 0
+  const totalNumber = maxAmount ? Number(maxAmount) : 0
 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const { data: paymentSettings } = usePaymentInfo()
@@ -168,8 +170,10 @@ export default function BudgetPaymentScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={styles.backText}>← Atrás</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Anticipo de Presupuesto</Text>
-          <Text style={styles.subtitle}>Orden {orderNumber} — autoriza al técnico a reparar</Text>
+          <Text style={styles.title}>{isExtra ? 'Pago de repuesto adicional' : 'Anticipo de Presupuesto'}</Text>
+          <Text style={styles.subtitle}>
+            Orden {orderNumber} — {isExtra ? 'el técnico continúa al confirmarse el pago' : 'autoriza al técnico a reparar'}
+          </Text>
         </View>
 
         <ScrollView
@@ -177,22 +181,20 @@ export default function BudgetPaymentScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>💰 Resumen del anticipo</Text>
+            <Text style={styles.summaryTitle}>💰 Resumen</Text>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Presupuesto de reparación</Text>
               <Text style={styles.summaryValue}>${budgetNumber.toFixed(2)}</Text>
             </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>- Anticipo de revisión (ya pagado)</Text>
-              <Text style={styles.summaryValueNegative}>-${revisionNumber.toFixed(2)}</Text>
-            </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabelBold}>Total a cubrir con el anticipo</Text>
-              <Text style={styles.summaryValueBold}>${baseNumber.toFixed(2)}</Text>
+              <Text style={styles.summaryLabelBold}>Te falta por pagar</Text>
+              <Text style={styles.summaryValueBold}>${totalNumber.toFixed(2)}</Text>
             </View>
             <Text style={styles.waitNote}>
-              Mínimo para autorizar la reparación: ${minimumNumber.toFixed(2)} (50%). Puedes pagar hasta ${baseNumber.toFixed(2)} (100%) de una vez si lo prefieres.
+              {isExtra
+                ? `Paga $${minimumNumber.toFixed(2)} para que el técnico continúe. Puedes pagar hasta $${totalNumber.toFixed(2)} si lo prefieres.`
+                : `Paga el ${percentNumber}% ($${minimumNumber.toFixed(2)}) para iniciar la reparación. Puedes pagar hasta $${totalNumber.toFixed(2)} de una vez si lo prefieres.`}
             </Text>
           </View>
 
@@ -278,7 +280,7 @@ export default function BudgetPaymentScreen() {
               {faltante > 0.009 && montoNumber > 0 && montoNumber + 0.009 < minimumNumber && (
                 <View style={styles.warningCard}>
                   <Text style={styles.warningText}>
-                    ⏳ Este abono todavía no alcanza el mínimo de ${minimumNumber.toFixed(2)} (50%) — el técnico no podrá comenzar hasta completarlo.
+                    ⏳ Este abono todavía no alcanza el mínimo de ${minimumNumber.toFixed(2)} — el técnico no podrá {isExtra ? 'continuar' : 'comenzar'} hasta completarlo.
                   </Text>
                 </View>
               )}

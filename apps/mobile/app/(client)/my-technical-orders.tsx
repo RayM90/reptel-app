@@ -17,7 +17,9 @@ import { useAuthStore } from '../../src/store/auth.store'
 import { useToastStore } from '../../src/store/toast.store'
 import { useConfirm } from '../../src/hooks/useConfirm'
 import OrderProgress from '../../src/components/OrderProgress'
-import { getOrderProgress, clientStatusLabel, clientHistoryComment } from '../../src/utils/orderProgress'
+import { getOrderProgress, clientHistoryComment, CLIENT_STATUS_LABEL } from '../../src/utils/orderProgress'
+import ContactCard from '../../src/components/ContactCard'
+import { usePaymentInfo } from '../../src/hooks/usePaymentInfo'
 
 // El backend guarda el método de pago con el enum de Prisma (MOBILE_PAYMENT,
 // TRANSFER, BINANCE), pero la pantalla de pago espera los literales que usa
@@ -32,11 +34,12 @@ const BACKEND_TO_FRONTEND_METHOD: Record<string, 'PAGO_MOVIL' | 'TRANSFERENCIA' 
 type OrderStatus =
   | 'PENDING_PAYMENT'
   | 'RECEIVED'
+  | 'ON_THE_WAY'
   | 'DIAGNOSING'
   | 'WAITING_APPROVAL'
   | 'APPROVED'
   | 'REPAIRING'
-  | 'WAITING_PART'
+  | 'WAITING_EXTRA_PAYMENT'
   | 'READY'
   | 'PAID_PENDING_DELIVERY'
   | 'REJECTED_PENDING_PICKUP'
@@ -86,9 +89,14 @@ interface TechOrder {
     model: string
     color: string
   }
-  technician?: {
-    id: string
-    name: string
+  technician?: { id: string; name: string; lastName?: string | null; phone?: string | null } | null
+  paymentSummary?: {
+    budget: number
+    paid: number
+    remaining: number
+    minimumPercent: number
+    minimumAmount: number
+    pendingForMinimum: number
   } | null
   statusHistory: StatusHistoryEntry[]
   partsUsed?: {
@@ -98,29 +106,15 @@ interface TechOrder {
   }[]
 }
 
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  PENDING_PAYMENT: '💳 Pendiente de confirmación de pago',
-  RECEIVED: '📥 Recibida',
-  DIAGNOSING: '🔍 En diagnóstico',
-  WAITING_APPROVAL: '⏳ Esperando aprobación de presupuesto',
-  APPROVED: '✅ Presupuesto aprobado',
-  REPAIRING: '🔧 En reparación',
-  WAITING_PART: '📦 Esperando repuesto',
-  READY: '📦 Lista para entrega',
-  PAID_PENDING_DELIVERY: '💰 Pagado, pendiente de entrega',
-  REJECTED_PENDING_PICKUP: '❌ Presupuesto rechazado, pendiente de retiro',
-  DELIVERED: '🚚 Entregada',
-  CANCELLED: '❌ Cancelada',
-}
-
 const STATUS_COLOR: Record<OrderStatus, string> = {
   PENDING_PAYMENT: '#6B6B75',
   RECEIVED: '#6B6B75',
+  ON_THE_WAY: '#4B3E96',
   DIAGNOSING: '#4B3E96',
   WAITING_APPROVAL: '#4B3E96',
   APPROVED: '#4B3E96',
   REPAIRING: '#4B3E96',
-  WAITING_PART: '#4B3E96',
+  WAITING_EXTRA_PAYMENT: '#b45309',
   READY: '#1E7A3D',
   PAID_PENDING_DELIVERY: '#0369a1',
   REJECTED_PENDING_PICKUP: '#B3261E',
@@ -131,11 +125,12 @@ const STATUS_COLOR: Record<OrderStatus, string> = {
 const STATUS_BG: Record<OrderStatus, string> = {
   PENDING_PAYMENT: '#EFEAE2',
   RECEIVED: '#EFEAE2',
+  ON_THE_WAY: '#ECEAF3',
   DIAGNOSING: '#ECEAF3',
   WAITING_APPROVAL: '#ECEAF3',
   APPROVED: '#ECEAF3',
   REPAIRING: '#ECEAF3',
-  WAITING_PART: '#ECEAF3',
+  WAITING_EXTRA_PAYMENT: '#FFF4E0',
   READY: '#E3F3E9',
   PAID_PENDING_DELIVERY: '#e0f2fe',
   REJECTED_PENDING_PICKUP: '#FBE9E7',
@@ -159,6 +154,7 @@ export default function MyTechnicalOrdersScreen() {
   const [downloadingReceipt, setDownloadingReceipt] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({})
   const token = useAuthStore((state) => state.token)
+  const { data: paymentSettings } = usePaymentInfo()
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -248,6 +244,26 @@ export default function MyTechnicalOrdersScreen() {
       fetchOrders()
     } catch (error: any) {
       showToast(error?.response?.data?.message || 'Error al rechazar el presupuesto', 'error')
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [order.id]: false }))
+    }
+  }
+
+  const handleRejectExtraPart = async (order: TechOrder) => {
+    const confirmed = await confirmDialog({
+      title: 'Rechazar repuesto adicional',
+      message: 'Si rechazas el repuesto, la reparación puede no quedar al 100% y es tu responsabilidad. Lo que ya pagaste no se devuelve. ¿Confirmas?',
+      confirmLabel: 'Rechazar repuesto',
+    })
+    if (!confirmed) return
+
+    setActionLoading((prev) => ({ ...prev, [order.id]: true }))
+    try {
+      await ordersAPI.rejectExtraPart(order.id)
+      showToast('Listo. El técnico continúa la reparación sin el repuesto.', 'success')
+      fetchOrders()
+    } catch (error: any) {
+      showToast(error?.response?.data?.message || 'Error al rechazar el repuesto', 'error')
     } finally {
       setActionLoading((prev) => ({ ...prev, [order.id]: false }))
     }
@@ -387,10 +403,10 @@ export default function MyTechnicalOrdersScreen() {
                   <View style={styles.statusRow}>
                     <View style={[styles.statusBadge, { backgroundColor: STATUS_BG[status] }]}>
                       <Text style={[styles.statusText, { color: STATUS_COLOR[status] }]}>
-                        {clientStatusLabel(status, order, STATUS_LABEL)}
+                        {CLIENT_STATUS_LABEL[status] ?? status}
                       </Text>
                     </View>
-                    {status === 'WAITING_APPROVAL' && order.budget != null && (
+                    {((status === 'WAITING_APPROVAL' && order.budget != null) || status === 'WAITING_EXTRA_PAYMENT') && (
                       <View style={styles.actionBadge}>
                         <Text style={styles.actionBadgeText}>⚠️ Acción requerida</Text>
                       </View>
@@ -514,29 +530,37 @@ export default function MyTechnicalOrdersScreen() {
                         </View>
                       )}
 
-                      {/* Técnico asignado */}
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Técnico asignado</Text>
-                        <Text style={styles.detailValue}>
-                          {order.technician?.name || 'Por asignar'}
-                        </Text>
-                      </View>
+                      {/* Contacto — desde el pago confirmado hasta la entrega */}
+                      {!['PENDING_PAYMENT', 'DELIVERED', 'CANCELLED'].includes(status) && (
+                        <ContactCard technician={order.technician} storePhone={paymentSettings?.pagoMovilTelefono} />
+                      )}
 
-                      {/* Presupuesto */}
-                      {order.budget != null && (
+                      {/* Presupuesto — con resumen de lo pagado y lo que falta,
+                          salvo en órdenes rechazadas (ahí no se cobra más). */}
+                      {order.budget != null && (status === 'REJECTED_PENDING_PICKUP' || status === 'CANCELLED' || !order.paymentSummary ? (
                         <View style={styles.detailRow}>
                           <Text style={styles.detailLabel}>Presupuesto</Text>
                           <Text style={styles.detailValue}>
                             ${Number(order.budget).toFixed(2)}
-                            {order.budgetApproved != null &&
-                              (order.budgetApproved
-                                ? ' — Aprobado'
-                                : status === 'CANCELLED'
-                                  ? ' — Rechazado'
-                                  : ' — Pendiente de aprobación')}
+                            {order.budgetApproved === false ? ' — Rechazado' : ''}
                           </Text>
                         </View>
-                      )}
+                      ) : (
+                        <View style={styles.paymentSummary}>
+                          <View style={styles.paymentSummaryRow}>
+                            <Text style={styles.paymentSummaryLabel}>Presupuesto</Text>
+                            <Text style={styles.paymentSummaryValue}>${order.paymentSummary.budget.toFixed(2)}</Text>
+                          </View>
+                          <View style={styles.paymentSummaryRow}>
+                            <Text style={styles.paymentSummaryLabel}>Pagado</Text>
+                            <Text style={styles.paymentSummaryValue}>${order.paymentSummary.paid.toFixed(2)}</Text>
+                          </View>
+                          <View style={[styles.paymentSummaryRow, styles.paymentSummaryTotal]}>
+                            <Text style={styles.paymentSummaryLabelBold}>Te falta</Text>
+                            <Text style={styles.paymentSummaryValueBold}>${order.paymentSummary.remaining.toFixed(2)}</Text>
+                          </View>
+                        </View>
+                      ))}
 
                       {/* Decisión del cliente sobre el presupuesto — solo cuando el
                           presupuesto supera lo ya pagado por la revisión. Si
@@ -558,12 +582,15 @@ export default function MyTechnicalOrdersScreen() {
                                   orderId: order.id,
                                   orderNumber: order.orderNumber,
                                   budget: String(order.budget ?? 0),
-                                  revisionAmount: String(order.revisionAmount ?? 15),
+                                  mode: 'approve',
+                                  minimumPercent: String(order.paymentSummary?.minimumPercent ?? 50),
+                                  pendingForMinimum: String(order.paymentSummary?.pendingForMinimum ?? 0),
+                                  maxAmount: String(order.paymentSummary?.remaining ?? 0),
                                 },
                               })
                             }}
                           >
-                            <Text style={styles.approveBtnText}>✅ Pagar anticipo y aprobar</Text>
+                            <Text style={styles.approveBtnText}>✅ Pagar el {order.paymentSummary?.minimumPercent ?? 50}% y aprobar</Text>
                           </TouchableOpacity>
 
                           <Text style={styles.reasonLabel}>O si prefieres no reparar, indica por qué:</Text>
@@ -652,6 +679,46 @@ export default function MyTechnicalOrdersScreen() {
                             disabled={actionLoading[order.id]}
                           >
                             <Text style={styles.rejectBtnText}>🔁 No estoy de acuerdo, pedir nueva revisión</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      {/* Repuesto adicional durante la reparación */}
+                      {status === 'WAITING_EXTRA_PAYMENT' && order.paymentSummary && (
+                        <View style={styles.decisionCard}>
+                          <Text style={styles.decisionTitle}>Tu reparación necesita un repuesto adicional</Text>
+                          <Text style={styles.reasonLabel}>
+                            Presupuesto nuevo: ${order.paymentSummary.budget.toFixed(2)} · Pagado: ${order.paymentSummary.paid.toFixed(2)}.
+                            Paga ${order.paymentSummary.pendingForMinimum.toFixed(2)} para que el técnico continúe.
+                          </Text>
+
+                          <TouchableOpacity
+                            style={styles.approveBtn}
+                            onPress={(e) => {
+                              e.stopPropagation()
+                              router.push({
+                                pathname: '/(client)/budget-payment',
+                                params: {
+                                  orderId: order.id,
+                                  orderNumber: order.orderNumber,
+                                  budget: String(order.budget ?? 0),
+                                  mode: 'extra',
+                                  minimumPercent: String(order.paymentSummary?.minimumPercent ?? 50),
+                                  pendingForMinimum: String(order.paymentSummary?.pendingForMinimum ?? 0),
+                                  maxAmount: String(order.paymentSummary?.remaining ?? 0),
+                                },
+                              })
+                            }}
+                          >
+                            <Text style={styles.approveBtnText}>💳 Pagar ${order.paymentSummary.pendingForMinimum.toFixed(2)} y continuar</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.rejectBtn, actionLoading[order.id] && styles.actionBtnDisabled]}
+                            onPress={(e) => { e.stopPropagation(); handleRejectExtraPart(order) }}
+                            disabled={actionLoading[order.id]}
+                          >
+                            <Text style={styles.rejectBtnText}>❌ No quiero el repuesto</Text>
                           </TouchableOpacity>
                         </View>
                       )}
@@ -770,7 +837,7 @@ export default function MyTechnicalOrdersScreen() {
                         return (
                           <View key={entry.id} style={styles.itemRow}>
                             <View style={styles.itemInfo}>
-                              <Text style={styles.itemName}>{clientStatusLabel(entry.status, order, STATUS_LABEL)}</Text>
+                              <Text style={styles.itemName}>{CLIENT_STATUS_LABEL[entry.status] ?? entry.status}</Text>
                               {comment !== '' && (
                                 <Text style={styles.itemQty}>{comment}</Text>
                               )}
@@ -869,6 +936,20 @@ const styles = StyleSheet.create({
   detailRow: { marginBottom: 10 },
   detailLabel: { fontSize: 11, color: '#9aa5cc', fontWeight: '600', textTransform: 'uppercase', marginBottom: 2 },
   detailValue: { fontSize: 13, color: '#17247a', lineHeight: 18 },
+  paymentSummary: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#d5ddff',
+  },
+  paymentSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
+  paymentSummaryTotal: { borderTopWidth: 1, borderTopColor: '#e3e8ff', marginTop: 4, paddingTop: 6 },
+  paymentSummaryLabel: { fontSize: 13, color: '#5a6399' },
+  paymentSummaryValue: { fontSize: 13, color: '#17247a' },
+  paymentSummaryLabelBold: { fontSize: 14, fontWeight: '700', color: '#17247a' },
+  paymentSummaryValueBold: { fontSize: 14, fontWeight: '700', color: '#17247a' },
   itemsTitle: { fontSize: 13, fontWeight: '700', color: '#17247a', marginBottom: 8, marginTop: 4 },
   linkedProductBtn: {
     backgroundColor: '#17247a',
