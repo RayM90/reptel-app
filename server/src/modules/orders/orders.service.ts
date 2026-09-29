@@ -2,6 +2,7 @@ import { Prisma, type Order } from '@prisma/client'
 import prisma from '../../lib/prisma'
 import { InsufficientStockError } from '../products/products.service'
 import { flattenClientAddresses } from '../../lib/clientAddress'
+import { computeRepairMinimum, sumPartsCost, buildPaymentSummary } from './repairMinimum'
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -161,6 +162,33 @@ const withClientAddress = <T extends { client: Record<string, any> }>(order: T) 
   client: flattenClientAddresses(order.client),
 })
 
+// Repuestos que cuentan para el presupuesto: salidas de servicio técnico no
+// revertidas ni reportadas como merma (la merma no se cobra al cliente).
+const ACTIVE_PARTS_WHERE = {
+  type: 'OUT',
+  channel: 'SERVICIO_TECNICO',
+  reversedAt: null,
+  lossReportedAt: null,
+} satisfies Prisma.InventoryMovementWhereInput
+
+const confirmedBudgetPaid = (subs: { kind: string; status: string; amount: unknown }[]) =>
+  subs.filter((s) => s.kind === 'BUDGET' && s.status === 'CONFIRMED').reduce((sum, s) => sum + Number(s.amount), 0)
+
+// Resumen "Presupuesto · Pagado · Te falta" + mínimo para reparar — se
+// calcula acá para que la app y el panel no repitan la regla.
+const paymentSummaryFor = (order: {
+  budget: unknown
+  revisionAmount: unknown
+  advancePaymentSubmissions: { kind: string; status: string; amount: unknown }[]
+  inventoryMovements: { quantity: number; unitPriceAtUse: unknown }[]
+}) =>
+  buildPaymentSummary({
+    budget: order.budget,
+    revisionAmount: Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT),
+    confirmedBudgetPaid: confirmedBudgetPaid(order.advancePaymentSubmissions),
+    partsCost: sumPartsCost(order.inventoryMovements),
+  })
+
 export const getAllOrders = async () => {
   const orders = await prisma.order.findMany({
     include: {
@@ -169,10 +197,13 @@ export const getAllOrders = async () => {
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
       advancePaymentSubmissions: { orderBy: { createdAt: 'desc' } },
+      inventoryMovements: { where: ACTIVE_PARTS_WHERE, select: { quantity: true, unitPriceAtUse: true } },
     },
     orderBy: { receivedAt: 'desc' },
   })
-  return orders.map(withClientAddress)
+  return orders.map(({ inventoryMovements, ...order }) =>
+    withClientAddress({ ...order, paymentSummary: paymentSummaryFor({ ...order, inventoryMovements }) })
+  )
 }
 
 export const getTodayOrders = async () => {
@@ -209,9 +240,12 @@ export const getOrderById = async (id: string) => {
       device: true,
       statusHistory: { orderBy: { createdAt: 'desc' } },
       advancePaymentSubmissions: { orderBy: { createdAt: 'desc' } },
+      inventoryMovements: { where: ACTIVE_PARTS_WHERE, select: { quantity: true, unitPriceAtUse: true } },
     },
   })
-  return order ? withClientAddress(order) : null
+  if (!order) return null
+  const { inventoryMovements, ...rest } = order
+  return withClientAddress({ ...rest, paymentSummary: paymentSummaryFor({ ...rest, inventoryMovements }) })
 }
 
 export const getOrderByNumber = async (orderNumber: string) => {
@@ -237,19 +271,23 @@ export const getOrdersByClient = async (clientId: string) => {
     where: { clientId },
     include: {
       device: true,
-      technician: { select: { id: true, name: true } },
+      technician: { select: { id: true, name: true, lastName: true, phone: true } },
       statusHistory: { orderBy: { createdAt: 'desc' } },
       advancePaymentSubmissions: { orderBy: { createdAt: 'desc' } },
       inventoryMovements: {
-        where: { type: 'OUT', channel: 'SERVICIO_TECNICO', reversedAt: null, lossReportedAt: null },
+        where: ACTIVE_PARTS_WHERE,
         include: { product: { select: { name: true } } },
       },
     },
     orderBy: { receivedAt: 'desc' },
   })
 
-  return orders.map(({ inventoryMovements, ...order }) => ({
+  return orders.map(({ inventoryMovements, technician, ...order }) => ({
     ...order,
+    // El cliente ve el contacto del técnico recién cuando el pago del
+    // anticipo está confirmado — antes todavía no hay nada que coordinar.
+    technician: order.status === 'PENDING_PAYMENT' ? null : technician,
+    paymentSummary: paymentSummaryFor({ ...order, inventoryMovements }),
     partsUsed: inventoryMovements.map((m) => ({
       productName: m.product.name,
       quantity: m.quantity,
@@ -572,10 +610,11 @@ export const submitAdvancePaymentInstallment = async (
 }
 
 // ─────────────────────────────────────────────
-// CLIENTE — Anticipo del presupuesto (50% de la reparación, pagar es
-// aprobar). Base = budget - revisionAmount (la revisión ya está pagada y
-// no se vuelve a cobrar), tope = 50% de esa base. El otro 50% se cobra al
-// entregar (confirmFinalPayment, ya existente).
+// CLIENTE — Anticipo del presupuesto (pagar es aprobar). Base = budget -
+// revisionAmount (la revisión ya está pagada y no se vuelve a cobrar),
+// mínimo = computeRepairMinimum (50% o lo que cubra los repuestos), tope =
+// 100% de esa base. El resto se cobra al entregar (confirmFinalPayment, ya
+// existente).
 // ─────────────────────────────────────────────
 
 export const submitBudgetPaymentInstallment = async (
@@ -604,8 +643,8 @@ export const submitBudgetPaymentInstallment = async (
     throw new Error('Orden no encontrada')
   }
 
-  if (order.status !== 'WAITING_APPROVAL') {
-    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
+  if (order.status !== 'WAITING_APPROVAL' && order.status !== 'WAITING_EXTRA_PAYMENT') {
+    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto o el pago de un repuesto adicional')
   }
 
   if (amount == null || amount <= 0) {
@@ -625,7 +664,7 @@ export const submitBudgetPaymentInstallment = async (
 
   // El cliente puede abonar en partes hasta completar el 100% de la base si
   // lo desea, pero nunca más de eso — el mínimo para autorizar la reparación
-  // (50%) se exige aparte, en confirmAdvancePaymentInstallment.
+  // (ver repairMinimum.ts) se exige aparte, en confirmAdvancePaymentInstallment.
   const alreadyAccounted = order.advancePaymentSubmissions.reduce(
     (sum, s) => sum + Number(s.amount),
     0
@@ -662,6 +701,7 @@ export const confirmAdvancePaymentInstallment = async (
         include: {
           client: { include: { user: true } },
           advancePaymentSubmissions: { where: { status: 'CONFIRMED' } },
+          inventoryMovements: { where: ACTIVE_PARTS_WHERE },
         },
       },
     },
@@ -684,12 +724,13 @@ export const confirmAdvancePaymentInstallment = async (
 
   // Órdenes de recepción no tienen deliveryAmount (no hay que ir a buscar el
   // equipo) — su total es solo la revisión, no revisión+delivery como self-service.
-  // Para BUDGET: el mínimo del 50% de (budget - revisionAmount) autoriza a
-  // reparar — el cliente puede haber abonado más (hasta el 100% de la base,
-  // ver submitBudgetPaymentInstallment), el resto se cobra al entregar
-  // (confirmFinalPayment) sobre lo que realmente falte.
+  // Para BUDGET: el mínimo para reparar (repairMinimum.ts — 50%, o lo que
+  // cubra los repuestos) autoriza a reparar; el resto se cobra al entregar.
   const total = isBudgetKind
-    ? 0.5 * (Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT))
+    ? computeRepairMinimum(
+        Number(order.budget ?? 0) - Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT),
+        sumPartsCost(order.inventoryMovements)
+      ).amount
     : order.deliveryAmount != null
       ? Number(order.deliveryAmount) + Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
       : Number(order.revisionAmount ?? ADVANCE_REVISION_AMOUNT)
@@ -720,7 +761,7 @@ export const confirmAdvancePaymentInstallment = async (
           // arriba pero no volvemos a tocar status/budgetApproved/historial:
           // cae al fallback de abajo, que devuelve la orden tal cual está.
           if (order.status === 'WAITING_APPROVAL') {
-            // 50% del presupuesto completado → pagar ES aprobar, autoriza a
+            // Mínimo del presupuesto completado → pagar ES aprobar, autoriza a
             // reparar de inmediato (reemplaza el approveBudget gratis).
             return await tx.order.update({
               where: { id: order.id },
@@ -1938,8 +1979,8 @@ export const submitCounterBudgetInstallment = async (
   if (!order) throw new Error('Orden no encontrada')
   assertCounterOrder(order)
 
-  if (order.status !== 'WAITING_APPROVAL') {
-    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto')
+  if (order.status !== 'WAITING_APPROVAL' && order.status !== 'WAITING_EXTRA_PAYMENT') {
+    throw new Error('Esta acción solo aplica a órdenes esperando aprobación de presupuesto o el pago de un repuesto adicional')
   }
 
   if (amount == null || amount <= 0) {
@@ -1955,8 +1996,8 @@ export const submitCounterBudgetInstallment = async (
   }
 
   // Igual que en submitBudgetPaymentInstallment: se puede abonar hasta el
-  // 100% de la base, nunca más — el mínimo del 50% para autorizar se exige
-  // en confirmAdvancePaymentInstallment.
+  // 100% de la base, nunca más — el mínimo para autorizar (ver repairMinimum.ts)
+  // se exige en confirmAdvancePaymentInstallment.
   const alreadyAccounted = order.advancePaymentSubmissions.reduce((sum, s) => sum + Number(s.amount), 0)
   const remaining = base - alreadyAccounted
 

@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma'
-import { submitAdvancePaymentInstallment, submitBudgetPaymentInstallment, submitCounterBudgetInstallment, confirmAdvancePaymentInstallment } from '../modules/orders/orders.service'
+import { submitAdvancePaymentInstallment, submitBudgetPaymentInstallment, submitCounterBudgetInstallment, confirmAdvancePaymentInstallment, getOrdersByClient } from '../modules/orders/orders.service'
+import { createProduct } from '../modules/products/products.service'
 
 let client: { id: string }
 let clientUser: { id: string; email: string }
@@ -137,5 +138,74 @@ describe('orders.service — confirmAdvancePaymentInstallment con kind BUDGET', 
     })
     const updated = await confirmAdvancePaymentInstallment(submission.id, true, undefined, undefined)
     expect(updated.status).toBe('DIAGNOSING')
+  })
+})
+
+describe('mínimo dinámico por repuestos', () => {
+  let category: { id: string }
+  let product: { id: string }
+
+  beforeAll(async () => {
+    category = await prisma.productCategory.create({ data: { name: `Categoria Min ${Date.now()}` } })
+    product = await createProduct({ name: 'Pantalla Min Test', price: 63, stock: 5, categoryId: category.id })
+  })
+
+  afterAll(async () => {
+    await prisma.inventoryMovement.deleteMany({ where: { productId: product.id } })
+    await prisma.product.delete({ where: { id: product.id } }).catch(() => {})
+    await prisma.productCategory.delete({ where: { id: category.id } }).catch(() => {})
+  })
+
+  const addPart = (orderId: string) =>
+    prisma.inventoryMovement.create({
+      data: { productId: product.id, type: 'OUT', channel: 'SERVICIO_TECNICO', quantity: 1, reason: 'test', orderId, unitPriceAtUse: 63 },
+    })
+
+  it('con repuestos de $63 sobre base $100, el 50% ya no alcanza: exige 70%', async () => {
+    const order = await makeOrder({ budget: 115, revisionAmount: 15 })
+    await addPart(order.id)
+    const s1 = await submitBudgetPaymentInstallment(order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: 'MIN1' }, 50)
+    const after50 = await confirmAdvancePaymentInstallment(s1.id, true, undefined, undefined)
+    expect(after50.status).toBe('WAITING_APPROVAL')
+
+    const s2 = await submitBudgetPaymentInstallment(order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: 'MIN2' }, 20)
+    const after70 = await confirmAdvancePaymentInstallment(s2.id, true, undefined, undefined)
+    expect(after70.status).toBe('REPAIRING')
+  })
+
+  it('getOrdersByClient devuelve paymentSummary con el porcentaje y lo que falta', async () => {
+    const order = await makeOrder({ budget: 115, revisionAmount: 15 })
+    await addPart(order.id)
+    const orders = await getOrdersByClient(client.id)
+    const found = orders.find((o) => o.id === order.id)!
+    expect(found.paymentSummary).toEqual({
+      budget: 115, paid: 15, remaining: 100, minimumPercent: 70, minimumAmount: 70, pendingForMinimum: 70,
+    })
+  })
+
+  it('acepta abonos de presupuesto en WAITING_EXTRA_PAYMENT', async () => {
+    const order = await makeOrder({ status: 'WAITING_EXTRA_PAYMENT', budget: 115, revisionAmount: 15 })
+    const s = await submitBudgetPaymentInstallment(order.id, clientUser.email, { banco: 'Bancaribe', telefono: '04121234567', referencia: 'MIN3' }, 10)
+    expect(s.kind).toBe('BUDGET')
+  })
+
+  it('no expone el técnico mientras el pago del anticipo no está confirmado', async () => {
+    const tech = await prisma.user.create({
+      data: { name: 'Tec', lastName: 'Contacto', email: `tec-contacto-${Date.now()}@test.com`, password: 'x', role: 'TECHNICIAN_DELIVERY', phone: '04141234567' },
+    })
+    try {
+      const pending = await prisma.order.create({
+        data: { orderNumber: `REP-TEST-CT-${Date.now()}`, status: 'PENDING_PAYMENT', problem: 'x', clientId: client.id, deviceId: device.id, technicianId: tech.id, deliveryAmount: 10, revisionAmount: 15 },
+      })
+      const onTheWay = await prisma.order.create({
+        data: { orderNumber: `REP-TEST-CT2-${Date.now()}`, status: 'ON_THE_WAY', problem: 'x', clientId: client.id, deviceId: device.id, technicianId: tech.id, deliveryAmount: 10, revisionAmount: 15 },
+      })
+      const orders = await getOrdersByClient(client.id)
+      expect(orders.find((o) => o.id === pending.id)!.technician).toBeNull()
+      expect(orders.find((o) => o.id === onTheWay.id)!.technician).toEqual({ id: tech.id, name: 'Tec', lastName: 'Contacto', phone: '04141234567' })
+    } finally {
+      await prisma.order.deleteMany({ where: { technicianId: tech.id } })
+      await prisma.user.delete({ where: { id: tech.id } }).catch(() => {})
+    }
   })
 })
