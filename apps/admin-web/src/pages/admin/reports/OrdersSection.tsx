@@ -22,7 +22,6 @@ export default function OrdersSection() {
   const [rows, setRows] = useState<AuditOrderRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [open, setOpen] = useState(false)
   const [receiptError, setReceiptError] = useState('')
   const paramsKey = JSON.stringify({ ...apiParams(true), status: filters.estado || undefined })
 
@@ -39,7 +38,7 @@ export default function OrdersSection() {
     }
   }, [paramsKey])
 
-  useEffect(() => { if (open) load() }, [open, load])
+  useEffect(() => { load() }, [load])
 
   const downloadReceipt = async (o: AuditOrderRow, type: 'intake' | 'final') => {
     setReceiptError('')
@@ -59,7 +58,7 @@ export default function OrdersSection() {
   }
 
   return (
-    <details className="card" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+    <details className="card">
       <summary><h2 style={{ display: 'inline', fontSize: 'inherit' }}>Órdenes creadas en el período</h2></summary>
       <div className="filter-bar no-print" style={{ margin: '12px 0' }}>
         <div className="form-group">
