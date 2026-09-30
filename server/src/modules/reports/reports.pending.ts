@@ -20,7 +20,7 @@ const DEFAULT_REVISION = 15
 const round2 = (n: number) => Math.round(n * 100) / 100
 const sumAmount = (rows: { amount: unknown }[]) => rows.reduce((s, r) => s + Number(r.amount), 0)
 
-export const getPendingReport = async (f: { technicianId?: string; channel?: 'WEB' | 'APK' }) => {
+export const getPendingReport = async (f: { technicianId?: string; clientId?: string; channel?: 'WEB' | 'APK' }) => {
   const orders = await prisma.order.findMany({
     where: { ...orderScope(f), status: { in: PENDING_GROUPS.flatMap((g) => g.statuses) } },
     include: {
@@ -40,9 +40,13 @@ export const getPendingReport = async (f: { technicianId?: string; channel?: 'WE
     const finalBalance = Math.max(0, Number(o.budget ?? 0) - Number(o.revisionAmount ?? DEFAULT_REVISION) - confirmedBudget)
     const finalReported = o.status === 'READY' && o.finalPaymentDetails != null && !o.finalPaymentConfirmed
 
+    // Un abono de presupuesto pendiente ya está dentro de "por confirmar": no se cobra otra vez.
+    const pendingBudget = sumAmount(pending.filter((s) => s.kind === 'BUDGET'))
+    const finalOutstanding = Math.max(0, finalBalance - pendingBudget)
+
     let pendingConfirmation = sumAmount(pending)
     let balanceDue = 0
-    if (finalReported) pendingConfirmation += finalBalance
+    if (finalReported) pendingConfirmation += finalOutstanding
     if (o.status === 'PENDING_PAYMENT') {
       const advanceTotal = Number(o.revisionAmount ?? DEFAULT_REVISION) + Number(o.deliveryAmount ?? 0)
       balanceDue = Math.max(0, advanceTotal - sumAmount(subs.filter((s) => s.kind === 'REVISION')))
@@ -50,7 +54,7 @@ export const getPendingReport = async (f: { technicianId?: string; channel?: 'WE
       const extra = o.inventoryMovements.reduce((s, m) => s + m.quantity * Number(m.unitPriceAtUse ?? 0), 0)
       balanceDue = Math.max(0, extra - sumAmount(pending.filter((s) => s.kind === 'BUDGET')))
     } else if (o.status === 'READY' && !finalReported) {
-      balanceDue = finalBalance
+      balanceDue = finalOutstanding
     }
 
     return {
@@ -70,6 +74,7 @@ export const getPendingReport = async (f: { technicianId?: string; channel?: 'WE
   const confirmRows = rows.filter((r) => r.pendingConfirmation > 0.009)
   const dueRows = rows.filter((r) => r.balanceDue > 0.009)
   const confirmAmount = round2(confirmRows.reduce((s, r) => s + r.pendingConfirmation, 0))
+  const openRows = rows.filter((r) => r.pendingConfirmation > 0.009 || r.balanceDue > 0.009)
   const dueAmount = round2(dueRows.reduce((s, r) => s + r.balanceDue, 0))
 
   return {
@@ -78,6 +83,7 @@ export const getPendingReport = async (f: { technicianId?: string; channel?: 'WE
       return { key: g.key, label: g.label, count: groupRows.length, orders: groupRows }
     }),
     toCollect: {
+      orders: openRows.length,
       pendingConfirmation: { count: confirmRows.length, amount: confirmAmount },
       balanceDue: { count: dueRows.length, amount: dueAmount },
       total: round2(confirmAmount + dueAmount),

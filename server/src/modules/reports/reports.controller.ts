@@ -6,7 +6,7 @@ import { getPeriodReport } from './reports.period'
 import { getPartsReport } from './reports.parts'
 import { getPendingReport } from './reports.pending'
 
-// Parsea y valida from/to, compartido por getSummary y getAudit. Devuelve
+// Parsea y valida from/to, compartido por getAudit, getPeriod y getParts. Devuelve
 // null y ya envió la respuesta de error si algo es inválido.
 function parseDateRange(req: AuthRequest, res: Response): { from: Date; to: Date } | null {
   const { from, to } = req.query
@@ -132,8 +132,12 @@ export const getPending = async (req: AuthRequest, res: Response) => {
   try {
     const channel = parseChannel(req, res)
     if (channel === null) return
-    const { technicianId } = req.query
-    const data = await getPendingReport({ technicianId: technicianId ? String(technicianId) : undefined, channel })
+    const { technicianId, clientId } = req.query
+    const data = await getPendingReport({
+      technicianId: technicianId ? String(technicianId) : undefined,
+      clientId: clientId ? String(clientId) : undefined,
+      channel,
+    })
     res.json({ success: true, data })
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error al obtener los pendientes' })
