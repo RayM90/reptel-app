@@ -54,8 +54,8 @@ export default function PeriodTab() {
       <p className="print-only form-hint">Reporte del {rangeLabel}</p>
       <KpiRow loading={loading} items={[
         { label: 'Cobrado', value: money(period?.money.total ?? 0), detail: period ? `Revisión y delivery ${money(period.money.revision)} · Reparación ${money(period.money.repair)}` : undefined },
-        { label: 'Equipos', value: `${period?.activity.received ?? 0} entraron · ${period?.activity.delivered ?? 0} salieron` },
-        { label: 'Por cobrar al día de hoy', value: money(pending?.toCollect.total ?? 0), detail: pending ? `${pending.toCollect.pendingConfirmation.count + pending.toCollect.balanceDue.count} órdenes` : undefined },
+        { label: 'Equipos', value: `${period?.activity.received ?? 0} / ${period?.activity.delivered ?? 0}`, detail: 'entraron / salieron' },
+        { label: 'Por cobrar al día de hoy', value: money(pending?.toCollect.total ?? 0), detail: pending ? `${pending.toCollect.pendingConfirmation.count + pending.toCollect.balanceDue.count} ${pending.toCollect.pendingConfirmation.count + pending.toCollect.balanceDue.count === 1 ? 'orden' : 'órdenes'}` : undefined },
       ]} />
 
       {history && (

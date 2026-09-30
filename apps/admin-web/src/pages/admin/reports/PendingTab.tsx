@@ -44,7 +44,7 @@ export default function PendingTab() {
     <>
       <KpiRow loading={loading} items={[
         { label: 'Cobrado hoy', value: money(today?.money.total ?? 0), detail: today ? `Revisión y delivery ${money(today.money.revision)} · Reparación ${money(today.money.repair)}` : undefined },
-        { label: 'Equipos hoy', value: `${today?.activity.received ?? 0} entraron · ${today?.activity.delivered ?? 0} salieron` },
+        { label: 'Equipos hoy', value: `${today?.activity.received ?? 0} / ${today?.activity.delivered ?? 0}`, detail: 'entraron / salieron' },
         { label: 'Por cobrar ahora', value: money(pending?.toCollect.total ?? 0), detail: pending ? `${money(pending.toCollect.pendingConfirmation.amount)} por confirmar · ${money(pending.toCollect.balanceDue.amount)} sin pagar` : undefined },
       ]} />
 

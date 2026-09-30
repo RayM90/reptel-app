@@ -40,7 +40,7 @@ export default function Reports() {
     <div className="page-container">
       <div className="no-print page-header">
         <h1>Reportes</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="page-header-actions">
           <button className="btn btn-outline" onClick={() => window.print()}>Imprimir / PDF</button>
           <Link to="/admin" className="btn btn-secondary">← Volver al panel</Link>
         </div>
@@ -51,7 +51,16 @@ export default function Reports() {
           <button key={t.key} role="tab" id={`tab-${t.key}`} aria-controls={`panel-${t.key}`}
             aria-selected={filters.tab === t.key} tabIndex={filters.tab === t.key ? 0 : -1}
             onClick={() => update({ tab: t.key })}
-            onKeyDown={(e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') update({ tab: filters.tab === 'hoy' ? 'periodo' : 'hoy' }) }}>
+            onKeyDown={(e) => {
+              const i = tabs.findIndex((x) => x.key === t.key)
+              const next = e.key === 'ArrowRight' ? (i + 1) % tabs.length
+                : e.key === 'ArrowLeft' ? (i - 1 + tabs.length) % tabs.length
+                : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -1
+              if (next < 0) return
+              e.preventDefault()
+              update({ tab: tabs[next].key })
+              document.getElementById(`tab-${tabs[next].key}`)?.focus()
+            }}>
             {t.label}
           </button>
         ))}

@@ -59,7 +59,7 @@ export default function OrdersSection() {
 
   return (
     <details className="card">
-      <summary><h2 style={{ display: 'inline', fontSize: 'inherit' }}>Órdenes creadas en el período</h2></summary>
+      <summary className="report-summary"><h2 style={{ display: 'inline', fontSize: 'inherit' }}>Órdenes creadas en el período</h2></summary>
       <div className="filter-bar no-print" style={{ margin: '12px 0' }}>
         <div className="form-group">
           <label htmlFor="rep-estado">Estado</label>

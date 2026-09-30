@@ -37,7 +37,7 @@ export default function PartsSection({ data, loading, error, onRetry, rangeLabel
               </div>
             )}
 
-            <h3>Mermas de técnicos</h3>
+            <h3 className="subsection-title">Mermas de técnicos</h3>
             {data.technicianLosses.items.length === 0 ? (
               <p className="form-hint">Ningún técnico reportó repuestos dañados en este período.</p>
             ) : (
@@ -63,7 +63,7 @@ export default function PartsSection({ data, loading, error, onRetry, rangeLabel
               </>
             )}
 
-            <h3>Movimientos de tienda</h3>
+            <h3 className="subsection-title">Movimientos de tienda</h3>
             {data.store ? (
               <ul>
                 <li><strong>Dañados al recibir:</strong> {data.store.damagedOnArrival.units} uds. · {money(data.store.damagedOnArrival.amount)}</li>

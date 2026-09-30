@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 export interface ComboOption { id: string; label: string; sub?: string }
 
@@ -16,6 +16,16 @@ export default function EntityCombobox({ label, placeholder, selectedLabel, onSe
   const [query, setQuery] = useState('')
   const [options, setOptions] = useState<ComboOption[]>([])
   const [active, setActive] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const clearRef = useRef<HTMLButtonElement>(null)
+  const pendingFocus = useRef<'clear' | 'input' | null>(null)
+
+  // Al elegir → foco en la ✕ del valor; al quitar → foco en el buscador.
+  useEffect(() => {
+    if (pendingFocus.current === 'clear' && selectedLabel) clearRef.current?.focus()
+    if (pendingFocus.current === 'input' && !selectedLabel) inputRef.current?.focus()
+    pendingFocus.current = null
+  }, [selectedLabel])
 
   useEffect(() => {
     if (query.trim().length < 2) { setOptions([]); return }
@@ -23,7 +33,7 @@ export default function EntityCombobox({ label, placeholder, selectedLabel, onSe
     return () => clearTimeout(t)
   }, [query, search])
 
-  const choose = (opt: ComboOption) => { onSelect(opt); setQuery(''); setOptions([]) }
+  const choose = (opt: ComboOption) => { pendingFocus.current = 'clear'; onSelect(opt); setQuery(''); setOptions([]) }
 
   if (selectedLabel) {
     return (
@@ -31,7 +41,7 @@ export default function EntityCombobox({ label, placeholder, selectedLabel, onSe
         <span className="form-label" id={`${id}-l`}>{label}</span>
         <span className="chip" aria-labelledby={`${id}-l`}>
           {selectedLabel}
-          <button type="button" onClick={onClear} aria-label={`Quitar filtro de ${label.toLowerCase()}`}>✕</button>
+          <button type="button" ref={clearRef} onClick={() => { pendingFocus.current = 'input'; onClear() }} aria-label={`Quitar filtro de ${label.toLowerCase()}`}>✕</button>
         </span>
       </div>
     )
@@ -42,6 +52,7 @@ export default function EntityCombobox({ label, placeholder, selectedLabel, onSe
       <label htmlFor={`${id}-i`}>{label}</label>
       <input
         id={`${id}-i`}
+        ref={inputRef}
         type="text"
         role="combobox"
         aria-expanded={options.length > 0}

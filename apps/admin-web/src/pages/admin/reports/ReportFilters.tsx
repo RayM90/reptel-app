@@ -46,10 +46,9 @@ export default function ReportFilters({ mode }: { mode: 'hoy' | 'periodo' }) {
     else update({ preset: key, ...presetRange(key) })
   }
 
-  const chips: { label: string; clear: () => void }[] = []
-  if (filters.tec) chips.push({ label: `Técnico: ${filters.tecNombre}`, clear: () => update({ tec: '', tecNombre: '' }) })
-  if (mode === 'periodo' && filters.cli) chips.push({ label: `Cliente: ${filters.cliNombre}`, clear: () => update({ cli: '', cliNombre: '', cliCedula: '' }) })
-  if (filters.canal) chips.push({ label: `Canal: ${CHANNEL_LABEL[filters.canal]}`, clear: () => update({ canal: '' }) })
+  // Técnico y cliente ya se ven (con su ✕) dentro de cada buscador; aquí solo el canal.
+  const activeFilters = [filters.tec, mode === 'periodo' && filters.cli, filters.canal].filter(Boolean).length
+  const clearCanal = () => { update({ canal: '' }); document.getElementById('rep-canal')?.focus() }
 
   return (
     <div className="card no-print">
@@ -94,10 +93,10 @@ export default function ReportFilters({ mode }: { mode: 'hoy' | 'periodo' }) {
       </div>
       <p className="filter-chips" aria-live="polite">
         <span>{mode === 'periodo' ? `Mostrando: ${formatRange(filters.from, filters.to)}` : 'Mostrando: hoy y pendientes al momento'}</span>
-        {chips.map((c) => (
-          <span key={c.label} className="chip">{c.label}<button type="button" onClick={c.clear} aria-label={`Quitar ${c.label}`}>✕</button></span>
-        ))}
-        {chips.length > 1 && <button type="button" className="btn btn-outline" onClick={clearAll}>Limpiar filtros</button>}
+        {filters.canal && (
+          <span className="chip">Canal: {CHANNEL_LABEL[filters.canal]}<button type="button" onClick={clearCanal} aria-label={`Quitar Canal: ${CHANNEL_LABEL[filters.canal]}`}>✕</button></span>
+        )}
+        {activeFilters > 1 && <button type="button" className="btn btn-outline" onClick={clearAll}>Limpiar filtros</button>}
       </p>
     </div>
   )
