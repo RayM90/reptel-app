@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
 import * as reportsService from './reports.service'
+import { parseVenezuelaDay } from './reports.dates'
 
 // Parsea y valida from/to, compartido por getSummary y getAudit. Devuelve
 // null y ya envió la respuesta de error si algo es inválido.
@@ -12,12 +13,11 @@ function parseDateRange(req: AuthRequest, res: Response): { from: Date; to: Date
     return null
   }
 
-  const fromDate = new Date(String(from))
-  const toDate = new Date(String(to))
-  toDate.setHours(23, 59, 59, 999)
+  const fromDate = parseVenezuelaDay(String(from), 'start')
+  const toDate = parseVenezuelaDay(String(to), 'end')
 
-  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-    res.status(400).json({ success: false, message: 'Fechas inválidas' })
+  if (!fromDate || !toDate) {
+    res.status(400).json({ success: false, message: 'Fechas inválidas (formato AAAA-MM-DD)' })
     return null
   }
 
