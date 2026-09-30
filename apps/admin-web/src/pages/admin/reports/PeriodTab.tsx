@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../../services/api'
 import KpiRow from './KpiRow'
 import SectionState from './SectionState'
@@ -9,6 +9,7 @@ import { formatDay, formatRange } from './dateRange'
 import type { ClientHistory, PartsReport, PendingReport, PeriodReport } from './reports.types'
 import { formatFullName } from '../../../utils/formatName'
 
+const CHANNEL = { WEB: 'Mostrador', APK: 'App' } as const
 const money = (n: number) => `$${n.toFixed(2)}`
 
 export default function PeriodTab() {
@@ -19,18 +20,21 @@ export default function PeriodTab() {
   const [history, setHistory] = useState<ClientHistory | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState({ period: '', parts: '' })
+  const reqRef = useRef(0)
   const paramsKey = JSON.stringify(apiParams(true))
   const rangeLabel = formatRange(filters.from, filters.to)
 
   const load = useCallback(async () => {
+    const id = ++reqRef.current
     setLoading(true)
     const params = JSON.parse(paramsKey)
-    const { from: _from, to: _to, clientId: _clientId, ...noDates } = params
+    const { from: _from, to: _to, ...noDates } = params
     const [p, r, q] = await Promise.allSettled([
       api.get('/api/reports/period', { params }),
       api.get('/api/reports/parts', { params }),
       api.get('/api/reports/pending', { params: noDates }),
     ])
+    if (id !== reqRef.current) return
     setPeriod(p.status === 'fulfilled' ? p.value.data.data : null)
     setParts(r.status === 'fulfilled' ? r.value.data.data : null)
     setPending(q.status === 'fulfilled' ? q.value.data.data : null)
@@ -45,17 +49,25 @@ export default function PeriodTab() {
 
   useEffect(() => {
     if (!filters.cliCedula) { setHistory(null); return }
+    let cancelled = false
     api.get(`/api/reports/client-history/${encodeURIComponent(filters.cliCedula)}`)
-      .then((r) => setHistory(r.data.data)).catch(() => setHistory(null))
+      .then((r) => { if (!cancelled) setHistory(r.data.data) })
+      .catch(() => { if (!cancelled) setHistory(null) })
+    return () => { cancelled = true }
   }, [filters.cliCedula])
+
+  const filterLine = [`Reporte del ${rangeLabel}`,
+    filters.tecNombre && `Técnico: ${filters.tecNombre}`,
+    filters.cliNombre && `Cliente: ${filters.cliNombre}`,
+    filters.canal && `Canal: ${CHANNEL[filters.canal]}`].filter(Boolean).join(' · ')
 
   return (
     <>
-      <p className="print-only form-hint">Reporte del {rangeLabel}</p>
+      <p className="print-only form-hint">{filterLine}</p>
       <KpiRow loading={loading} items={[
-        { label: 'Cobrado', value: money(period?.money.total ?? 0), detail: period ? `Revisión y delivery ${money(period.money.revision)} · Reparación ${money(period.money.repair)}` : undefined },
-        { label: 'Equipos', value: `${period?.activity.received ?? 0} / ${period?.activity.delivered ?? 0}`, detail: 'entraron / salieron' },
-        { label: 'Por cobrar al día de hoy', value: money(pending?.toCollect.total ?? 0), detail: pending ? `${pending.toCollect.pendingConfirmation.count + pending.toCollect.balanceDue.count} ${pending.toCollect.pendingConfirmation.count + pending.toCollect.balanceDue.count === 1 ? 'orden' : 'órdenes'}` : undefined },
+        { label: 'Cobrado', value: money(period?.money.total ?? 0), failed: !period, detail: period ? `Revisión y delivery ${money(period.money.revision)} · Reparación ${money(period.money.repair)}` : undefined },
+        { label: 'Equipos', value: `${period?.activity.received ?? 0} / ${period?.activity.delivered ?? 0}`, failed: !period, detail: 'entraron / salieron' },
+        { label: 'Por cobrar al día de hoy', value: money(pending?.toCollect.total ?? 0), failed: !pending, detail: pending ? `${pending.toCollect.orders} ${pending.toCollect.orders === 1 ? 'orden' : 'órdenes'}` : undefined },
       ]} />
 
       {history && (

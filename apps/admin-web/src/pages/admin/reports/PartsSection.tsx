@@ -16,7 +16,7 @@ export default function PartsSection({ data, loading, error, onRetry, rangeLabel
         {data && (
           <>
             <p>
-              <strong>{data.used.units} usados en reparaciones</strong> · {money(data.used.amount)} cobrados al cliente
+              <strong>{data.used.units} usados en reparaciones</strong> · {money(data.used.amount)} a precio de venta
               {data.used.awaitingPaymentAmount > 0 && <> · <span className="form-hint">{money(data.used.awaitingPaymentAmount)} todavía sin pagar</span></>}
             </p>
             {data.used.byProduct.length > 0 && (

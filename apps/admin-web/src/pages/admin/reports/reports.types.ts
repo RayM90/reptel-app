@@ -78,6 +78,7 @@ export interface PendingOrderRow {
 export interface PendingReport {
   groups: { key: PendingGroupKey; label: string; count: number; orders: PendingOrderRow[] }[]
   toCollect: {
+    orders: number
     pendingConfirmation: { count: number; amount: number }
     balanceDue: { count: number; amount: number }
     total: number

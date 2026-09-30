@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../../services/api'
 import { getStatusBadge } from '../../../utils/statusBadge'
 import KpiRow from './KpiRow'
@@ -11,46 +11,51 @@ const money = (n: number) => `$${n.toFixed(2)}`
 const CHANNEL = { WEB: 'Mostrador', APK: 'App' } as const
 
 export default function PendingTab() {
-  const { apiParams } = useReportFilters()
+  const { filters, apiParams } = useReportFilters()
   const [today, setToday] = useState<PeriodReport | null>(null)
   const [pending, setPending] = useState<PendingReport | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [error, setError] = useState({ today: '', pending: '' })
+  const reqRef = useRef(0)
   const paramsKey = JSON.stringify(apiParams(false))
 
   const load = useCallback(async () => {
+    const id = ++reqRef.current
     setLoading(true)
-    setError('')
     const base = JSON.parse(paramsKey)
-    try {
-      const [t, p] = await Promise.all([
-        api.get('/api/reports/period', { params: { ...base, ...presetRange('hoy') } }),
-        api.get('/api/reports/pending', { params: base }),
-      ])
-      setToday(t.data.data)
-      setPending(p.data.data)
-    } catch {
-      setError('No se pudieron cargar los datos de hoy.')
-    } finally {
-      setLoading(false)
-    }
+    const [t, p] = await Promise.allSettled([
+      api.get('/api/reports/period', { params: { ...base, ...presetRange('hoy') } }),
+      api.get('/api/reports/pending', { params: base }),
+    ])
+    if (id !== reqRef.current) return
+    setToday(t.status === 'fulfilled' ? t.value.data.data : null)
+    setPending(p.status === 'fulfilled' ? p.value.data.data : null)
+    setError({
+      today: t.status === 'rejected' ? 'No se pudieron cargar los datos de hoy.' : '',
+      pending: p.status === 'rejected' ? 'No se pudieron cargar los pendientes.' : '',
+    })
+    setLoading(false)
   }, [paramsKey])
 
   useEffect(() => { load() }, [load])
 
+  const filterLine = ['Reporte de hoy y pendientes',
+    filters.tecNombre && `Técnico: ${filters.tecNombre}`,
+    filters.canal && `Canal: ${CHANNEL[filters.canal]}`].filter(Boolean).join(' · ')
   const totalOpen = pending?.groups.reduce((s, g) => s + g.count, 0) ?? 0
 
   return (
     <>
+      <p className="print-only form-hint">{filterLine}</p>
       <KpiRow loading={loading} items={[
-        { label: 'Cobrado hoy', value: money(today?.money.total ?? 0), detail: today ? `Revisión y delivery ${money(today.money.revision)} · Reparación ${money(today.money.repair)}` : undefined },
-        { label: 'Equipos hoy', value: `${today?.activity.received ?? 0} / ${today?.activity.delivered ?? 0}`, detail: 'entraron / salieron' },
-        { label: 'Por cobrar ahora', value: money(pending?.toCollect.total ?? 0), detail: pending ? `${money(pending.toCollect.pendingConfirmation.amount)} por confirmar · ${money(pending.toCollect.balanceDue.amount)} sin pagar` : undefined },
+        { label: 'Cobrado hoy', value: money(today?.money.total ?? 0), failed: !today, detail: today ? `Revisión y delivery ${money(today.money.revision)} · Reparación ${money(today.money.repair)}` : undefined },
+        { label: 'Equipos hoy', value: `${today?.activity.received ?? 0} / ${today?.activity.delivered ?? 0}`, failed: !today, detail: 'entraron / salieron' },
+        { label: 'Por cobrar ahora', value: money(pending?.toCollect.total ?? 0), failed: !pending, detail: pending ? `${money(pending.toCollect.pendingConfirmation.amount)} por confirmar · ${money(pending.toCollect.balanceDue.amount)} sin pagar` : undefined },
       ]} />
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Pendientes</h2>
-        <SectionState loading={loading} error={error} empty={totalOpen === 0} emptyText="Todo al día: no hay órdenes pendientes." onRetry={load}>
+        <SectionState loading={loading} error={error.pending} empty={totalOpen === 0} emptyText="Todo al día: no hay órdenes pendientes." onRetry={load}>
           {pending?.groups.map((g) => (
             <details key={g.key} className="pending-group" data-empty={g.count === 0} open={g.key === 'payment' && g.count > 0}>
               <summary aria-disabled={g.count === 0} onClick={(e) => { if (g.count === 0) e.preventDefault() }}>

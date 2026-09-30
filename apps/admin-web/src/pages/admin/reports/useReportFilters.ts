@@ -18,11 +18,15 @@ export interface ReportFilterState {
 
 const KEYS: (keyof ReportFilterState)[] = ['tab', 'preset', 'from', 'to', 'tec', 'tecNombre', 'cli', 'cliNombre', 'cliCedula', 'canal', 'estado']
 
+const PRESETS: string[] = ['hoy', 'semana', 'mes', 'personalizado']
+
 export function useReportFilters() {
   const [params, setParams] = useSearchParams()
 
   const filters = useMemo<ReportFilterState>(() => {
-    const preset = (params.get('preset') as Preset) || 'mes'
+    const rawPreset = params.get('preset')
+    const preset: Preset = PRESETS.includes(rawPreset ?? '') ? (rawPreset as Preset) : 'mes'
+    const rawCanal = params.get('canal')
     const fallback = presetRange(preset === 'personalizado' ? 'mes' : preset)
     return {
       tab: params.get('tab') === 'periodo' ? 'periodo' : 'hoy',
@@ -36,7 +40,7 @@ export function useReportFilters() {
       cli: params.get('cli') || '',
       cliNombre: params.get('cliNombre') || '',
       cliCedula: params.get('cliCedula') || '',
-      canal: (params.get('canal') as '' | 'WEB' | 'APK') || '',
+      canal: rawCanal === 'WEB' || rawCanal === 'APK' ? rawCanal : '',
       estado: params.get('estado') || '',
     }
   }, [params])

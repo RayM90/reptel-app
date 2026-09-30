@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../../services/api'
 import { getStatusBadge } from '../../../utils/statusBadge'
 import SectionState from './SectionState'
@@ -23,18 +23,22 @@ export default function OrdersSection() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [receiptError, setReceiptError] = useState('')
+  const reqRef = useRef(0)
   const paramsKey = JSON.stringify({ ...apiParams(true), status: filters.estado || undefined })
 
   const load = useCallback(async () => {
+    const id = ++reqRef.current
     setLoading(true)
     setError('')
     try {
       const r = await api.get('/api/reports/audit', { params: JSON.parse(paramsKey) })
+      if (id !== reqRef.current) return
       setRows(r.data.data)
     } catch {
+      if (id !== reqRef.current) return
       setError('No se pudieron cargar las órdenes.')
     } finally {
-      setLoading(false)
+      if (id === reqRef.current) setLoading(false)
     }
   }, [paramsKey])
 
