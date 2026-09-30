@@ -42,30 +42,6 @@ function parseChannel(req: AuthRequest, res: Response): 'WEB' | 'APK' | undefine
   return channel
 }
 
-export const getSummary = async (req: AuthRequest, res: Response) => {
-  try {
-    const range = parseDateRange(req, res)
-    if (!range) return
-
-    const channel = parseChannel(req, res)
-    if (channel === null) return
-
-    const { technicianId, clientId } = req.query
-
-    const summary = await reportsService.getReportSummary({
-      from: range.from,
-      to: range.to,
-      technicianId: technicianId ? String(technicianId) : undefined,
-      clientId: clientId ? String(clientId) : undefined,
-      channel,
-    })
-
-    res.json({ success: true, data: summary })
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al generar el reporte' })
-  }
-}
-
 export const getAudit = async (req: AuthRequest, res: Response) => {
   try {
     const range = parseDateRange(req, res)
