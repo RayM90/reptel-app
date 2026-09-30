@@ -2,6 +2,7 @@ import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
 import * as reportsService from './reports.service'
 import { parseVenezuelaDay } from './reports.dates'
+import { getPeriodReport } from './reports.period'
 
 // Parsea y valida from/to, compartido por getSummary y getAudit. Devuelve
 // null y ya envió la respuesta de error si algo es inválido.
@@ -108,5 +109,24 @@ export const getTechnicians = async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: technicians })
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error al obtener los técnicos' })
+  }
+}
+
+export const getPeriod = async (req: AuthRequest, res: Response) => {
+  try {
+    const range = parseDateRange(req, res)
+    if (!range) return
+    const channel = parseChannel(req, res)
+    if (channel === null) return
+    const { technicianId, clientId } = req.query
+    const data = await getPeriodReport({
+      ...range,
+      technicianId: technicianId ? String(technicianId) : undefined,
+      clientId: clientId ? String(clientId) : undefined,
+      channel,
+    })
+    res.json({ success: true, data })
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error al generar el reporte del período' })
   }
 }

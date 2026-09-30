@@ -8,5 +8,6 @@ router.get('/summary', authenticate, authorize('ADMIN'), reportsController.getSu
 router.get('/audit', authenticate, authorize('ADMIN'), reportsController.getAudit)
 router.get('/client-history/:idNumber', authenticate, authorize('ADMIN'), reportsController.getClientHistory)
 router.get('/technicians', authenticate, authorize('ADMIN'), reportsController.getTechnicians)
+router.get('/period', authenticate, authorize('ADMIN'), reportsController.getPeriod)
 
 export default router
