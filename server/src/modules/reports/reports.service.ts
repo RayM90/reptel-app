@@ -151,10 +151,13 @@ export const getAuditReport = async ({ from, to, status, channel, technicianId, 
     technicianCommission: Number(o.technicianCommission ?? 0),
     diagnosis: o.diagnosis,
     totalAmount: orderTotalAmount(o),
-    partsUsed: o.inventoryMovements.map((m) => ({
-      productName: m.product.name,
-      quantity: m.quantity,
-    })),
+    partsUsed: o.inventoryMovements
+      .filter((m) => m.lossReportedAt == null)
+      .map((m) => ({
+        productName: m.product.name,
+        quantity: m.quantity,
+        amount: m.quantity * Number(m.unitPriceAtUse ?? 0),
+      })),
   }))
 }
 
