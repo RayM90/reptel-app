@@ -819,3 +819,9 @@ details.card[open] summary::before {
 @media print {
   .report-tabs, .filter-bar, .filter-chips button { display: none; }
 }
+
+.money-breakdown { display: grid; grid-template-columns: 1fr auto; gap: 6px 24px; max-width: 420px; margin: 0 0 8px; }
+.money-breakdown dt { color: var(--color-text-muted); }
+.money-breakdown dd { margin: 0; font-variant-numeric: tabular-nums; }
+.print-only { display: none; }
+@media print { .print-only { display: block; } }
