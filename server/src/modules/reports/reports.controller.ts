@@ -4,6 +4,7 @@ import * as reportsService from './reports.service'
 import { parseVenezuelaDay } from './reports.dates'
 import { getPeriodReport } from './reports.period'
 import { getPartsReport } from './reports.parts'
+import { getPendingReport } from './reports.pending'
 
 // Parsea y valida from/to, compartido por getSummary y getAudit. Devuelve
 // null y ya envió la respuesta de error si algo es inválido.
@@ -148,5 +149,17 @@ export const getParts = async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data })
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error al generar el reporte de repuestos' })
+  }
+}
+
+export const getPending = async (req: AuthRequest, res: Response) => {
+  try {
+    const channel = parseChannel(req, res)
+    if (channel === null) return
+    const { technicianId } = req.query
+    const data = await getPendingReport({ technicianId: technicianId ? String(technicianId) : undefined, channel })
+    res.json({ success: true, data })
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error al obtener los pendientes' })
   }
 }
