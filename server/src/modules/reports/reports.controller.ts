@@ -3,7 +3,7 @@ import { AuthRequest } from '../../middleware/auth.middleware'
 import * as reportsService from './reports.service'
 import { parseVenezuelaDay } from './reports.dates'
 import { getPeriodReport } from './reports.period'
-import { getPartsReport } from './reports.parts'
+import { getPartsReport, getPartsDetail } from './reports.parts'
 import { getPendingReport } from './reports.pending'
 
 // Parsea y valida from/to, compartido por getAudit, getPeriod y getParts. Devuelve
@@ -125,6 +125,25 @@ export const getParts = async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data })
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error al generar el reporte de repuestos' })
+  }
+}
+
+export const getPartsDetailHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const range = parseDateRange(req, res)
+    if (!range) return
+    const channel = parseChannel(req, res)
+    if (channel === null) return
+    const { technicianId, clientId } = req.query
+    const data = await getPartsDetail({
+      ...range,
+      technicianId: technicianId ? String(technicianId) : undefined,
+      clientId: clientId ? String(clientId) : undefined,
+      channel,
+    })
+    res.json({ success: true, data })
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error al generar el detalle de repuestos' })
   }
 }
 

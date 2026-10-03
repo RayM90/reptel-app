@@ -9,6 +9,7 @@ router.get('/client-history/:idNumber', authenticate, authorize('ADMIN'), report
 router.get('/technicians', authenticate, authorize('ADMIN'), reportsController.getTechnicians)
 router.get('/period', authenticate, authorize('ADMIN'), reportsController.getPeriod)
 router.get('/parts', authenticate, authorize('ADMIN'), reportsController.getParts)
+router.get('/parts/detail', authenticate, authorize('ADMIN'), reportsController.getPartsDetailHandler)
 router.get('/pending', authenticate, authorize('ADMIN'), reportsController.getPending)
 
 export default router

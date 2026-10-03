@@ -59,7 +59,7 @@ describe('reports.period — getPeriodReport', () => {
         { day: '2026-05-12', received: 0, delivered: 1, collected: 40, partsUnits: 0, partsAmount: 0 },
       ])
       expect(r.technicians).toEqual([
-        { technicianId: tech.id, technicianName: tech.name, delivered: 1, commission: 16, avgDays: 2 },
+        { technicianId: tech.id, technicianName: tech.name, delivered: 1, commission: 16, avgHours: 48 },
       ])
 
       const onlyApp = await getPeriodReport({ from: FROM, to: TO, technicianId: tech.id, channel: 'APK' })

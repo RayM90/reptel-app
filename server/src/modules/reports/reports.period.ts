@@ -103,13 +103,13 @@ export const getPeriodReport = async (f: PeriodFilters) => {
     row.partsAmount += part.amount
   }
 
-  const techMap = new Map<string, { technicianId: string; technicianName: string; delivered: number; commission: number; totalDays: number }>()
+  const techMap = new Map<string, { technicianId: string; technicianName: string; delivered: number; commission: number; totalHours: number }>()
   for (const o of delivered) {
     if (!o.technician) continue
-    const entry = techMap.get(o.technician.id) ?? { technicianId: o.technician.id, technicianName: o.technician.name, delivered: 0, commission: 0, totalDays: 0 }
+    const entry = techMap.get(o.technician.id) ?? { technicianId: o.technician.id, technicianName: o.technician.name, delivered: 0, commission: 0, totalHours: 0 }
     entry.delivered += 1
     entry.commission += Number(o.technicianCommission ?? 0)
-    entry.totalDays += (o.deliveredAt!.getTime() - o.receivedAt.getTime()) / 86_400_000
+    entry.totalHours += (o.deliveredAt!.getTime() - o.receivedAt.getTime()) / 3_600_000
     techMap.set(o.technician.id, entry)
   }
 
@@ -123,7 +123,7 @@ export const getPeriodReport = async (f: PeriodFilters) => {
       .map((r) => ({ ...r, collected: round2(r.collected), partsAmount: round2(r.partsAmount) }))
       .sort((a, b) => a.day.localeCompare(b.day)),
     technicians: [...techMap.values()]
-      .map(({ totalDays, ...t }) => ({ ...t, commission: round2(t.commission), avgDays: t.delivered ? Math.round((totalDays / t.delivered) * 10) / 10 : null }))
+      .map(({ totalHours, ...t }) => ({ ...t, commission: round2(t.commission), avgHours: t.delivered ? Math.round((totalHours / t.delivered) * 10) / 10 : null }))
       .sort((a, b) => b.delivered - a.delivered),
   }
 }
