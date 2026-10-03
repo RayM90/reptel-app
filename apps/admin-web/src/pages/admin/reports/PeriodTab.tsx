@@ -9,13 +9,13 @@ import { formatDay, formatRange } from './dateRange'
 import type { ClientHistory, PartsReport, PendingReport, PeriodReport } from './reports.types'
 import { formatFullName } from '../../../utils/formatName'
 import { getStatusBadge } from '../../../utils/statusBadge'
-import { STATUS_GROUPS } from './ordersTable'
+import { STATUS_GROUPS, formatHours } from './ordersTable'
 
 const CHANNEL = { WEB: 'Mostrador', APK: 'App' } as const
 const money = (n: number) => `$${n.toFixed(2)}`
 
 export default function PeriodTab() {
-  const { filters, apiParams } = useReportFilters()
+  const { filters, update, apiParams } = useReportFilters()
   const [period, setPeriod] = useState<PeriodReport | null>(null)
   const [parts, setParts] = useState<PartsReport | null>(null)
   const [pending, setPending] = useState<PendingReport | null>(null)
@@ -112,31 +112,43 @@ export default function PeriodTab() {
         <h2 style={{ marginTop: 0 }}>Dinero</h2>
         <SectionState loading={loading} error={error.period} onRetry={load} empty={!period || period.money.total === 0} emptyText={`No se confirmaron pagos (${rangeLabel}).`}>
           {period && (
-            <dl className="money-breakdown">
-              <dt>Revisión y delivery</dt><dd className="money">{money(period.money.revision)}</dd>
-              <dt>Reparación y pago final</dt><dd className="money">{money(period.money.repair)}</dd>
-              <dt>Mostrador</dt><dd className="money">{money(period.money.byChannel.WEB)}</dd>
-              <dt>App</dt><dd className="money">{money(period.money.byChannel.APK)}</dd>
-            </dl>
+            <div className="money-groups">
+              <div>
+                <h3 className="money-group-title">Por tipo de pago</h3>
+                <dl className="money-breakdown">
+                  <dt>Revisión y delivery</dt><dd className="money">{money(period.money.revision)}</dd>
+                  <dt>Reparación y pago final</dt><dd className="money">{money(period.money.repair)}</dd>
+                  <dt className="money-total">Total</dt><dd className="money money-total">{money(period.money.total)}</dd>
+                </dl>
+              </div>
+              <div>
+                <h3 className="money-group-title">Por canal</h3>
+                <dl className="money-breakdown">
+                  <dt>Mostrador</dt><dd className="money">{money(period.money.byChannel.WEB)}</dd>
+                  <dt>App</dt><dd className="money">{money(period.money.byChannel.APK)}</dd>
+                  <dt className="money-total">Total</dt><dd className="money money-total">{money(period.money.total)}</dd>
+                </dl>
+              </div>
+            </div>
           )}
           <p className="form-hint">Cuenta los pagos que confirmaste en este período, por la fecha de confirmación.</p>
         </SectionState>
       </section>
 
-      <PartsSection data={parts} loading={loading} error={error.parts} onRetry={load} rangeLabel={rangeLabel} />
+      <PartsSection data={parts} loading={loading} error={error.parts} onRetry={load} rangeLabel={rangeLabel} onShowDetail={() => update({ tab: 'repuestos' })} />
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Técnicos</h2>
         <SectionState loading={loading} error={error.period} onRetry={load} empty={!period?.technicians.length} emptyText={`Ningún técnico entregó órdenes (${rangeLabel}).`}>
           <div className="table-wrapper">
             <table className="styled-table">
-              <thead><tr><th scope="col">Técnico</th><th scope="col">Entregadas</th><th scope="col">Días promedio</th><th scope="col" className="money">Comisión</th></tr></thead>
+              <thead><tr><th scope="col">Técnico</th><th scope="col">Entregadas</th><th scope="col">Tiempo promedio</th><th scope="col" className="money">Comisión</th></tr></thead>
               <tbody>
                 {period?.technicians.map((t) => (
                   <tr key={t.technicianId}>
                     <td data-label="Técnico">{t.technicianName}</td>
                     <td data-label="Entregadas">{t.delivered}</td>
-                    <td data-label="Días promedio">{t.avgDays ?? '—'}</td>
+                    <td data-label="Tiempo promedio">{formatHours(t.avgHours)}</td>
                     <td className="money" data-label="Comisión">{money(t.commission)}</td>
                   </tr>
                 ))}

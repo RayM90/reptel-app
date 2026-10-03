@@ -4,12 +4,14 @@ import { useReportFilters } from './reports/useReportFilters'
 import ReportFilters from './reports/ReportFilters'
 import PendingTab from './reports/PendingTab'
 import PeriodTab from './reports/PeriodTab'
+import PartsTab from './reports/PartsTab'
 
 export default function Reports() {
   const { filters, update } = useReportFilters()
   const tabs = [
     { key: 'hoy' as const, label: 'Hoy y pendientes' },
     { key: 'periodo' as const, label: 'Período' },
+    { key: 'repuestos' as const, label: 'Repuestos' },
   ]
 
   // Forzar que los <details className="card"> se muestren expandidos al
@@ -67,8 +69,8 @@ export default function Reports() {
       </div>
 
       <div role="tabpanel" id={`panel-${filters.tab}`} aria-labelledby={`tab-${filters.tab}`}>
-        <ReportFilters mode={filters.tab} />
-        {filters.tab === 'hoy' ? <PendingTab /> : <PeriodTab />}
+        <ReportFilters mode={filters.tab === 'hoy' ? 'hoy' : 'periodo'} />
+        {filters.tab === 'hoy' ? <PendingTab /> : filters.tab === 'periodo' ? <PeriodTab /> : <PartsTab />}
       </div>
     </div>
   )

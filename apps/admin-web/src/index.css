@@ -837,6 +837,12 @@ details.card[open] summary::before {
 .money-breakdown { display: grid; grid-template-columns: 1fr auto; gap: 6px 24px; max-width: 420px; margin: 0 0 8px; }
 .money-breakdown dt { color: var(--color-text-muted); }
 .money-breakdown dd { margin: 0; font-variant-numeric: tabular-nums; }
+.money-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 360px)); gap: 16px 48px; margin-bottom: 8px; }
+.money-group-title { font-family: inherit; font-size: 14px; font-weight: 600; color: var(--color-text-muted); margin: 0 0 8px; }
+.money-groups .money-breakdown { max-width: none; column-gap: 0; }
+.money-groups .money-breakdown dd { padding-left: 24px; }
+.money-total { border-top: 1px solid var(--color-border); padding-top: 6px; font-weight: 700; color: var(--color-text); }
+@media (max-width: 640px) { .money-groups { grid-template-columns: 1fr; } }
 /* Reportes: más ancho que el resto del panel — las tablas tienen muchas columnas */
 .page-container:has(> .reports-page) { max-width: 1320px; }
 .orders-table td, .orders-table th { padding-left: 10px; padding-right: 10px; }
@@ -844,5 +850,8 @@ details.card[open] summary::before {
 .nowrap { white-space: nowrap; }
 .receipt-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .btn-compact { padding: 6px 10px; font-size: 13px; min-height: 32px; }
+.section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 12px; }
+.parts-total-row td { font-weight: 700; border-top: 2px solid var(--color-border); }
+@media (max-width: 640px) { .parts-total-row td:empty { display: none; } }
 .print-only { display: none; }
 @media print { .print-only { display: block; } }

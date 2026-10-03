@@ -33,12 +33,16 @@ export function matchesSearch(row: { orderNumber: string; clientIdNumber: string
   return normalize(row.orderNumber).includes(needle) || normalize(row.clientIdNumber ?? '').includes(needle)
 }
 
-// Tiempo desde que entró hasta que se entregó. Sin entregar → "—".
-export function resolutionLabel(receivedAt: string, deliveredAt: string | null): string {
-  if (!deliveredAt) return '—'
-  const hours = (new Date(deliveredAt).getTime() - new Date(receivedAt).getTime()) / 3_600_000
-  if (hours < 0) return '—'
+// Duración legible: horas si fue menos de un día, si no días.
+export function formatHours(hours: number | null): string {
+  if (hours == null || hours < 0) return '—'
   if (hours < 24) return `${Math.max(1, Math.round(hours))} h`
   const days = Math.round(hours / 24)
   return `${days} ${days === 1 ? 'día' : 'días'}`
+}
+
+// Tiempo desde que entró hasta que se entregó. Sin entregar → "—".
+export function resolutionLabel(receivedAt: string, deliveredAt: string | null): string {
+  if (!deliveredAt) return '—'
+  return formatHours((new Date(deliveredAt).getTime() - new Date(receivedAt).getTime()) / 3_600_000)
 }

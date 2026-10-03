@@ -4,7 +4,7 @@ import { presetRange, type Preset } from './dateRange'
 import { isGroupKey, type GroupKey } from './ordersTable'
 
 export interface ReportFilterState {
-  tab: 'hoy' | 'periodo'
+  tab: 'hoy' | 'periodo' | 'repuestos'
   preset: Preset
   from: string
   to: string
@@ -17,9 +17,10 @@ export interface ReportFilterState {
   estado: string
   grupo: GroupKey | ''
   q: string
+  rep: string
 }
 
-const KEYS: (keyof ReportFilterState)[] = ['tab', 'preset', 'from', 'to', 'tec', 'tecNombre', 'cli', 'cliNombre', 'cliCedula', 'canal', 'estado', 'grupo', 'q']
+const KEYS: (keyof ReportFilterState)[] = ['tab', 'preset', 'from', 'to', 'tec', 'tecNombre', 'cli', 'cliNombre', 'cliCedula', 'canal', 'estado', 'grupo', 'q', 'rep']
 
 const PRESETS: string[] = ['hoy', 'semana', 'mes', 'personalizado']
 
@@ -32,7 +33,7 @@ export function useReportFilters() {
     const rawCanal = params.get('canal')
     const fallback = presetRange(preset === 'personalizado' ? 'mes' : preset)
     return {
-      tab: params.get('tab') === 'periodo' ? 'periodo' : 'hoy',
+      tab: params.get('tab') === 'periodo' ? 'periodo' : params.get('tab') === 'repuestos' ? 'repuestos' : 'hoy',
       preset,
       // Los presets se recalculan siempre: un enlace de "Esta semana" guardado
       // la semana pasada muestra la semana actual.
@@ -47,6 +48,7 @@ export function useReportFilters() {
       estado: params.get('estado') || '',
       grupo: isGroupKey(params.get('grupo') ?? '') ? (params.get('grupo') as GroupKey) : '',
       q: params.get('q') || '',
+      rep: params.get('rep') || '',
     }
   }, [params])
 
@@ -62,7 +64,7 @@ export function useReportFilters() {
     setParams(out, { replace: true })
   }, [filters, setParams])
 
-  const clearAll = useCallback(() => update({ tec: '', tecNombre: '', cli: '', cliNombre: '', cliCedula: '', canal: '', estado: '', grupo: '', q: '' }), [update])
+  const clearAll = useCallback(() => update({ tec: '', tecNombre: '', cli: '', cliNombre: '', cliCedula: '', canal: '', estado: '', grupo: '', q: '', rep: '' }), [update])
 
   const apiParams = useCallback((withDates: boolean) => {
     const p: Record<string, string> = {}

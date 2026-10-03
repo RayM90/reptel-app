@@ -21,7 +21,7 @@ export interface PeriodReport {
     technicianName: string
     delivered: number
     commission: number
-    avgDays: number | null
+    avgHours: number | null
   }[]
 }
 
@@ -129,4 +129,23 @@ export interface ClientHistory {
     deviceLabel: string
     totalAmount: number
   }[]
+}
+
+export type PartUseStatus = 'USED' | 'RETURNED' | 'LOSS'
+
+export interface PartsDetail {
+  rows: {
+    movementId: string
+    day: string
+    productId: string
+    productName: string
+    quantity: number
+    unitPrice: number
+    amount: number
+    orderNumber: string
+    technicianName: string
+    clientName: string
+    status: PartUseStatus
+  }[]
+  totals: { usedUnits: number; usedAmount: number; lossUnits: number; lossAmount: number; returnedUnits: number }
 }

@@ -4,12 +4,15 @@ import type { PartsReport } from './reports.types'
 
 const money = (n: number) => `$${n.toFixed(2)}`
 
-interface Props { data: PartsReport | null; loading: boolean; error: string; onRetry: () => void; rangeLabel: string }
+interface Props { data: PartsReport | null; loading: boolean; error: string; onRetry: () => void; rangeLabel: string; onShowDetail: () => void }
 
-export default function PartsSection({ data, loading, error, onRetry, rangeLabel }: Props) {
+export default function PartsSection({ data, loading, error, onRetry, rangeLabel, onShowDetail }: Props) {
   return (
     <section className="card">
-      <h2 style={{ marginTop: 0 }}>Repuestos</h2>
+      <div className="section-head">
+        <h2 style={{ margin: 0 }}>Repuestos</h2>
+        <button type="button" className="btn btn-outline btn-compact no-print" onClick={onShowDetail}>Ver detalle →</button>
+      </div>
       <SectionState loading={loading} error={error} onRetry={onRetry}
         empty={!!data && data.used.units === 0 && data.technicianLosses.units === 0 && (!data.store || (data.store.sales.units + data.store.damagedOnArrival.units + data.store.otherAdjustments.units === 0))}
         emptyText={`No se usaron repuestos (${rangeLabel}). Prueba otro rango.`}>
