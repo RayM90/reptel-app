@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../../services/api'
-import { getStatusBadge } from '../../../utils/statusBadge'
+import { badgeClassName, getStatusBadge } from '../../../utils/statusBadge'
 import KpiRow from './KpiRow'
 import SectionState from './SectionState'
 import { useReportFilters } from './useReportFilters'
@@ -71,11 +71,11 @@ export default function PendingTab() {
                     <tbody>
                       {g.orders.map((o) => (
                         <tr key={o.orderId}>
-                          <td data-label="Orden">{o.orderNumber}</td>
+                          <td data-label="Orden" className="nowrap"><strong>{o.orderNumber}</strong></td>
                           <td data-label="Cliente">{o.clientName}</td>
                           <td data-label="Técnico">{o.technicianName}</td>
                           <td data-label="Canal">{CHANNEL[o.channel]}</td>
-                          <td data-label="Estado">{getStatusBadge('order', o.status).label}</td>
+                          <td data-label="Estado"><span className={badgeClassName(getStatusBadge('order', o.status).variant)}>{getStatusBadge('order', o.status).label}</span></td>
                           <td data-label="Días abierta">{o.daysOpen}</td>
                           <td className="money" data-label="Pendiente">
                             {o.pendingConfirmation > 0 && <div>{money(o.pendingConfirmation)} por confirmar</div>}

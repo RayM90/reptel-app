@@ -47,7 +47,8 @@ export default function ReportFilters({ mode }: { mode: 'hoy' | 'periodo' }) {
   }
 
   // Técnico y cliente ya se ven (con su ✕) dentro de cada buscador; aquí solo el canal.
-  const activeFilters = [filters.tec, mode === 'periodo' && filters.cli, filters.canal].filter(Boolean).length
+  const activeFilters = [filters.tec, mode === 'periodo' && filters.cli, filters.canal,
+    mode === 'periodo' && (filters.estado || filters.grupo), mode === 'periodo' && filters.q].filter(Boolean).length
   const clearCanal = () => { update({ canal: '' }); document.getElementById('rep-canal')?.focus() }
 
   return (

@@ -805,6 +805,13 @@ details.card[open] summary::before {
 .kpi-label { font-size: 13px; color: var(--color-text-muted); margin: 0 0 6px; }
 .kpi-value { font-size: 32px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; margin: 0; }
 .kpi-detail { font-size: 13px; color: var(--color-text-muted); margin: 6px 0 0; }
+.status-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.status-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 44px; padding: 12px 14px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-bg-1); color: inherit; font: inherit; text-align: left; cursor: pointer; transition: border-color 150ms ease-out, background-color 150ms ease-out; }
+.status-card:hover { border-color: var(--color-text-muted); }
+.status-card:focus-visible { outline: 2px solid var(--color-secondary); outline-offset: 2px; }
+.status-card[aria-pressed="true"] { border-color: var(--color-secondary); background: #f1effa; box-shadow: inset 0 0 0 1px var(--color-secondary); }
+.status-card-value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.status-card-label { font-size: 13px; color: var(--color-text-muted); }
 
 .skeleton { background: linear-gradient(90deg, var(--color-bg-2), #ece7df, var(--color-bg-2)); background-size: 200% 100%; animation: skeleton 1.2s ease-in-out infinite; border-radius: 6px; }
 @keyframes skeleton { from { background-position: 200% 0 } to { background-position: -200% 0 } }
@@ -817,6 +824,7 @@ details.card[open] summary::before {
 
 @media (max-width: 640px) {
   .kpi-row { grid-template-columns: 1fr; }
+  .status-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-value { font-size: 28px; }
   .segmented { display: flex; flex-wrap: wrap; width: 100%; }
   .segmented button { flex: 1 1 auto; }
@@ -829,5 +837,12 @@ details.card[open] summary::before {
 .money-breakdown { display: grid; grid-template-columns: 1fr auto; gap: 6px 24px; max-width: 420px; margin: 0 0 8px; }
 .money-breakdown dt { color: var(--color-text-muted); }
 .money-breakdown dd { margin: 0; font-variant-numeric: tabular-nums; }
+/* Reportes: más ancho que el resto del panel — las tablas tienen muchas columnas */
+.page-container:has(> .reports-page) { max-width: 1320px; }
+.orders-table td, .orders-table th { padding-left: 10px; padding-right: 10px; }
+.orders-table td { vertical-align: top; }
+.nowrap { white-space: nowrap; }
+.receipt-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn-compact { padding: 6px 10px; font-size: 13px; min-height: 32px; }
 .print-only { display: none; }
 @media print { .print-only { display: block; } }

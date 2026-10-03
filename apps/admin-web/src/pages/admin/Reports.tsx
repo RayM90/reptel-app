@@ -37,7 +37,7 @@ export default function Reports() {
   }, [])
 
   return (
-    <div className="page-container">
+    <div className="reports-page">
       <div className="no-print page-header">
         <h1>Reportes</h1>
         <div className="page-header-actions">

@@ -8,6 +8,8 @@ import { useReportFilters } from './useReportFilters'
 import { formatDay, formatRange } from './dateRange'
 import type { ClientHistory, PartsReport, PendingReport, PeriodReport } from './reports.types'
 import { formatFullName } from '../../../utils/formatName'
+import { getStatusBadge } from '../../../utils/statusBadge'
+import { STATUS_GROUPS } from './ordersTable'
 
 const CHANNEL = { WEB: 'Mostrador', APK: 'App' } as const
 const money = (n: number) => `$${n.toFixed(2)}`
@@ -59,7 +61,10 @@ export default function PeriodTab() {
   const filterLine = [`Reporte del ${rangeLabel}`,
     filters.tecNombre && `Técnico: ${filters.tecNombre}`,
     filters.cliNombre && `Cliente: ${filters.cliNombre}`,
-    filters.canal && `Canal: ${CHANNEL[filters.canal]}`].filter(Boolean).join(' · ')
+    filters.canal && `Canal: ${CHANNEL[filters.canal]}`,
+    filters.grupo && `Órdenes: ${STATUS_GROUPS.find((g) => g.key === filters.grupo)?.label}`,
+    filters.estado && `Estado: ${getStatusBadge('order', filters.estado).label}`,
+    filters.q && `Búsqueda: ${filters.q}`].filter(Boolean).join(' · ')
 
   return (
     <>
