@@ -58,6 +58,12 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        // Revoca la sesión en el servidor sin esperar la respuesta: el token se
+        // pasa explícito porque el store se limpia justo después.
+        const { token, refreshToken } = get();
+        if (token) {
+          api.post("/api/auth/logout", { refreshToken }, { headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+        }
         if (refreshTimer) {
           clearTimeout(refreshTimer);
           refreshTimer = null;

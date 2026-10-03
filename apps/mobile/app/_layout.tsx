@@ -9,6 +9,8 @@ import { fontsToLoad } from '../src/theme/fonts'
 import { useAuthStore } from '../src/store/auth.store'
 import Toast from '../src/components/Toast'
 import ConfirmDialog from '../src/components/ConfirmDialog'
+import IdleWarning from '../src/components/IdleWarning'
+import { markActivity } from '../src/hooks/useIdleLogout'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 
@@ -67,7 +69,9 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       {/* View envolvente para que Toast y ConfirmDialog puedan superponerse
           sobre cualquier pantalla de la app, sin depender de cada Screen. */}
-      <View style={{ flex: 1 }}>
+      {/* Cada toque cuenta como actividad para el cierre por inactividad; se
+          devuelve false para no robarle el toque a la pantalla. */}
+      <View style={{ flex: 1 }} onStartShouldSetResponderCapture={() => { markActivity(); return false }}>
         <StatusBar style="light" />
         <Stack
           screenOptions={{
@@ -93,6 +97,7 @@ export default function RootLayout() {
 
         <Toast />
         <ConfirmDialog />
+        <IdleWarning />
       </View>
     </QueryClientProvider>
   )
