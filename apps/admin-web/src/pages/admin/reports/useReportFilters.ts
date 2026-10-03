@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { presetRange, type Preset } from './dateRange'
+import { isGroupKey, type GroupKey } from './ordersTable'
 
 export interface ReportFilterState {
   tab: 'hoy' | 'periodo'
@@ -14,9 +15,11 @@ export interface ReportFilterState {
   cliCedula: string
   canal: '' | 'WEB' | 'APK'
   estado: string
+  grupo: GroupKey | ''
+  q: string
 }
 
-const KEYS: (keyof ReportFilterState)[] = ['tab', 'preset', 'from', 'to', 'tec', 'tecNombre', 'cli', 'cliNombre', 'cliCedula', 'canal', 'estado']
+const KEYS: (keyof ReportFilterState)[] = ['tab', 'preset', 'from', 'to', 'tec', 'tecNombre', 'cli', 'cliNombre', 'cliCedula', 'canal', 'estado', 'grupo', 'q']
 
 const PRESETS: string[] = ['hoy', 'semana', 'mes', 'personalizado']
 
@@ -42,6 +45,8 @@ export function useReportFilters() {
       cliCedula: params.get('cliCedula') || '',
       canal: rawCanal === 'WEB' || rawCanal === 'APK' ? rawCanal : '',
       estado: params.get('estado') || '',
+      grupo: isGroupKey(params.get('grupo') ?? '') ? (params.get('grupo') as GroupKey) : '',
+      q: params.get('q') || '',
     }
   }, [params])
 
@@ -57,7 +62,7 @@ export function useReportFilters() {
     setParams(out, { replace: true })
   }, [filters, setParams])
 
-  const clearAll = useCallback(() => update({ tec: '', tecNombre: '', cli: '', cliNombre: '', cliCedula: '', canal: '', estado: '' }), [update])
+  const clearAll = useCallback(() => update({ tec: '', tecNombre: '', cli: '', cliNombre: '', cliCedula: '', canal: '', estado: '', grupo: '', q: '' }), [update])
 
   const apiParams = useCallback((withDates: boolean) => {
     const p: Record<string, string> = {}
