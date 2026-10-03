@@ -120,7 +120,7 @@ Todas las noches a las 23:00 una tarea programada de Windows ejecuta `scripts/re
 2. Guarda la copia en `Documentos\RepTel-respaldos` (últimos 7 días).
 3. La sube a Amazon S3 (`reptel-respaldos-369559608282/mysql/`), un bucket privado y cifrado que borra solas las copias de más de 30 días.
 
-Si la PC estaba apagada a las 23:00, el respaldo se ejecuta al encenderla. El registro de cada ejecución queda en `Documentos\RepTel-respaldosespaldo.log`.
+Si la PC estaba apagada a las 23:00, el respaldo se ejecuta al encenderla. El registro de cada ejecución queda en `Documentos\RepTel-respaldos\respaldo.log`.
 
 | Script | Uso |
 |---|---|
