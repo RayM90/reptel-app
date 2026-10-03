@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth.store'
+import { endSession } from '../lib/session'
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrador',
@@ -10,10 +11,8 @@ const ROLE_LABELS: Record<string, string> = {
 export default function Header() {
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
-  const logout = useAuthStore((state) => state.logout)
-
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await endSession()
     navigate('/login')
   }
 

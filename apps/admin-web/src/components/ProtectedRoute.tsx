@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth.store'
 import Header from './Header'
+import IdleWarning from './IdleWarning'
 
 type Role = 'ADMIN' | 'TECHNICIAN_DELIVERY' | 'TECHNICIAN'
 
@@ -23,6 +24,7 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
   return (
     <>
       <Header />
+      <IdleWarning />
       <div className="page-container">{children}</div>
     </>
   )

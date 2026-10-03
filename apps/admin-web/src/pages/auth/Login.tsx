@@ -250,6 +250,9 @@ export default function Login() {
       <div className="login-card">
         <img src="/logo-reptel.png" alt="RepTel" className="login-logo" />
         <p className="login-subtitle">Acceso de personal</p>
+        {new URLSearchParams(window.location.search).get('motivo') === 'inactividad' && (
+          <p className="form-hint" role="status">Tu sesión se cerró por inactividad. Vuelve a ingresar.</p>
+        )}
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Email</label>
