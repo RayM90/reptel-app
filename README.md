@@ -112,6 +112,26 @@ cd server && npm test
 
 ---
 
+## 💾 Respaldo de la base de datos
+
+Todas las noches a las 23:00 una tarea programada de Windows ejecuta `scripts/respaldo/respaldo-bd.ps1`:
+
+1. Saca una copia de la base MySQL con `mysqldump` y la comprime.
+2. Guarda la copia en `Documentos\RepTel-respaldos` (últimos 7 días).
+3. La sube a Amazon S3 (`reptel-respaldos-369559608282/mysql/`), un bucket privado y cifrado que borra solas las copias de más de 30 días.
+
+Si la PC estaba apagada a las 23:00, el respaldo se ejecuta al encenderla. El registro de cada ejecución queda en `Documentos\RepTel-respaldosespaldo.log`.
+
+| Script | Uso |
+|---|---|
+| `respaldo-bd.ps1` | Respaldo manual en cualquier momento |
+| `restaurar-bd.ps1` | Restaura el respaldo más reciente (pide escribir `RESTAURAR`). `-Archivo <nombre>` elige otro; `-BaseDestino <base>` lo carga en otra base sin tocar la real |
+| `registrar-tarea.ps1` | Crea o actualiza la tarea diaria (`-Hora '22:00'` para cambiar la hora) |
+
+**Requisitos:** MySQL Server 8.0, AWS CLI con el perfil `reptel-backup` (usuario IAM que solo puede leer y escribir en ese bucket) y `server/.env` con `DATABASE_URL`. Las contraseñas nunca se escriben en los scripts.
+
+> Si se mueve la carpeta del proyecto, vuelve a ejecutar `registrar-tarea.ps1` desde la nueva ubicación.
+
 ## 👥 Roles del sistema
 
 | Rol | Qué hace |
