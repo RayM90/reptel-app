@@ -50,7 +50,7 @@ export const trackOrder = async (req: AuthRequest, res: Response): Promise<void>
     res.json({ success: true, data: order })
   } catch (error) {
     console.error('ERROR TRACK ORDER:', error)
-    res.status(500).json({ success: false, message: 'Error al rastrear la orden', error: String(error) })
+    res.status(500).json({ success: false, message: 'Error al rastrear la orden' })
   }
 }
 

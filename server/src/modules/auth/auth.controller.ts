@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
-import { registerUser, loginUser, refreshUserToken, completeNewPasswordChallenge, createStaffUser, setTemporaryPassword } from './auth.service';
+import { registerUser, loginUser, refreshUserToken, completeNewPasswordChallenge, createStaffUser, setTemporaryPassword, revokeRefreshToken } from './auth.service';
+import { revokeToken } from '../../lib/tokenDenylist';
+import type { AuthRequest } from '../../middleware/auth.middleware';
 import { translateCognitoError } from './auth.errors';
 import prisma from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
@@ -363,4 +365,13 @@ export const resolvePasswordReset = async (req: Request, res: Response): Promise
   } catch (error: any) {
     res.status(400).json({ message: translateCognitoError(error) || 'Error al resolver la solicitud' });
   }
+};
+
+// Cerrar sesión: el token actual deja de servir en este servidor y el refresh
+// token queda revocado en Cognito. Si Cognito falla, igual se cierra la sesión.
+export const logout = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (req.user?.jti && req.user.exp) revokeToken(req.user.jti, req.user.exp);
+  const { refreshToken } = req.body ?? {};
+  if (refreshToken) await revokeRefreshToken(String(refreshToken)).catch(() => {});
+  res.json({ success: true, message: 'Sesión cerrada' });
 };

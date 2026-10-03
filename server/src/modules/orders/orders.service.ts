@@ -254,17 +254,18 @@ export const getOrderById = async (id: string) => {
 export const getOrderByNumber = async (orderNumber: string) => {
   return await prisma.order.findUnique({
     where: { orderNumber },
-    include: {
-      // Endpoint público (sin autenticación) — solo lo mínimo para que el
-      // cliente identifique su orden. Nunca teléfono/apellido (PII) ni la
-      // contraseña del equipo.
-      client: {
-        select: { id: true, name: true },
-      },
-      device: {
-        select: { id: true, type: true, brand: true, model: true, color: true, accessories: true },
-      },
-      statusHistory: { orderBy: { createdAt: 'desc' } },
+    // Endpoint público (sin autenticación): solo lo necesario para que el
+    // cliente siga su orden. Nada de montos, pagos, comisión, diagnóstico,
+    // teléfono/apellido ni la contraseña del equipo.
+    select: {
+      orderNumber: true,
+      status: true,
+      receivedAt: true,
+      deliveredAt: true,
+      updatedAt: true,
+      client: { select: { name: true } },
+      device: { select: { type: true, brand: true, model: true } },
+      statusHistory: { select: { status: true, createdAt: true }, orderBy: { createdAt: 'desc' } },
     },
   })
 }

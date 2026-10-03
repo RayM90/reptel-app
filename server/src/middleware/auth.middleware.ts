@@ -8,6 +8,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
+import { isTokenRevoked } from '../lib/tokenDenylist';
 
 /**
  * Verificador de tokens JWT configurado con el User Pool de Cognito
@@ -26,6 +27,8 @@ export interface AuthRequest extends Request {
     sub: string;      // ID único del usuario en Cognito
     email: string;    // Email del usuario
     groups: string[]; // Roles asignados (ADMIN, TECHNICIAN, etc.)
+    jti?: string;     // ID del token, para poder revocarlo al cerrar sesión
+    exp?: number;     // Vencimiento del token (segundos)
   };
 }
 
@@ -49,10 +52,17 @@ export const authenticate = async (
     const token = authHeader.split(' ')[1];
     const payload = await verifier.verify(token);
 
+    if (isTokenRevoked(payload.jti as string | undefined)) {
+      res.status(401).json({ message: 'Sesión cerrada' });
+      return;
+    }
+
   req.user = {
       sub: payload.sub,
       email: payload.email as string,
       groups: (payload['cognito:groups'] as string[]) || [],
+      jti: payload.jti as string | undefined,
+      exp: payload.exp,
     };
 
     next();

@@ -7,6 +7,7 @@ import {
   AdminConfirmSignUpCommand,
   AdminCreateUserCommand,
   AdminSetUserPasswordCommand,
+  RevokeTokenCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 
 import prisma from '../../lib/prisma';
@@ -256,4 +257,12 @@ export const setTemporaryPassword = async (email: string, tempPassword: string) 
       Permanent: false,
     })
   );
+};
+
+/**
+ * Revoca el refresh token en Cognito al cerrar sesión: ya no se puede usar
+ * para pedir tokens nuevos.
+ */
+export const revokeRefreshToken = async (refreshToken: string) => {
+  await client.send(new RevokeTokenCommand({ Token: refreshToken, ClientId: CLIENT_ID }));
 };
