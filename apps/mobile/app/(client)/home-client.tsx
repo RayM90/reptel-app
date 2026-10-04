@@ -7,12 +7,25 @@ import {
   Image
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/store/auth.store';
 import { useToastStore } from '../../src/store/toast.store';
 import { useConfirm } from '../../src/hooks/useConfirm';
 import { colors } from '../../src/theme/colors';
+import { ordersAPI } from '../../src/services/api';
+import { splitOrders } from '../../src/utils/orderGroups';
+import { CLIENT_STATUS_LABEL } from '../../src/utils/orderProgress';
+import SupportSheet from '../../src/components/SupportSheet';
+
+interface ActiveOrderSummary {
+  id: string;
+  orderNumber: string;
+  status: string;
+  receivedAt: string;
+  device: { brand: string; model: string };
+}
 
 export default function HomeClient() {
   const router = useRouter();
@@ -22,6 +35,27 @@ export default function HomeClient() {
   const insets = useSafeAreaInsets();
 
   const firstName = user?.name?.split(' ')[0] ?? 'Cliente';
+
+  // Orden en curso más reciente, para la tarjeta "En curso".
+  const [activeOrder, setActiveOrder] = useState<ActiveOrderSummary | null>(null);
+  const [supportOpen, setSupportOpen] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      ordersAPI
+        .getMyOrders()
+        .then((res) => setActiveOrder(splitOrders<ActiveOrderSummary>(res.data.data).active[0] ?? null))
+        .catch(() => setActiveOrder(null));
+    }, [])
+  );
+
+  const openActiveOrder = () => {
+    if (activeOrder) {
+      router.push({ pathname: '/(client)/my-technical-orders', params: { expandId: activeOrder.id } });
+    } else {
+      router.push('/(client)/my-technical-orders');
+    }
+  };
 
   const handleLogout = async () => {
     const confirmed = await confirmDialog({
@@ -35,13 +69,15 @@ export default function HomeClient() {
     router.replace('/welcome');
   };
 
-const primaryOptions = [
+  const primaryOptions = [
     {
       id: 'service',
       emoji: '🔧',
       label: 'Servicio Técnico',
       description: 'Solicita tu reparación y hazle seguimiento',
       route: '/(client)/technical-service',
+      selected: true,
+      soon: false,
     },
     {
       id: 'store',
@@ -50,39 +86,8 @@ const primaryOptions = [
       description: 'Accesorios y repuestos de alta calidad',
       // TODO: tienda física en desarrollo — reactivar cuando exista el flujo de mostrador
       route: null,
-    },
-  ];
-
-const secondaryOptions = [
-    {
-      id: 'orders',
-      emoji: '📦',
-      label: 'Mis Pedidos',
-      description: 'Historial de compras',
-      // TODO: tienda física en desarrollo — reactivar cuando exista el flujo de mostrador
-      route: null,
-    },
-    {
-      id: 'techOrders',
-      emoji: '🛠️',
-      label: 'Mis Órdenes',
-      description: 'Servicio técnico',
-      route: '/(client)/my-technical-orders',
-    },
-    {
-      id: 'support',
-      emoji: '💬',
-      label: 'Soporte',
-      description: 'WhatsApp activo',
-      route: null,
-    },
-    {
-      id: 'track',
-      emoji: '🔍',
-      label: 'Rastrear Orden',
-      description: 'Consulta el estado por número',
-      // TODO: pantalla pendiente de construir — usará GET /api/orders/track/:orderNumber
-      route: null,
+      selected: false,
+      soon: true,
     },
   ];
 
@@ -126,7 +131,7 @@ const secondaryOptions = [
             {primaryOptions.map(option => (
               <TouchableOpacity
                 key={option.id}
-                style={styles.mainCard}
+                style={[styles.mainCard, option.selected && styles.selectedCard]}
                 activeOpacity={0.85}
                 onPress={() => {
                   if (option.route) {
@@ -136,6 +141,7 @@ const secondaryOptions = [
                   }
                 }}
               >
+                {option.soon && <Text style={[styles.soonTag, styles.soonTagCorner]}>PRÓXIMAMENTE</Text>}
                 <View style={styles.iconWrapper}>
                   <Text style={styles.mainCardIcon}>{option.emoji}</Text>
                 </View>
@@ -149,26 +155,55 @@ const secondaryOptions = [
 
           {/* 3. TARJETAS SECUNDARIAS */}
           <View style={styles.secondaryRow}>
-            {secondaryOptions.map(option => (
-              <TouchableOpacity
-                key={option.id}
-                style={styles.subCard}
-                activeOpacity={0.85}
-                onPress={() => {
-                  if (option.route) {
-                  router.push(option.route as any)
-                 } else {
-                    showToast('Esta función estará disponible pronto.', 'info')
-                 }
-                }}
-              >
-                <View style={styles.subCardIconWrapper}>
-                  <Text style={styles.subCardIcon}>{option.emoji}</Text>
-                </View>
-                <Text style={styles.cardLabel}>{option.label}</Text>
-                <Text style={styles.cardDesc}>{option.description}</Text>
-              </TouchableOpacity>
-            ))}
+            {/* En curso: la orden activa más reciente */}
+            <TouchableOpacity style={[styles.subCard, styles.activeCard]} activeOpacity={0.85} onPress={openActiveOrder}>
+              <View style={styles.activeHeader}>
+                <View style={styles.statusDot} />
+                <Text style={styles.activeLabel}>EN CURSO</Text>
+              </View>
+              {activeOrder ? (
+                <>
+                  <Text style={styles.cardLabel}>{activeOrder.orderNumber}</Text>
+                  <Text style={styles.cardDesc} numberOfLines={2}>
+                    {activeOrder.device.brand} {activeOrder.device.model} ·{' '}
+                    {(CLIENT_STATUS_LABEL[activeOrder.status] ?? '').replace(/^\S+\s/, '')}
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.cardDesc}>Sin órdenes en curso</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.subCard, styles.selectedCard]}
+              activeOpacity={0.85}
+              onPress={() => router.push('/(client)/my-technical-orders')}
+            >
+              <View style={styles.subCardIconWrapper}>
+                <Text style={styles.subCardIcon}>🛠️</Text>
+              </View>
+              <Text style={styles.cardLabel}>Mis Órdenes</Text>
+              <Text style={styles.cardDesc}>Servicio técnico</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.subCard} activeOpacity={0.85} onPress={() => setSupportOpen(true)}>
+              <View style={styles.subCardIconWrapper}>
+                <Text style={styles.subCardIcon}>💬</Text>
+              </View>
+              <Text style={styles.cardLabel}>Soporte</Text>
+              <Text style={styles.cardDesc}>Atención al cliente</Text>
+            </TouchableOpacity>
+
+            {/* TODO: pantalla pendiente de construir — usará GET /api/orders/track/:orderNumber */}
+            <TouchableOpacity
+              style={styles.subCard}
+              activeOpacity={0.85}
+              onPress={() => showToast('Esta función estará disponible pronto.', 'info')}
+            >
+              <Text style={[styles.soonTag, { marginBottom: 8 }]}>PRÓXIMAMENTE</Text>
+              <Text style={styles.cardLabel}>Rastrear Orden</Text>
+              <Text style={styles.cardDesc}>Consulta el estado por número</Text>
+            </TouchableOpacity>
           </View>
 
           {/* 4. ESTADO DEL SERVICIO */}
@@ -180,6 +215,8 @@ const secondaryOptions = [
           </View>
 
         </ScrollView>
+
+        <SupportSheet visible={supportOpen} onClose={() => setSupportOpen(false)} />
       </LinearGradient>
     </>
   );
@@ -299,6 +336,46 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 10,
     elevation: 3,
+  },
+  selectedCard: {
+    borderWidth: 2,
+    borderColor: colors.secondary,
+    shadowColor: colors.secondary,
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  activeCard: {
+    borderWidth: 2,
+    borderColor: colors.success,
+  },
+  activeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
+  activeLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.success,
+    letterSpacing: 0.4,
+  },
+  soonTag: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.secondary,
+    backgroundColor: colors.backgroundAlt,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    overflow: 'hidden',
+    letterSpacing: 0.3,
+  },
+  soonTagCorner: {
+    position: 'absolute',
+    top: 8,
+    right: 10,
   },
   subCardIconWrapper: {
     width: 46,

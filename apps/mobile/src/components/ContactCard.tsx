@@ -7,6 +7,8 @@ import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native'
 interface Props {
   technician: { name: string; lastName?: string | null; phone?: string | null } | null | undefined
   storePhone?: string | null
+  // false en el panel de Soporte del inicio: solo la fila del local.
+  showTechnician?: boolean
 }
 
 const digitsOf = (phone: string) => phone.replace(/\D/g, '')
@@ -47,11 +49,11 @@ function ContactRow({ title, name, phone }: { title: string; name: string; phone
   )
 }
 
-export default function ContactCard({ technician, storePhone }: Props) {
+export default function ContactCard({ technician, storePhone, showTechnician = true }: Props) {
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Contacto</Text>
-      {technician ? (
+      {showTechnician && (technician ? (
         <ContactRow
           title="👤 Tu técnico"
           name={[technician.name, technician.lastName].filter(Boolean).join(' ')}
@@ -62,7 +64,7 @@ export default function ContactCard({ technician, storePhone }: Props) {
           <Text style={styles.rowTitle}>👤 Tu técnico</Text>
           <Text style={styles.rowPhone}>Estamos buscando un técnico disponible</Text>
         </View>
-      )}
+      ))}
       <ContactRow title="🏪 Atención al cliente" name="RepTel" phone={storePhone} />
     </View>
   )
