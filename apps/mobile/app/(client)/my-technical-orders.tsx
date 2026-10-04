@@ -19,6 +19,7 @@ import { useConfirm } from '../../src/hooks/useConfirm'
 import OrderProgress from '../../src/components/OrderProgress'
 import { getOrderProgress, clientHistoryComment, CLIENT_STATUS_LABEL } from '../../src/utils/orderProgress'
 import ContactCard from '../../src/components/ContactCard'
+import BudgetDecision from '../../src/components/BudgetDecision'
 import { usePaymentInfo } from '../../src/hooks/usePaymentInfo'
 
 // El backend guarda el método de pago con el enum de Prisma (MOBILE_PAYMENT,
@@ -140,8 +141,6 @@ const STATUS_BG: Record<OrderStatus, string> = {
   CANCELLED: '#FBE9E7',
 }
 
-const REJECT_REASONS = ['Es muy costoso', 'Prefiero resolverlo por mi cuenta', 'Otro']
-
 export default function MyTechnicalOrdersScreen() {
   const router = useRouter()
   const [orders, setOrders] = useState<TechOrder[]>([])
@@ -149,8 +148,6 @@ export default function MyTechnicalOrdersScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const showToast = useToastStore((state) => state.showToast)
   const confirmDialog = useConfirm()
-  const [rejectReason, setRejectReason] = useState<Record<string, string>>({})
-  const [rejectReasonOther, setRejectReasonOther] = useState<Record<string, string>>({})
   const [disputeNote, setDisputeNote] = useState<Record<string, string>>({})
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({})
   const [downloadingReceipt, setDownloadingReceipt] = useState<string | null>(null)
@@ -224,13 +221,28 @@ export default function MyTechnicalOrdersScreen() {
     })
   }
 
-  const handleRejectBudget = async (order: TechOrder) => {
-    const selected = rejectReason[order.id]
-    if (!selected) {
-      showToast('Selecciona un motivo antes de rechazar.', 'error')
-      return
-    }
-    const reason = selected === 'Otro' ? (rejectReasonOther[order.id] || '').trim() : selected
+  const goToBudgetPayment = (
+    order: TechOrder,
+    mode: 'approve' | 'extra',
+    preset: 'minimum' | 'full',
+    payable: { pendingForMinimum: number; maxAmount: number }
+  ) => {
+    router.push({
+      pathname: '/(client)/budget-payment',
+      params: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        budget: String(order.budget ?? 0),
+        mode,
+        preset,
+        minimumPercent: String(order.paymentSummary?.minimumPercent ?? 50),
+        pendingForMinimum: String(payable.pendingForMinimum),
+        maxAmount: String(payable.maxAmount),
+      },
+    })
+  }
+
+  const handleRejectBudget = async (order: TechOrder, reason: string) => {
     if (!reason) {
       showToast('Describe el motivo antes de rechazar.', 'error')
       return
@@ -591,80 +603,15 @@ export default function MyTechnicalOrdersScreen() {
                           "diagnóstico sin costo adicional" de más abajo, igual
                           que budget === 0 (Finding 4, revisión final). */}
                       {status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15) && (
-                        <View style={styles.decisionCard}>
-                          <Text style={styles.decisionTitle}>¿Qué decides con este presupuesto?</Text>
-
-                          {payable.pendingReview > 0.009 && (
-                            <Text style={styles.reasonLabel}>Tienes ${payable.pendingReview.toFixed(2)} en revisión por el local.</Text>
-                          )}
-
-                          {payable.pendingForMinimum > 0.009 && (
-                            <TouchableOpacity
-                              style={styles.approveBtn}
-                              onPress={(e) => {
-                                e.stopPropagation()
-                                router.push({
-                                  pathname: '/(client)/budget-payment',
-                                  params: {
-                                    orderId: order.id,
-                                    orderNumber: order.orderNumber,
-                                    budget: String(order.budget ?? 0),
-                                    mode: 'approve',
-                                    minimumPercent: String(order.paymentSummary?.minimumPercent ?? 50),
-                                    pendingForMinimum: String(payable.pendingForMinimum),
-                                    maxAmount: String(payable.maxAmount),
-                                  },
-                                })
-                              }}
-                            >
-                              <Text style={styles.approveBtnText}>✅ Pagar el {order.paymentSummary?.minimumPercent ?? 50}% y aprobar</Text>
-                            </TouchableOpacity>
-                          )}
-
-                          <Text style={styles.reasonLabel}>O si prefieres no reparar, indica por qué:</Text>
-                          <View style={styles.reasonRow}>
-                            {REJECT_REASONS.map((r) => (
-                              <TouchableOpacity
-                                key={r}
-                                style={[styles.reasonChip, rejectReason[order.id] === r && styles.reasonChipActive]}
-                                onPress={(e) => {
-                                  e.stopPropagation()
-                                  setRejectReason((prev) => ({ ...prev, [order.id]: r }))
-                                  if (r !== 'Otro') {
-                                    setRejectReasonOther((prev) => ({ ...prev, [order.id]: '' }))
-                                  }
-                                }}
-                              >
-                                <Text style={[styles.reasonChipText, rejectReason[order.id] === r && styles.reasonChipTextActive]}>
-                                  {r}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-
-                          {rejectReason[order.id] === 'Otro' && (
-                            <TextInput
-                              style={styles.reasonInput}
-                              placeholder="Cuéntanos el motivo..."
-                              placeholderTextColor="#9aa5cc"
-                              value={rejectReasonOther[order.id] || ''}
-                              onChangeText={(text) =>
-                                setRejectReasonOther((prev) => ({ ...prev, [order.id]: text }))
-                              }
-                              onTouchStart={(e) => e.stopPropagation()}
-                            />
-                          )}
-
-                          {!!rejectReason[order.id] && (
-                            <TouchableOpacity
-                              style={[styles.rejectBtn, actionLoading[order.id] && styles.actionBtnDisabled]}
-                              onPress={(e) => { e.stopPropagation(); handleRejectBudget(order) }}
-                              disabled={actionLoading[order.id]}
-                            >
-                              <Text style={styles.rejectBtnText}>❌ Rechazar presupuesto</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
+                        <BudgetDecision
+                          kind="budget"
+                          minimumAmount={payable.pendingForMinimum}
+                          fullAmount={payable.maxAmount}
+                          pendingReview={payable.pendingReview}
+                          loading={!!actionLoading[order.id]}
+                          onPay={(preset) => goToBudgetPayment(order, 'approve', preset, payable)}
+                          onReject={(reason) => handleRejectBudget(order, reason ?? '')}
+                        />
                       )}
 
                       {/* Decisión del cliente — diagnóstico SIN costo (incluye
@@ -713,49 +660,20 @@ export default function MyTechnicalOrdersScreen() {
 
                       {/* Repuesto adicional durante la reparación */}
                       {status === 'WAITING_EXTRA_PAYMENT' && order.paymentSummary && (
-                        <View style={styles.decisionCard}>
-                          <Text style={styles.decisionTitle}>Tu reparación necesita un repuesto adicional</Text>
+                        <>
                           <Text style={styles.reasonLabel}>
                             Presupuesto nuevo: ${order.paymentSummary.budget.toFixed(2)} · Pagado: ${order.paymentSummary.paid.toFixed(2)}.
-                            {payable.pendingForMinimum > 0.009 &&
-                              ` Paga $${payable.pendingForMinimum.toFixed(2)} para que el técnico continúe.`}
                           </Text>
-
-                          {payable.pendingReview > 0.009 && (
-                            <Text style={styles.reasonLabel}>Tienes ${payable.pendingReview.toFixed(2)} en revisión por el local.</Text>
-                          )}
-
-                          {payable.pendingForMinimum > 0.009 && (
-                            <TouchableOpacity
-                              style={styles.approveBtn}
-                              onPress={(e) => {
-                                e.stopPropagation()
-                                router.push({
-                                  pathname: '/(client)/budget-payment',
-                                  params: {
-                                    orderId: order.id,
-                                    orderNumber: order.orderNumber,
-                                    budget: String(order.budget ?? 0),
-                                    mode: 'extra',
-                                    minimumPercent: String(order.paymentSummary?.minimumPercent ?? 50),
-                                    pendingForMinimum: String(payable.pendingForMinimum),
-                                    maxAmount: String(payable.maxAmount),
-                                  },
-                                })
-                              }}
-                            >
-                              <Text style={styles.approveBtnText}>💳 Pagar ${payable.pendingForMinimum.toFixed(2)} y continuar</Text>
-                            </TouchableOpacity>
-                          )}
-
-                          <TouchableOpacity
-                            style={[styles.rejectBtn, actionLoading[order.id] && styles.actionBtnDisabled]}
-                            onPress={(e) => { e.stopPropagation(); handleRejectExtraPart(order) }}
-                            disabled={actionLoading[order.id]}
-                          >
-                            <Text style={styles.rejectBtnText}>❌ No quiero el repuesto</Text>
-                          </TouchableOpacity>
-                        </View>
+                          <BudgetDecision
+                            kind="extra"
+                            minimumAmount={payable.pendingForMinimum}
+                            fullAmount={payable.maxAmount}
+                            pendingReview={payable.pendingReview}
+                            loading={!!actionLoading[order.id]}
+                            onPay={(preset) => goToBudgetPayment(order, 'extra', preset, payable)}
+                            onReject={() => handleRejectExtraPart(order)}
+                          />
+                        </>
                       )}
 
                       {/* Motivo de rechazo del pago final, si aplica */}
@@ -1049,18 +967,6 @@ const styles = StyleSheet.create({
   },
   approveBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   reasonLabel: { fontSize: 12, color: '#5364ad', marginBottom: 8 },
-  reasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
-  reasonChip: {
-    borderWidth: 1.5,
-    borderColor: '#d0d8ff',
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: '#fff',
-  },
-  reasonChipActive: { borderColor: '#B3261E', backgroundColor: '#fee2e2' },
-  reasonChipText: { fontSize: 12, color: '#17247a', fontWeight: '600' },
-  reasonChipTextActive: { color: '#B3261E' },
   reasonInput: {
     backgroundColor: '#fff',
     borderRadius: 10,

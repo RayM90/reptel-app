@@ -40,11 +40,12 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
 
 export default function BudgetPaymentScreen() {
   const router = useRouter()
-  const { orderId, orderNumber, budget, mode, minimumPercent, pendingForMinimum, maxAmount } = useLocalSearchParams<{
+  const { orderId, orderNumber, budget, mode, preset, minimumPercent, pendingForMinimum, maxAmount } = useLocalSearchParams<{
     orderId: string
     orderNumber: string
     budget: string
     mode: 'approve' | 'extra'
+    preset?: 'minimum' | 'full'
     minimumPercent: string
     pendingForMinimum: string
     maxAmount: string
@@ -65,7 +66,9 @@ export default function BudgetPaymentScreen() {
   const [banco, setBanco] = useState('')
   const [telefono, setTelefono] = useState('')
   const [referencia, setReferencia] = useState('')
-  const [monto, setMonto] = useState(String(minimumNumber.toFixed(2)))
+  // Monto inicial según lo que eligió en la tarjeta de decisión (mínimo o todo).
+  const initialAmount = preset === 'full' ? totalNumber : minimumNumber
+  const [monto, setMonto] = useState(String(initialAmount.toFixed(2)))
   const [titular, setTitular] = useState('')
   const [cedulaLetter, setCedulaLetter] = useState<'V' | 'E'>('V')
   const [cedulaNumber, setCedulaNumber] = useState('')
