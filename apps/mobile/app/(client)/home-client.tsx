@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/store/auth.store';
 import { useToastStore } from '../../src/store/toast.store';
 import { useConfirm } from '../../src/hooks/useConfirm';
@@ -18,6 +19,7 @@ export default function HomeClient() {
   const { user, logout } = useAuthStore();
   const showToast = useToastStore((state) => state.showToast);
   const confirmDialog = useConfirm();
+  const insets = useSafeAreaInsets();
 
   const firstName = user?.name?.split(' ')[0] ?? 'Cliente';
 
@@ -93,8 +95,12 @@ const secondaryOptions = [
         style={styles.container}
       >
         {/* Barra superior con cerrar sesión */}
-        <View style={styles.topBar}>
-          <TouchableOpacity onPress={handleLogout}>
+        <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
+          <TouchableOpacity
+            onPress={handleLogout}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={styles.logoutBtn}
+          >
             <Text style={styles.logoutText}>Cerrar sesión →</Text>
           </TouchableOpacity>
         </View>
@@ -186,8 +192,11 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingTop: 30,
     paddingHorizontal: 22,
+  },
+  logoutBtn: {
+    minHeight: 44,
+    justifyContent: 'center',
   },
   logoutText: {
     fontSize: 14,

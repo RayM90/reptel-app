@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, Stack } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Feather } from '@expo/vector-icons'
 import { useToastStore } from '../../src/store/toast.store'
@@ -260,6 +260,7 @@ export default function TechnicalServiceScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <Stack.Screen options={{ title: 'Servicio Técnico' }} />
       <LinearGradient
         colors={['#ffffff', '#eef2ff', '#d5ddff', '#8fa5ff']}
         style={{ flex: 1 }}

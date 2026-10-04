@@ -26,16 +26,10 @@ function BackButton() {
 }
 
 // ── Botón home ───────────────────────────────────────────────────
+// Vuelve al inicio del cliente sin cerrar la sesión.
 function HomeButton() {
-  const { logout } = useAuthStore()
-
-  const handleHome = () => {
-    logout()
-    router.replace('/welcome')
-  }
-
   return (
-    <TouchableOpacity style={styles.headerBtn} onPress={handleHome}>
+    <TouchableOpacity style={styles.headerBtn} onPress={() => router.replace('/(client)/home-client')}>
       <Text style={styles.headerBtnText}>🏠 Inicio</Text>
     </TouchableOpacity>
   )
