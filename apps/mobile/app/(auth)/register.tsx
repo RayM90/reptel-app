@@ -10,10 +10,10 @@ import {
   Platform,
   Image,
   Dimensions,
-  SafeAreaView,
   StatusBar,
   ScrollView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
@@ -23,6 +23,10 @@ import PhoneInput from "../../src/components/PhoneInput";
 import IdNumberInput, { isCompanyIdPrefix } from "../../src/components/IdNumberInput";
 import EmailAutocompleteInput from "../../src/components/EmailAutocompleteInput";
 import AddressFields, { emptyAddressValues, isAddressComplete, AddressValues } from "../../src/components/AddressFields";
+
+// Igual que el SafeAreaView de react-native (obsoleto): solo en iOS se
+// respeta el área segura; en Android el diseño ya deja su propio margen.
+const SAFE_EDGES = Platform.OS === "ios" ? (["top", "bottom"] as const) : ([] as const);
 
 const { width } = Dimensions.get("window");
 const SECONDARY_LABELS = ["Casa", "Trabajo", "Otro"];
@@ -160,7 +164,7 @@ export default function RegisterScreen() {
       end={{ x: 0, y: 1 }}
       style={styles.gradient}
     >
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={SAFE_EDGES}>
         <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
         <KeyboardAvoidingView

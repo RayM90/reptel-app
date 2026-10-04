@@ -1,17 +1,22 @@
 // apps/mobile/app/welcome.tsx
 import { useRouter } from "expo-router";
 import {
+  Platform,
   Dimensions,
   Image,
   ImageBackground,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+
+// Igual que el SafeAreaView de react-native (obsoleto): solo en iOS se
+// respeta el área segura; en Android el diseño ya deja su propio margen.
+const SAFE_EDGES = Platform.OS === "ios" ? (["top", "bottom"] as const) : ([] as const);
 
 const { width, height } = Dimensions.get("window");
 
@@ -25,7 +30,7 @@ export default function WelcomeScreen() {
       end={{ x: 0, y: 1 }}
       style={styles.gradient}
     >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={SAFE_EDGES}>
         <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
         {/* ── LOGO ── */}
