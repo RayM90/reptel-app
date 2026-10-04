@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { registerUser, loginUser, refreshUserToken, completeNewPasswordChallenge, createStaffUser, setTemporaryPassword, revokeRefreshToken } from './auth.service';
+import * as authService from './auth.service';
 import { revokeToken } from '../../lib/tokenDenylist';
 import type { AuthRequest } from '../../middleware/auth.middleware';
 import { translateCognitoError } from './auth.errors';
@@ -317,6 +318,44 @@ export const checkIdNumber = async (req: Request, res: Response): Promise<void> 
   }
 };
 
+const STAFF_ROLES: string[] = ['ADMIN', 'TECHNICIAN', 'TECHNICIAN_DELIVERY'];
+const FORGOT_MESSAGE = 'Si el correo está registrado, te enviamos un código para cambiar tu contraseña.';
+
+// Recuperación propia del cliente (app): el código llega a su correo. Los
+// trabajadores siguen pidiéndola al administrador. Misma respuesta exista o
+// no la cuenta, para no revelar qué correos están registrados.
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const email = String(req.body?.email ?? '').trim().toLowerCase();
+    if (!email) {
+      res.status(400).json({ message: 'El correo es requerido' });
+      return;
+    }
+    const user = await prisma.user.findUnique({ where: { email }, select: { role: true } });
+    if (user?.role === 'CLIENT') {
+      await authService.sendForgotPasswordCode(email).catch((e) => console.error('ERROR FORGOT PASSWORD:', e?.name));
+    }
+    res.status(200).json({ success: true, message: FORGOT_MESSAGE });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Error al procesar la solicitud' });
+  }
+};
+
+export const confirmForgotPasswordHandler = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const email = String(req.body?.email ?? '').trim().toLowerCase();
+    const { code, newPassword } = req.body ?? {};
+    if (!email || !code || !newPassword) {
+      res.status(400).json({ message: 'Correo, código y nueva contraseña son requeridos' });
+      return;
+    }
+    await authService.confirmForgotPassword(email, String(code).trim(), newPassword);
+    res.status(200).json({ success: true, message: 'Contraseña actualizada. Ya puedes iniciar sesión.' });
+  } catch (error: any) {
+    res.status(400).json({ message: translateCognitoError(error) || 'No se pudo cambiar la contraseña' });
+  }
+};
+
 // Mensaje idéntico se devuelva o no la cuenta exista — evita que este
 // endpoint público sirva para enumerar qué emails están registrados.
 const GENERIC_RESET_MESSAGE = 'Si el correo existe en el sistema, un administrador se pondrá en contacto para restablecer tu contraseña.';
@@ -329,8 +368,10 @@ export const requestPasswordReset = async (req: Request, res: Response): Promise
       return;
     }
 
+    // Solo trabajadores: los clientes recuperan su clave con un código por
+    // correo (forgotPassword).
     const user = await prisma.user.findUnique({ where: { email } });
-    if (user) {
+    if (user && STAFF_ROLES.includes(user.role)) {
       await prisma.passwordResetRequest.create({ data: { email } });
     }
 
@@ -342,8 +383,11 @@ export const requestPasswordReset = async (req: Request, res: Response): Promise
 
 export const listPasswordResetRequests = async (_req: Request, res: Response): Promise<void> => {
   try {
+    const staffEmails = (
+      await prisma.user.findMany({ where: { role: { in: STAFF_ROLES as any } }, select: { email: true } })
+    ).map((u) => u.email);
     const requests = await prisma.passwordResetRequest.findMany({
-      where: { status: 'PENDING' },
+      where: { status: 'PENDING', email: { in: staffEmails } },
       orderBy: { createdAt: 'desc' },
     });
     res.status(200).json({ success: true, data: requests });

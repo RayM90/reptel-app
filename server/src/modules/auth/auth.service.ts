@@ -8,6 +8,9 @@ import {
   AdminCreateUserCommand,
   AdminSetUserPasswordCommand,
   AdminDeleteUserCommand,
+  AdminUpdateUserAttributesCommand,
+  ForgotPasswordCommand,
+  ConfirmForgotPasswordCommand,
   RevokeTokenCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 
@@ -58,6 +61,10 @@ export const registerUser = async (input: {
       Username: email,
     })
   );
+
+  // 2b. Correo verificado: sin esto Cognito no puede enviarle el código de
+  // recuperación de contraseña.
+  await markEmailVerified(email);
 
   // 3. Asignar grupo/rol
   await client.send(
@@ -301,3 +308,26 @@ export const createClientCognitoAccount = async (
 export const deleteCognitoUser = async (email: string): Promise<void> => {
   await client.send(new AdminDeleteUserCommand({ UserPoolId: USER_POOL_ID, Username: email }));
 };
+
+// Cognito envía el código al correo (cuenta de correo por defecto del User
+// Pool). Requiere email_verified = true.
+export const sendForgotPasswordCode = async (email: string): Promise<void> => {
+  await client.send(new ForgotPasswordCommand({ ClientId: CLIENT_ID, Username: email }));
+};
+
+export const confirmForgotPassword = async (email: string, code: string, newPassword: string): Promise<void> => {
+  await client.send(
+    new ConfirmForgotPasswordCommand({ ClientId: CLIENT_ID, Username: email, ConfirmationCode: code, Password: newPassword })
+  );
+};
+
+// Sin correo verificado Cognito no puede enviar el código de recuperación.
+export async function markEmailVerified(email: string): Promise<void> {
+  await client.send(
+    new AdminUpdateUserAttributesCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+      UserAttributes: [{ Name: 'email_verified', Value: 'true' }],
+    })
+  );
+}
