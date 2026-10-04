@@ -6,9 +6,10 @@ import {
   ScrollView,
   ActivityIndicator,
   TextInput,
+  RefreshControl,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { Stack, useRouter, useFocusEffect } from 'expo-router'
+import { Stack, useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useState, useCallback } from 'react'
 import { File, Paths } from 'expo-file-system'
 import * as Sharing from 'expo-sharing'
@@ -17,11 +18,14 @@ import { useAuthStore } from '../../src/store/auth.store'
 import { useToastStore } from '../../src/store/toast.store'
 import { useConfirm } from '../../src/hooks/useConfirm'
 import OrderProgress from '../../src/components/OrderProgress'
-import { getOrderProgress, clientHistoryComment, CLIENT_STATUS_LABEL } from '../../src/utils/orderProgress'
+import { getOrderProgress, getProgressSummary, clientHistoryComment, CLIENT_STATUS_LABEL } from '../../src/utils/orderProgress'
 import ContactCard from '../../src/components/ContactCard'
 import BudgetDecision from '../../src/components/BudgetDecision'
 import { usePaymentInfo } from '../../src/hooks/usePaymentInfo'
 import { getAdvanceStatus } from '../../src/utils/advancePayment'
+import { splitOrders } from '../../src/utils/orderGroups'
+import ScreenHeader from '../../src/components/ScreenHeader'
+import OrderProgressBar from '../../src/components/OrderProgressBar'
 
 // El backend guarda el método de pago con el enum de Prisma (MOBILE_PAYMENT,
 // TRANSFER, BINANCE), pero la pantalla de pago espera los literales que usa
@@ -146,7 +150,10 @@ export default function MyTechnicalOrdersScreen() {
   const router = useRouter()
   const [orders, setOrders] = useState<TechOrder[]>([])
   const [loading, setLoading] = useState(true)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  // expandId: desde la tarjeta "En curso" del inicio se abre esa orden.
+  const { expandId } = useLocalSearchParams<{ expandId?: string }>()
+  const [expandedId, setExpandedId] = useState<string | null>(expandId ?? null)
+  const [refreshing, setRefreshing] = useState(false)
   const showToast = useToastStore((state) => state.showToast)
   const confirmDialog = useConfirm()
   const [disputeNote, setDisputeNote] = useState<Record<string, string>>({})
@@ -156,8 +163,9 @@ export default function MyTechnicalOrdersScreen() {
   const token = useAuthStore((state) => state.token)
   const { data: paymentSettings } = usePaymentInfo()
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true)
+  // silent: al deslizar para refrescar se mantiene la lista visible.
+  const fetchOrders = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const response = await ordersAPI.getMyOrders()
       setOrders(response.data.data)
@@ -171,6 +179,12 @@ export default function MyTechnicalOrdersScreen() {
       setLoading(false)
     }
   }, [])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await fetchOrders(true)
+    setRefreshing(false)
+  }, [fetchOrders])
 
   // Se recarga cada vez que el cliente vuelve a esta pantalla (por ejemplo,
   // después de pagar), para ver el estado al día.
@@ -354,6 +368,464 @@ export default function MyTechnicalOrdersScreen() {
     }
   }
 
+  const renderOrderCard = (order: TechOrder, isActive: boolean) => {
+    const isExpanded = expandedId === order.id
+    const status = order.status
+    // Lo que el cliente puede pagar descontando los abonos que el
+    // local todavía no revisó — así no vuelve a pagar lo mismo.
+    const pendingReview = order.paymentSummary?.pendingReview ?? 0
+    const payable = {
+      pendingReview,
+      maxAmount: Math.max(0, (order.paymentSummary?.remaining ?? 0) - pendingReview),
+      pendingForMinimum: Math.max(0, (order.paymentSummary?.pendingForMinimum ?? 0) - pendingReview),
+    }
+
+    // Anticipo incompleto de una orden de la app: se avisa sin abrir la tarjeta.
+    const advance = getAdvanceStatus(order)
+    const missingAdvance =
+      status === 'PENDING_PAYMENT' && !advance.isCounterOrder && advance.counted > 0.009 && advance.remaining > 0.009
+    const compactHistory = !isActive && !isExpanded
+
+    const statusBadge = (
+      <View
+        style={[
+          styles.statusBadge,
+          { backgroundColor: missingAdvance ? '#FFF4E0' : STATUS_BG[status] },
+        ]}
+      >
+        <Text style={[styles.statusText, { color: missingAdvance ? '#b45309' : STATUS_COLOR[status] }]}>
+          {missingAdvance ? 'FALTA PAGO' : CLIENT_STATUS_LABEL[status] ?? status}
+        </Text>
+      </View>
+    )
+
+    return (
+      <TouchableOpacity
+        key={order.id}
+        style={[styles.orderCard, isActive && styles.orderCardActive, compactHistory && styles.orderCardCompact]}
+        onPress={() => toggleExpand(order.id)}
+        activeOpacity={0.85}
+      >
+        {compactHistory ? (
+          // Historial: una sola fila (número, fecha · equipo y estado).
+          <View style={styles.orderHeader}>
+            <View style={styles.orderHeaderLeft}>
+              <Text style={styles.orderId}>{order.orderNumber}</Text>
+              <Text style={styles.orderDate}>
+                {formatDate(order.receivedAt)} · {order.device.brand} {order.device.model}
+              </Text>
+            </View>
+            {statusBadge}
+            <Text style={styles.expandArrow}>▼</Text>
+          </View>
+        ) : (
+          <>
+            {/* Cabecera del pedido */}
+            <View style={styles.orderHeader}>
+              <View style={styles.orderHeaderLeft}>
+                <Text style={styles.orderId}>{order.orderNumber}</Text>
+                <Text style={styles.orderDate}>{formatDate(order.receivedAt)}</Text>
+              </View>
+              {isActive && (
+                <View style={styles.activeTag}>
+                  <View style={styles.activeDot} />
+                  <Text style={styles.activeTagText}>ACTIVA</Text>
+                </View>
+              )}
+              <Text style={styles.expandArrow}>{isExpanded ? '▲' : '▼'}</Text>
+            </View>
+
+            {/* Badge de estado */}
+            <View style={styles.statusRow}>
+              {statusBadge}
+              {((status === 'WAITING_APPROVAL' && order.budget != null) || status === 'WAITING_EXTRA_PAYMENT') && (
+                <View style={styles.actionBadge}>
+                  <Text style={styles.actionBadgeText}>⚠️ Acción requerida</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Equipo siempre visible */}
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Equipo</Text>
+              <Text style={styles.deviceValue}>
+                {order.device.brand} {order.device.model}
+              </Text>
+            </View>
+
+            {/* Paso actual de la orden activa, sin tener que abrirla */}
+            {isActive && status !== 'REJECTED_PENDING_PICKUP' && (() => {
+              const { current, total } = getProgressSummary(order)
+              return <OrderProgressBar current={current} total={total} />
+            })()}
+
+            {/* Lo que falta del anticipo, con la tarjeta cerrada */}
+            {isActive && missingAdvance && !isExpanded && (
+              <View style={styles.advanceCard}>
+                <Text style={styles.advanceTitle}>
+                  ⏳ Pagado ${advance.counted.toFixed(2)} de ${advance.total.toFixed(2)}. Te faltan ${advance.remaining.toFixed(2)} para activar tu orden.
+                </Text>
+                <TouchableOpacity
+                  style={styles.advanceBtn}
+                  onPress={(e) => {
+                    e.stopPropagation()
+                    router.push({
+                      pathname: '/(client)/upload-advance-receipt',
+                      params: {
+                        orderId: order.id,
+                        paymentMethod: BACKEND_TO_FRONTEND_METHOD[order.advancePaymentMethod || ''] || 'PAGO_MOVIL',
+                        total: String(advance.remaining),
+                      },
+                    })
+                  }}
+                >
+                  <Text style={styles.advanceBtnText}>Enviar el resto · ${advance.remaining.toFixed(2)}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
+        )}
+
+        {/* Detalle expandible */}
+        {isExpanded && (
+          <View style={styles.expandedContent}>
+            {/* Seguimiento por pasos */}
+            <Text style={styles.itemsTitle}>📍 Seguimiento</Text>
+            <OrderProgress steps={getOrderProgress(order)} />
+
+            {/* Tipo y color */}
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Equipo</Text>
+              <Text style={styles.detailValue}>
+                {order.device.type === 'LAPTOP' ? 'Laptop' : 'PC'} · {order.device.color}
+              </Text>
+            </View>
+
+            {/* Falla reportada */}
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Falla o servicio reportado</Text>
+              <Text style={styles.detailValue}>{order.problem}</Text>
+            </View>
+
+            {/* Anticipo — solo mientras está pendiente de completarse */}
+            {status === 'PENDING_PAYMENT' && (() => {
+              const { isCounterOrder, total, confirmed: confirmado, remaining: restante, submissions } = getAdvanceStatus(order)
+
+              return (
+                <View style={styles.advanceCard}>
+                  <Text style={styles.advanceTitle}>
+                    Anticipo confirmado: ${confirmado.toFixed(2)} de ${total.toFixed(2)}
+                  </Text>
+                  {submissions.length > 0 && (
+                    <View style={{ marginTop: 6, marginBottom: 10 }}>
+                      {submissions.map((s) => (
+                        <Text key={s.id} style={styles.advanceSubmissionRow}>
+                          {s.status === 'CONFIRMED' ? '✅' : s.status === 'REJECTED' ? '❌' : '⏳'}{' '}
+                          ${Number(s.amount).toFixed(2)} — {s.status === 'CONFIRMED' ? 'confirmado' : s.status === 'REJECTED' ? 'rechazado' : 'pendiente de revisión'}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                  {isCounterOrder ? (
+                    <Text style={styles.advanceSubmissionRow}>
+                      El pago de la revisión se registra en el local.
+                    </Text>
+                  ) : restante > 0.009 && (
+                    <TouchableOpacity
+                      style={styles.advanceBtn}
+                      onPress={(e) => {
+                        e.stopPropagation()
+                        router.push({
+                          pathname: '/(client)/upload-advance-receipt',
+                          params: {
+                            orderId: order.id,
+                            paymentMethod:
+                              BACKEND_TO_FRONTEND_METHOD[order.advancePaymentMethod || ''] || 'PAGO_MOVIL',
+                            total: String(restante),
+                          },
+                        })
+                      }}
+                    >
+                      <Text style={styles.advanceBtnText}>
+                        💳 {submissions.length > 0 ? `Completar anticipo (falta $${restante.toFixed(2)})` : 'Pagar anticipo'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )
+            })()}
+
+            {/* Observaciones */}
+            {order.observations && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Observaciones</Text>
+                <Text style={styles.detailValue}>{order.observations}</Text>
+              </View>
+            )}
+
+            {/* Diagnóstico del técnico */}
+            {order.diagnosis && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Diagnóstico del técnico</Text>
+                <Text style={styles.detailValue}>{order.diagnosis}</Text>
+              </View>
+            )}
+
+            {/* Repuestos que el técnico usó/usará en la reparación —
+                visible en cualquier estado desde que quedan
+                registrados, no solo mientras se decide el presupuesto */}
+            {order.partsUsed && order.partsUsed.length > 0 && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Repuestos a utilizar</Text>
+                {order.partsUsed.map((part, index) => (
+                  <Text key={index} style={styles.detailValue}>
+                    {part.productName} (x{part.quantity}) — ${(part.quantity * Number(part.unitPriceAtUse ?? 0)).toFixed(2)}
+                  </Text>
+                ))}
+              </View>
+            )}
+
+            {/* Contacto — desde el pago confirmado hasta la entrega */}
+            {!['PENDING_PAYMENT', 'DELIVERED', 'CANCELLED'].includes(status) && (
+              <ContactCard technician={order.technician} storePhone={paymentSettings?.pagoMovilTelefono} />
+            )}
+
+            {/* Presupuesto — con resumen de lo pagado y lo que falta,
+                salvo en órdenes rechazadas (ahí no se cobra más). */}
+            {order.budget != null && (status === 'REJECTED_PENDING_PICKUP' || status === 'CANCELLED' || !order.paymentSummary ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Presupuesto</Text>
+                <Text style={styles.detailValue}>
+                  ${Number(order.budget).toFixed(2)}
+                  {order.budgetApproved === false ? ' — Rechazado' : ''}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.paymentSummary}>
+                <View style={styles.paymentSummaryRow}>
+                  <Text style={styles.paymentSummaryLabel}>Presupuesto</Text>
+                  <Text style={styles.paymentSummaryValue}>${order.paymentSummary.budget.toFixed(2)}</Text>
+                </View>
+                <View style={styles.paymentSummaryRow}>
+                  <Text style={styles.paymentSummaryLabel}>Pagado</Text>
+                  <Text style={styles.paymentSummaryValue}>${order.paymentSummary.paid.toFixed(2)}</Text>
+                </View>
+                <View style={[styles.paymentSummaryRow, styles.paymentSummaryTotal]}>
+                  <Text style={styles.paymentSummaryLabelBold}>Te falta</Text>
+                  <Text style={styles.paymentSummaryValueBold}>${order.paymentSummary.remaining.toFixed(2)}</Text>
+                </View>
+              </View>
+            ))}
+
+            {/* Decisión del cliente sobre el presupuesto — solo cuando el
+                presupuesto supera lo ya pagado por la revisión. Si
+                budget <= revisionAmount el 50% del anticipo da <= 0
+                (nada que cobrar): ese caso usa la tarjeta de
+                "diagnóstico sin costo adicional" de más abajo, igual
+                que budget === 0 (Finding 4, revisión final). */}
+            {status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15) && (
+              <BudgetDecision
+                kind="budget"
+                minimumAmount={payable.pendingForMinimum}
+                fullAmount={payable.maxAmount}
+                pendingReview={payable.pendingReview}
+                loading={!!actionLoading[order.id]}
+                onPay={(preset) => goToBudgetPayment(order, 'approve', preset, payable)}
+                onReject={(reason) => handleRejectBudget(order, reason ?? '')}
+              />
+            )}
+
+            {/* Decisión del cliente — diagnóstico SIN costo (incluye
+                budget > 0 pero <= revisionAmount: económicamente es
+                el mismo caso de "nada más que cobrar", ver Finding 4) */}
+            {status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) <= Number(order.revisionAmount ?? 15) && (
+              <View style={styles.decisionCard}>
+                <Text style={styles.decisionTitle}>
+                  El técnico determinó que no es necesario reparar tu equipo
+                </Text>
+                {order.diagnosis && (
+                  <Text style={styles.reasonLabel}>{order.diagnosis}</Text>
+                )}
+
+                <TouchableOpacity
+                  style={styles.approveBtn}
+                  onPress={(e) => { e.stopPropagation(); handleConfirmZeroBudget(order) }}
+                  disabled={actionLoading[order.id]}
+                >
+                  <Text style={styles.approveBtnText}>✅ Confirmar diagnóstico</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.reasonLabel}>
+                  Si no estás de acuerdo, cuéntanos qué sigue pasando (opcional):
+                </Text>
+                <TextInput
+                  style={styles.reasonInput}
+                  placeholder="Ej. Sigue sin encender"
+                  placeholderTextColor="#9aa5cc"
+                  value={disputeNote[order.id] || ''}
+                  onChangeText={(text) =>
+                    setDisputeNote((prev) => ({ ...prev, [order.id]: text }))
+                  }
+                  onTouchStart={(e) => e.stopPropagation()}
+                />
+
+                <TouchableOpacity
+                  style={styles.rejectBtn}
+                  onPress={(e) => { e.stopPropagation(); handleDisputeZeroBudget(order) }}
+                  disabled={actionLoading[order.id]}
+                >
+                  <Text style={styles.rejectBtnText}>🔁 No estoy de acuerdo, pedir nueva revisión</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Repuesto adicional durante la reparación */}
+            {status === 'WAITING_EXTRA_PAYMENT' && order.paymentSummary && (
+              <>
+                <Text style={styles.reasonLabel}>
+                  Presupuesto nuevo: ${order.paymentSummary.budget.toFixed(2)} · Pagado: ${order.paymentSummary.paid.toFixed(2)}.
+                </Text>
+                <BudgetDecision
+                  kind="extra"
+                  minimumAmount={payable.pendingForMinimum}
+                  fullAmount={payable.maxAmount}
+                  pendingReview={payable.pendingReview}
+                  loading={!!actionLoading[order.id]}
+                  onPay={(preset) => goToBudgetPayment(order, 'extra', preset, payable)}
+                  onReject={() => handleRejectExtraPart(order)}
+                />
+              </>
+            )}
+
+            {/* Motivo de rechazo del pago final, si aplica */}
+            {order.finalPaymentRejectionReason && (
+              <View style={styles.rejectionCard}>
+                <Text style={styles.rejectionTitle}>❌ Pago rechazado</Text>
+                <Text style={styles.rejectionText}>{order.finalPaymentRejectionReason}</Text>
+              </View>
+            )}
+
+            {/* Pago final — solo cuando la orden está lista (READY) y hay saldo
+                real que pagar. Con presupuesto $0 no hay nada que cobrar; el
+                admin cierra la orden directo sin pasar por este paso. */}
+            {status === 'READY' && !order.finalPaymentConfirmed && order.budget != null && Number(order.budget) > 0 && (
+              <TouchableOpacity
+                style={styles.finalPaymentBtn}
+                onPress={(e) => {
+                  e.stopPropagation()
+                  // Saldo real, no un 50% fijo: base (presupuesto −
+                  // revisión ya pagada) menos todo lo confirmado del
+                  // pool BUDGET. Con anticipo hasta el 100% y
+                  // ajustes imprevistos al presupuesto, el 50% dejó
+                  // de ser cierto (Finding B, revisión final).
+                  const base =
+                    Number(order.budget ?? 0) - Number(order.revisionAmount ?? 15)
+                  const confirmado = (order.advancePaymentSubmissions ?? [])
+                    .filter((s) => s.kind === 'BUDGET' && s.status === 'CONFIRMED')
+                    .reduce((sum, s) => sum + Number(s.amount), 0)
+                  const restante = Math.max(base - confirmado, 0)
+                  router.push({
+                    pathname: '/(client)/final-payment',
+                    params: {
+                      orderId: order.id,
+                      orderNumber: order.orderNumber,
+                      budget: String(order.budget ?? 0),
+                      revisionAmount: String(order.revisionAmount ?? 15),
+                      remaining: String(restante),
+                    },
+                  })
+                }}
+              >
+                <Text style={styles.finalPaymentBtnText}>
+                  {order.finalPaymentDetails
+                    ? '💰 Reenviar datos de pago final'
+                    : '💰 Pagar saldo final'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Aceptar entrega a domicilio — reemplaza el "marcar
+                entregado" del admin para self-service+delivery: el
+                cliente es quien puede confirmar que el equipo
+                llegó, el admin no está presente en la entrega. */}
+            {status === 'PAID_PENDING_DELIVERY' && order.deliveryAmount != null && (
+              <TouchableOpacity
+                style={styles.approveBtn}
+                onPress={(e) => { e.stopPropagation(); handleConfirmDelivery(order) }}
+                disabled={actionLoading[order.id]}
+              >
+                <Text style={styles.approveBtnText}>✅ Aceptar y finalizar servicio</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Recibos descargables — disponible desde que el anticipo está
+                confirmado; entrega solo si ya se entregó. En self-service con
+                delivery, RECEIVED solo significa "pago confirmado", no que el
+                técnico ya fue a buscar el equipo — hasta que haya diagnóstico
+                se etiqueta como "recibo del anticipo" en vez de "recepción". */}
+            {status !== 'PENDING_PAYMENT' && (() => {
+              const pendingPickup = order.deliveryAmount != null && !order.diagnosis
+              return (
+                <TouchableOpacity
+                  style={styles.linkedProductBtn}
+                  onPress={(e) => { e.stopPropagation(); handleDownloadReceipt(order, 'intake') }}
+                  disabled={downloadingReceipt === `${order.id}-intake`}
+                >
+                  <Text style={styles.linkedProductBtnText}>
+                    📄 Descargar {pendingPickup ? 'recibo del anticipo' : 'recibo de recepción'}
+                  </Text>
+                </TouchableOpacity>
+              )
+            })()}
+            {status === 'DELIVERED' && (
+              <TouchableOpacity
+                style={styles.linkedProductBtn}
+                onPress={(e) => { e.stopPropagation(); handleDownloadReceipt(order, 'final') }}
+                disabled={downloadingReceipt === `${order.id}-final`}
+              >
+                <Text style={styles.linkedProductBtnText}>📄 Descargar recibo de entrega</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Comisión (solo informativo, orden ya entregada) */}
+            {status === 'DELIVERED' && order.technicianCommission != null && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Servicio completado</Text>
+                <Text style={styles.detailValue}>✅ Pago final confirmado</Text>
+              </View>
+            )}
+
+            {/* Historial detallado — plegado; el seguimiento de arriba es el resumen */}
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation()
+                setHistoryOpen((prev) => ({ ...prev, [order.id]: !prev[order.id] }))
+              }}
+            >
+              <Text style={styles.itemsTitle}>
+                📋 {historyOpen[order.id] ? 'Ocultar detalle ▲' : 'Ver detalle ▼'}
+              </Text>
+            </TouchableOpacity>
+            {historyOpen[order.id] && order.statusHistory.map((entry) => {
+              const comment = entry.comment ? clientHistoryComment(entry.comment) : ''
+              return (
+                <View key={entry.id} style={styles.itemRow}>
+                  <View style={styles.itemInfo}>
+                    <Text style={styles.itemName}>{CLIENT_STATUS_LABEL[entry.status] ?? entry.status}</Text>
+                    {comment !== '' && (
+                      <Text style={styles.itemQty}>{comment}</Text>
+                    )}
+                  </View>
+                  <Text style={styles.historyDate}>{formatDate(entry.createdAt)}</Text>
+                </View>
+              )
+            })}
+          </View>
+        )}
+      </TouchableOpacity>
+    )
+  }
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -361,14 +833,7 @@ export default function MyTechnicalOrdersScreen() {
         colors={['#ffffff', '#eef2ff', '#d5ddff', '#8fa5ff']}
         style={styles.container}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>← Inicio</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Mis Órdenes de Servicio</Text>
-          <Text style={styles.subtitle}>Historial de reparaciones y mantenimiento</Text>
-        </View>
+        <ScreenHeader backLabel="← Inicio" title="Mis Órdenes de Servicio" subtitle="Historial de reparaciones y mantenimiento" />
 
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -393,400 +858,29 @@ export default function MyTechnicalOrdersScreen() {
           <ScrollView
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#17247a" />}
           >
-            <TouchableOpacity style={styles.refreshBtn} onPress={fetchOrders}>
+            <TouchableOpacity style={styles.refreshBtn} onPress={() => fetchOrders()}>
               <Text style={styles.refreshText}>↻ Actualizar</Text>
             </TouchableOpacity>
 
-            {orders.map((order) => {
-              const isExpanded = expandedId === order.id
-              const status = order.status
-              // Lo que el cliente puede pagar descontando los abonos que el
-              // local todavía no revisó — así no vuelve a pagar lo mismo.
-              const pendingReview = order.paymentSummary?.pendingReview ?? 0
-              const payable = {
-                pendingReview,
-                maxAmount: Math.max(0, (order.paymentSummary?.remaining ?? 0) - pendingReview),
-                pendingForMinimum: Math.max(0, (order.paymentSummary?.pendingForMinimum ?? 0) - pendingReview),
-              }
-
+            {(() => {
+              const { active, history } = splitOrders(orders)
               return (
-                <TouchableOpacity
-                  key={order.id}
-                  style={styles.orderCard}
-                  onPress={() => toggleExpand(order.id)}
-                  activeOpacity={0.85}
-                >
-                  {/* Cabecera del pedido */}
-                  <View style={styles.orderHeader}>
-                    <View style={styles.orderHeaderLeft}>
-                      <Text style={styles.orderId}>{order.orderNumber}</Text>
-                      <Text style={styles.orderDate}>{formatDate(order.receivedAt)}</Text>
+                <>
+                  <Text style={styles.sectionLabel}>EN CURSO</Text>
+                  {active.length === 0 ? (
+                    <View style={styles.emptyActive}>
+                      <Text style={styles.emptyActiveText}>No tienes órdenes en curso</Text>
                     </View>
-                    <Text style={styles.expandArrow}>{isExpanded ? '▲' : '▼'}</Text>
-                  </View>
-
-                  {/* Badge de estado */}
-                  <View style={styles.statusRow}>
-                    <View style={[styles.statusBadge, { backgroundColor: STATUS_BG[status] }]}>
-                      <Text style={[styles.statusText, { color: STATUS_COLOR[status] }]}>
-                        {CLIENT_STATUS_LABEL[status] ?? status}
-                      </Text>
-                    </View>
-                    {((status === 'WAITING_APPROVAL' && order.budget != null) || status === 'WAITING_EXTRA_PAYMENT') && (
-                      <View style={styles.actionBadge}>
-                        <Text style={styles.actionBadgeText}>⚠️ Acción requerida</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Equipo siempre visible */}
-                  <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>Equipo</Text>
-                    <Text style={styles.deviceValue}>
-                      {order.device.brand} {order.device.model}
-                    </Text>
-                  </View>
-
-                  {/* Detalle expandible */}
-                  {isExpanded && (
-                    <View style={styles.expandedContent}>
-                      {/* Seguimiento por pasos */}
-                      <Text style={styles.itemsTitle}>📍 Seguimiento</Text>
-                      <OrderProgress steps={getOrderProgress(order)} />
-
-                      {/* Tipo y color */}
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Equipo</Text>
-                        <Text style={styles.detailValue}>
-                          {order.device.type === 'LAPTOP' ? 'Laptop' : 'PC'} · {order.device.color}
-                        </Text>
-                      </View>
-
-                      {/* Falla reportada */}
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Falla o servicio reportado</Text>
-                        <Text style={styles.detailValue}>{order.problem}</Text>
-                      </View>
-
-                      {/* Anticipo — solo mientras está pendiente de completarse */}
-                      {status === 'PENDING_PAYMENT' && (() => {
-                        const { isCounterOrder, total, confirmed: confirmado, remaining: restante, submissions } = getAdvanceStatus(order)
-
-                        return (
-                          <View style={styles.advanceCard}>
-                            <Text style={styles.advanceTitle}>
-                              Anticipo confirmado: ${confirmado.toFixed(2)} de ${total.toFixed(2)}
-                            </Text>
-                            {submissions.length > 0 && (
-                              <View style={{ marginTop: 6, marginBottom: 10 }}>
-                                {submissions.map((s) => (
-                                  <Text key={s.id} style={styles.advanceSubmissionRow}>
-                                    {s.status === 'CONFIRMED' ? '✅' : s.status === 'REJECTED' ? '❌' : '⏳'}{' '}
-                                    ${Number(s.amount).toFixed(2)} — {s.status === 'CONFIRMED' ? 'confirmado' : s.status === 'REJECTED' ? 'rechazado' : 'pendiente de revisión'}
-                                  </Text>
-                                ))}
-                              </View>
-                            )}
-                            {isCounterOrder ? (
-                              <Text style={styles.advanceSubmissionRow}>
-                                El pago de la revisión se registra en el local.
-                              </Text>
-                            ) : restante > 0.009 && (
-                              <TouchableOpacity
-                                style={styles.advanceBtn}
-                                onPress={(e) => {
-                                  e.stopPropagation()
-                                  router.push({
-                                    pathname: '/(client)/upload-advance-receipt',
-                                    params: {
-                                      orderId: order.id,
-                                      paymentMethod:
-                                        BACKEND_TO_FRONTEND_METHOD[order.advancePaymentMethod || ''] || 'PAGO_MOVIL',
-                                      total: String(restante),
-                                    },
-                                  })
-                                }}
-                              >
-                                <Text style={styles.advanceBtnText}>
-                                  💳 {submissions.length > 0 ? `Completar anticipo (falta $${restante.toFixed(2)})` : 'Pagar anticipo'}
-                                </Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        )
-                      })()}
-
-                      {/* Observaciones */}
-                      {order.observations && (
-                        <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Observaciones</Text>
-                          <Text style={styles.detailValue}>{order.observations}</Text>
-                        </View>
-                      )}
-
-                      {/* Diagnóstico del técnico */}
-                      {order.diagnosis && (
-                        <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Diagnóstico del técnico</Text>
-                          <Text style={styles.detailValue}>{order.diagnosis}</Text>
-                        </View>
-                      )}
-
-                      {/* Repuestos que el técnico usó/usará en la reparación —
-                          visible en cualquier estado desde que quedan
-                          registrados, no solo mientras se decide el presupuesto */}
-                      {order.partsUsed && order.partsUsed.length > 0 && (
-                        <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Repuestos a utilizar</Text>
-                          {order.partsUsed.map((part, index) => (
-                            <Text key={index} style={styles.detailValue}>
-                              {part.productName} (x{part.quantity}) — ${(part.quantity * Number(part.unitPriceAtUse ?? 0)).toFixed(2)}
-                            </Text>
-                          ))}
-                        </View>
-                      )}
-
-                      {/* Contacto — desde el pago confirmado hasta la entrega */}
-                      {!['PENDING_PAYMENT', 'DELIVERED', 'CANCELLED'].includes(status) && (
-                        <ContactCard technician={order.technician} storePhone={paymentSettings?.pagoMovilTelefono} />
-                      )}
-
-                      {/* Presupuesto — con resumen de lo pagado y lo que falta,
-                          salvo en órdenes rechazadas (ahí no se cobra más). */}
-                      {order.budget != null && (status === 'REJECTED_PENDING_PICKUP' || status === 'CANCELLED' || !order.paymentSummary ? (
-                        <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Presupuesto</Text>
-                          <Text style={styles.detailValue}>
-                            ${Number(order.budget).toFixed(2)}
-                            {order.budgetApproved === false ? ' — Rechazado' : ''}
-                          </Text>
-                        </View>
-                      ) : (
-                        <View style={styles.paymentSummary}>
-                          <View style={styles.paymentSummaryRow}>
-                            <Text style={styles.paymentSummaryLabel}>Presupuesto</Text>
-                            <Text style={styles.paymentSummaryValue}>${order.paymentSummary.budget.toFixed(2)}</Text>
-                          </View>
-                          <View style={styles.paymentSummaryRow}>
-                            <Text style={styles.paymentSummaryLabel}>Pagado</Text>
-                            <Text style={styles.paymentSummaryValue}>${order.paymentSummary.paid.toFixed(2)}</Text>
-                          </View>
-                          <View style={[styles.paymentSummaryRow, styles.paymentSummaryTotal]}>
-                            <Text style={styles.paymentSummaryLabelBold}>Te falta</Text>
-                            <Text style={styles.paymentSummaryValueBold}>${order.paymentSummary.remaining.toFixed(2)}</Text>
-                          </View>
-                        </View>
-                      ))}
-
-                      {/* Decisión del cliente sobre el presupuesto — solo cuando el
-                          presupuesto supera lo ya pagado por la revisión. Si
-                          budget <= revisionAmount el 50% del anticipo da <= 0
-                          (nada que cobrar): ese caso usa la tarjeta de
-                          "diagnóstico sin costo adicional" de más abajo, igual
-                          que budget === 0 (Finding 4, revisión final). */}
-                      {status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) > Number(order.revisionAmount ?? 15) && (
-                        <BudgetDecision
-                          kind="budget"
-                          minimumAmount={payable.pendingForMinimum}
-                          fullAmount={payable.maxAmount}
-                          pendingReview={payable.pendingReview}
-                          loading={!!actionLoading[order.id]}
-                          onPay={(preset) => goToBudgetPayment(order, 'approve', preset, payable)}
-                          onReject={(reason) => handleRejectBudget(order, reason ?? '')}
-                        />
-                      )}
-
-                      {/* Decisión del cliente — diagnóstico SIN costo (incluye
-                          budget > 0 pero <= revisionAmount: económicamente es
-                          el mismo caso de "nada más que cobrar", ver Finding 4) */}
-                      {status === 'WAITING_APPROVAL' && order.budget != null && Number(order.budget) <= Number(order.revisionAmount ?? 15) && (
-                        <View style={styles.decisionCard}>
-                          <Text style={styles.decisionTitle}>
-                            El técnico determinó que no es necesario reparar tu equipo
-                          </Text>
-                          {order.diagnosis && (
-                            <Text style={styles.reasonLabel}>{order.diagnosis}</Text>
-                          )}
-
-                          <TouchableOpacity
-                            style={styles.approveBtn}
-                            onPress={(e) => { e.stopPropagation(); handleConfirmZeroBudget(order) }}
-                            disabled={actionLoading[order.id]}
-                          >
-                            <Text style={styles.approveBtnText}>✅ Confirmar diagnóstico</Text>
-                          </TouchableOpacity>
-
-                          <Text style={styles.reasonLabel}>
-                            Si no estás de acuerdo, cuéntanos qué sigue pasando (opcional):
-                          </Text>
-                          <TextInput
-                            style={styles.reasonInput}
-                            placeholder="Ej. Sigue sin encender"
-                            placeholderTextColor="#9aa5cc"
-                            value={disputeNote[order.id] || ''}
-                            onChangeText={(text) =>
-                              setDisputeNote((prev) => ({ ...prev, [order.id]: text }))
-                            }
-                            onTouchStart={(e) => e.stopPropagation()}
-                          />
-
-                          <TouchableOpacity
-                            style={styles.rejectBtn}
-                            onPress={(e) => { e.stopPropagation(); handleDisputeZeroBudget(order) }}
-                            disabled={actionLoading[order.id]}
-                          >
-                            <Text style={styles.rejectBtnText}>🔁 No estoy de acuerdo, pedir nueva revisión</Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
-
-                      {/* Repuesto adicional durante la reparación */}
-                      {status === 'WAITING_EXTRA_PAYMENT' && order.paymentSummary && (
-                        <>
-                          <Text style={styles.reasonLabel}>
-                            Presupuesto nuevo: ${order.paymentSummary.budget.toFixed(2)} · Pagado: ${order.paymentSummary.paid.toFixed(2)}.
-                          </Text>
-                          <BudgetDecision
-                            kind="extra"
-                            minimumAmount={payable.pendingForMinimum}
-                            fullAmount={payable.maxAmount}
-                            pendingReview={payable.pendingReview}
-                            loading={!!actionLoading[order.id]}
-                            onPay={(preset) => goToBudgetPayment(order, 'extra', preset, payable)}
-                            onReject={() => handleRejectExtraPart(order)}
-                          />
-                        </>
-                      )}
-
-                      {/* Motivo de rechazo del pago final, si aplica */}
-                      {order.finalPaymentRejectionReason && (
-                        <View style={styles.rejectionCard}>
-                          <Text style={styles.rejectionTitle}>❌ Pago rechazado</Text>
-                          <Text style={styles.rejectionText}>{order.finalPaymentRejectionReason}</Text>
-                        </View>
-                      )}
-
-                      {/* Pago final — solo cuando la orden está lista (READY) y hay saldo
-                          real que pagar. Con presupuesto $0 no hay nada que cobrar; el
-                          admin cierra la orden directo sin pasar por este paso. */}
-                      {status === 'READY' && !order.finalPaymentConfirmed && order.budget != null && Number(order.budget) > 0 && (
-                        <TouchableOpacity
-                          style={styles.finalPaymentBtn}
-                          onPress={(e) => {
-                            e.stopPropagation()
-                            // Saldo real, no un 50% fijo: base (presupuesto −
-                            // revisión ya pagada) menos todo lo confirmado del
-                            // pool BUDGET. Con anticipo hasta el 100% y
-                            // ajustes imprevistos al presupuesto, el 50% dejó
-                            // de ser cierto (Finding B, revisión final).
-                            const base =
-                              Number(order.budget ?? 0) - Number(order.revisionAmount ?? 15)
-                            const confirmado = (order.advancePaymentSubmissions ?? [])
-                              .filter((s) => s.kind === 'BUDGET' && s.status === 'CONFIRMED')
-                              .reduce((sum, s) => sum + Number(s.amount), 0)
-                            const restante = Math.max(base - confirmado, 0)
-                            router.push({
-                              pathname: '/(client)/final-payment',
-                              params: {
-                                orderId: order.id,
-                                orderNumber: order.orderNumber,
-                                budget: String(order.budget ?? 0),
-                                revisionAmount: String(order.revisionAmount ?? 15),
-                                remaining: String(restante),
-                              },
-                            })
-                          }}
-                        >
-                          <Text style={styles.finalPaymentBtnText}>
-                            {order.finalPaymentDetails
-                              ? '💰 Reenviar datos de pago final'
-                              : '💰 Pagar saldo final'}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Aceptar entrega a domicilio — reemplaza el "marcar
-                          entregado" del admin para self-service+delivery: el
-                          cliente es quien puede confirmar que el equipo
-                          llegó, el admin no está presente en la entrega. */}
-                      {status === 'PAID_PENDING_DELIVERY' && order.deliveryAmount != null && (
-                        <TouchableOpacity
-                          style={styles.approveBtn}
-                          onPress={(e) => { e.stopPropagation(); handleConfirmDelivery(order) }}
-                          disabled={actionLoading[order.id]}
-                        >
-                          <Text style={styles.approveBtnText}>✅ Aceptar y finalizar servicio</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Recibos descargables — disponible desde que el anticipo está
-                          confirmado; entrega solo si ya se entregó. En self-service con
-                          delivery, RECEIVED solo significa "pago confirmado", no que el
-                          técnico ya fue a buscar el equipo — hasta que haya diagnóstico
-                          se etiqueta como "recibo del anticipo" en vez de "recepción". */}
-                      {status !== 'PENDING_PAYMENT' && (() => {
-                        const pendingPickup = order.deliveryAmount != null && !order.diagnosis
-                        return (
-                          <TouchableOpacity
-                            style={styles.linkedProductBtn}
-                            onPress={(e) => { e.stopPropagation(); handleDownloadReceipt(order, 'intake') }}
-                            disabled={downloadingReceipt === `${order.id}-intake`}
-                          >
-                            <Text style={styles.linkedProductBtnText}>
-                              📄 Descargar {pendingPickup ? 'recibo del anticipo' : 'recibo de recepción'}
-                            </Text>
-                          </TouchableOpacity>
-                        )
-                      })()}
-                      {status === 'DELIVERED' && (
-                        <TouchableOpacity
-                          style={styles.linkedProductBtn}
-                          onPress={(e) => { e.stopPropagation(); handleDownloadReceipt(order, 'final') }}
-                          disabled={downloadingReceipt === `${order.id}-final`}
-                        >
-                          <Text style={styles.linkedProductBtnText}>📄 Descargar recibo de entrega</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Comisión (solo informativo, orden ya entregada) */}
-                      {status === 'DELIVERED' && order.technicianCommission != null && (
-                        <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Servicio completado</Text>
-                          <Text style={styles.detailValue}>✅ Pago final confirmado</Text>
-                        </View>
-                      )}
-
-                      {/* Historial detallado — plegado; el seguimiento de arriba es el resumen */}
-                      <TouchableOpacity
-                        onPress={(e) => {
-                          e.stopPropagation()
-                          setHistoryOpen((prev) => ({ ...prev, [order.id]: !prev[order.id] }))
-                        }}
-                      >
-                        <Text style={styles.itemsTitle}>
-                          📋 {historyOpen[order.id] ? 'Ocultar detalle ▲' : 'Ver detalle ▼'}
-                        </Text>
-                      </TouchableOpacity>
-                      {historyOpen[order.id] && order.statusHistory.map((entry) => {
-                        const comment = entry.comment ? clientHistoryComment(entry.comment) : ''
-                        return (
-                          <View key={entry.id} style={styles.itemRow}>
-                            <View style={styles.itemInfo}>
-                              <Text style={styles.itemName}>{CLIENT_STATUS_LABEL[entry.status] ?? entry.status}</Text>
-                              {comment !== '' && (
-                                <Text style={styles.itemQty}>{comment}</Text>
-                              )}
-                            </View>
-                            <Text style={styles.historyDate}>{formatDate(entry.createdAt)}</Text>
-                          </View>
-                        )
-                      })}
-                    </View>
+                  ) : (
+                    active.map((o) => renderOrderCard(o, true))
                   )}
-                </TouchableOpacity>
+                  {history.length > 0 && <Text style={styles.sectionLabel}>HISTORIAL</Text>}
+                  {history.map((o) => renderOrderCard(o, false))}
+                </>
               )
-            })}
+            })()}
           </ScrollView>
         )}
       </LinearGradient>
@@ -796,15 +890,39 @@ export default function MyTechnicalOrdersScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: 22,
-    paddingBottom: 16,
+  sectionLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6, color: '#5364ad', marginTop: 8, marginBottom: 8 },
+  orderCardActive: {
+    borderWidth: 2,
+    borderColor: '#17247a',
+    shadowColor: '#17247a',
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
-  backBtn: { marginBottom: 8 },
-  backText: { color: '#5364ad', fontSize: 14, fontWeight: '500' },
-  title: { fontSize: 26, fontWeight: '800', color: '#17247a', marginBottom: 2 },
-  subtitle: { fontSize: 14, color: '#5364ad' },
+  orderCardCompact: { paddingVertical: 12 },
+  activeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E3F3E9',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginRight: 8,
+  },
+  activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#1E7A3D' },
+  activeTagText: { fontSize: 10, fontWeight: '800', color: '#1E7A3D' },
+  emptyActive: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#d0d8ff',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  emptyActiveText: { fontSize: 13, color: '#5364ad' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   loadingText: { fontSize: 14, color: '#5364ad' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
