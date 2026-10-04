@@ -130,6 +130,15 @@ export const updateClient = async (req: Request, res: Response): Promise<void> =
       })
       return
     }
+    // El correo es el usuario de Cognito: cambiarlo aquí dejaría al cliente
+    // sin poder entrar. Queda para una próxima versión.
+    if (email !== undefined) {
+      const current = await prisma.client.findUnique({ where: { id }, select: { email: true, user: { select: { id: true } } } })
+      if (current?.user && (email || '') !== (current.email || '')) {
+        res.status(400).json({ success: false, message: 'El correo de un cliente con cuenta en la app no se puede cambiar por ahora' })
+        return
+      }
+    }
     const client = await clientsService.updateClient(id, {
       name,
       lastName,

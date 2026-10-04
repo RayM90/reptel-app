@@ -256,6 +256,16 @@ describe('Clients — registro de mostrador con acceso a la app', () => {
     expect(user?.role).toBe('CLIENT')
   })
 
+  it('PATCH /api/clients/:id rechaza cambiar el correo de un cliente con cuenta en la app', async () => {
+    const id = created[created.length - 1]
+    const res = await request(app)
+      .patch(`/api/clients/${id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ email: uniqueEmail('otro') })
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/no se puede cambiar/i)
+  })
+
   it('si falla la BD después de Cognito, borra el usuario de Cognito y no deja el cliente', async () => {
     const email = uniqueEmail('rollback')
     const idNumber = `V-${String(Date.now()).slice(-8)}`
