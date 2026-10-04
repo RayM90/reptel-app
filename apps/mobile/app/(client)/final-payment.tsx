@@ -19,6 +19,8 @@ import { usePaymentInfo, formatPaymentInfo } from '../../src/hooks/usePaymentInf
 import PhoneInput from '../../src/components/PhoneInput'
 import SelectField from '../../src/components/SelectField'
 import { VENEZUELAN_BANKS } from '../../src/constants/venezuela'
+import ScreenHeader from '../../src/components/ScreenHeader'
+import StickyFooter from '../../src/components/StickyFooter'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -169,13 +171,7 @@ export default function FinalPaymentScreen() {
         colors={['#ffffff', '#eef2ff', '#d5ddff', '#8fa5ff']}
         style={styles.container}
       >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>← Atrás</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Pago Final</Text>
-          <Text style={styles.subtitle}>Orden {orderNumber} — reparación completada</Text>
-        </View>
+        <ScreenHeader backLabel="← Volver" title="Pago Final" subtitle={`Orden ${orderNumber} — reparación completada`} />
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -287,6 +283,13 @@ export default function FinalPaymentScreen() {
             </View>
           )}
 
+
+          <Text style={styles.waitNote}>
+            ⏳ Una vez confirmado tu pago, tu orden quedará marcada como completada.
+          </Text>
+        </ScrollView>
+
+        <StickyFooter>
           <TouchableOpacity
             style={[styles.submitBtn, (!isFormValid() || loading) && styles.submitBtnDisabled]}
             onPress={handleSubmit}
@@ -295,14 +298,10 @@ export default function FinalPaymentScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.submitBtnText}>Enviar Datos de Pago</Text>
+              <Text style={styles.submitBtnText}>Pagar saldo · ${totalNumber.toFixed(2)}</Text>
             )}
           </TouchableOpacity>
-
-          <Text style={styles.waitNote}>
-            ⏳ Una vez confirmado tu pago, tu orden quedará marcada como completada.
-          </Text>
-        </ScrollView>
+        </StickyFooter>
       </LinearGradient>
       </KeyboardAvoidingView>
     </>
@@ -337,11 +336,6 @@ function Field({ label, value, onChangeText, placeholder, keyboardType = 'defaul
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: 22, paddingBottom: 20 },
-  backBtn: { marginBottom: 8 },
-  backText: { color: '#5364ad', fontSize: 14, fontWeight: '500' },
-  title: { fontSize: 26, fontWeight: '800', color: '#17247a', marginBottom: 6 },
-  subtitle: { fontSize: 14, color: '#5364ad', lineHeight: 20 },
   scrollContent: { paddingHorizontal: 22, paddingBottom: 40 },
   summaryCard: {
     backgroundColor: '#f0f3ff',

@@ -19,6 +19,8 @@ import { usePaymentInfo, formatPaymentInfo } from '../../src/hooks/usePaymentInf
 import PhoneInput from '../../src/components/PhoneInput'
 import SelectField from '../../src/components/SelectField'
 import { VENEZUELAN_BANKS } from '../../src/constants/venezuela'
+import ScreenHeader from '../../src/components/ScreenHeader'
+import StickyFooter from '../../src/components/StickyFooter'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -40,7 +42,7 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
 
 export default function BudgetPaymentScreen() {
   const router = useRouter()
-  const { orderId, orderNumber, budget, mode, preset, minimumPercent, pendingForMinimum, maxAmount } = useLocalSearchParams<{
+  const { orderId, orderNumber, budget, mode, preset, pendingForMinimum, maxAmount } = useLocalSearchParams<{
     orderId: string
     orderNumber: string
     budget: string
@@ -56,7 +58,6 @@ export default function BudgetPaymentScreen() {
   // muestran — el cliente puede pagar el mínimo o más, hasta lo que falta.
   const isExtra = mode === 'extra'
   const budgetNumber = budget ? Number(budget) : 0
-  const percentNumber = minimumPercent ? Number(minimumPercent) : 50
   const minimumNumber = pendingForMinimum ? Number(pendingForMinimum) : 0
   const totalNumber = maxAmount ? Number(maxAmount) : 0
 
@@ -171,15 +172,7 @@ export default function BudgetPaymentScreen() {
         colors={['#ffffff', '#eef2ff', '#d5ddff', '#8fa5ff']}
         style={styles.container}
       >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>← Atrás</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>{isExtra ? 'Pago de repuesto adicional' : 'Anticipo de Presupuesto'}</Text>
-          <Text style={styles.subtitle}>
-            Orden {orderNumber} — {isExtra ? 'el técnico continúa al confirmarse el pago' : 'autoriza al técnico a reparar'}
-          </Text>
-        </View>
+        <ScreenHeader backLabel="← Volver" title={isExtra ? 'Pago de repuesto adicional' : 'Anticipo de Presupuesto'} subtitle={`Orden ${orderNumber}`} />
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -196,10 +189,14 @@ export default function BudgetPaymentScreen() {
               <Text style={styles.summaryLabelBold}>Te falta por pagar</Text>
               <Text style={styles.summaryValueBold}>${totalNumber.toFixed(2)}</Text>
             </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabelBold}>Vas a pagar</Text>
+              <Text style={styles.summaryValueBold}>${montoNumber.toFixed(2)}</Text>
+            </View>
             <Text style={styles.waitNote}>
               {isExtra
                 ? `Paga $${minimumNumber.toFixed(2)} para que el técnico continúe. Puedes pagar hasta $${totalNumber.toFixed(2)} si lo prefieres.`
-                : `Paga el ${percentNumber}% ($${minimumNumber.toFixed(2)}) para iniciar la reparación. Puedes pagar hasta $${totalNumber.toFixed(2)} de una vez si lo prefieres.`}
+                : `Paga el mínimo ($${minimumNumber.toFixed(2)}) para iniciar la reparación. Puedes pagar hasta $${totalNumber.toFixed(2)} de una vez si lo prefieres.`}
             </Text>
           </View>
 
@@ -306,6 +303,13 @@ export default function BudgetPaymentScreen() {
             </View>
           )}
 
+
+          <Text style={styles.waitNote}>
+            ⏳ Una vez confirmado tu anticipo, el técnico comenzará la reparación.
+          </Text>
+        </ScrollView>
+
+        <StickyFooter>
           <TouchableOpacity
             style={[styles.submitBtn, (!isFormValid() || loading) && styles.submitBtnDisabled]}
             onPress={handleSubmit}
@@ -314,14 +318,10 @@ export default function BudgetPaymentScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.submitBtnText}>Enviar Datos de Pago</Text>
+              <Text style={styles.submitBtnText}>Enviar pago · ${montoNumber.toFixed(2)}</Text>
             )}
           </TouchableOpacity>
-
-          <Text style={styles.waitNote}>
-            ⏳ Una vez confirmado tu anticipo, el técnico comenzará la reparación.
-          </Text>
-        </ScrollView>
+        </StickyFooter>
       </LinearGradient>
       </KeyboardAvoidingView>
     </>
@@ -356,11 +356,6 @@ function Field({ label, value, onChangeText, placeholder, keyboardType = 'defaul
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: 22, paddingBottom: 20 },
-  backBtn: { marginBottom: 8 },
-  backText: { color: '#5364ad', fontSize: 14, fontWeight: '500' },
-  title: { fontSize: 26, fontWeight: '800', color: '#17247a', marginBottom: 6 },
-  subtitle: { fontSize: 14, color: '#5364ad', lineHeight: 20 },
   scrollContent: { paddingHorizontal: 22, paddingBottom: 40 },
   summaryCard: {
     backgroundColor: '#f0f3ff',

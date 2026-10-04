@@ -18,6 +18,8 @@ import { usePaymentDraft } from '../../src/hooks/usePaymentDraft'
 import PhoneInput from '../../src/components/PhoneInput'
 import SelectField from '../../src/components/SelectField'
 import { VENEZUELAN_BANKS } from '../../src/constants/venezuela'
+import ScreenHeader from '../../src/components/ScreenHeader'
+import StickyFooter from '../../src/components/StickyFooter'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -143,13 +145,7 @@ export default function UploadAdvanceReceiptScreen() {
         colors={['#ffffff', '#eef2ff', '#d5ddff', '#8fa5ff']}
         style={styles.container}
       >
-        <View style={styles.header}>
-          <Text style={styles.step}>Paso 2 de 2</Text>
-          <Text style={styles.title}>Datos del Pago</Text>
-          <Text style={styles.subtitle}>
-            Ingresa los datos de tu pago anticipado (delivery + revisión)
-          </Text>
-        </View>
+        <ScreenHeader step="PASO 2 DE 2" title="Datos del Pago" subtitle="Ingresa los datos de tu pago anticipado (delivery + revisión)" />
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -221,7 +217,7 @@ export default function UploadAdvanceReceiptScreen() {
             {esUnAbonoParcial && (
               <View style={styles.infoNoticeCard}>
                 <Text style={styles.infoNoticeText}>
-                  💡 Puedes pagar en partes. Con este abono quedarían ${faltante.toFixed(2)} pendientes de ${totalNumber?.toFixed(2)} — envía el resto cuando quieras desde "Mis Órdenes".
+                  ⏳ Con este abono te faltan ${faltante.toFixed(2)} para activar tu orden; puedes enviarlos luego desde "Mis Órdenes". El técnico sale cuando se complete.
                 </Text>
               </View>
             )}
@@ -235,6 +231,13 @@ export default function UploadAdvanceReceiptScreen() {
             )}
           </View>
 
+
+          <Text style={styles.waitNote}>
+            ⏳ Una vez enviado, el técnico-delivery será notificado para salir tan pronto tu pago sea confirmado.
+          </Text>
+        </ScrollView>
+
+        <StickyFooter>
           <TouchableOpacity
             style={[styles.submitBtn, (!isFormValid() || loading) && styles.submitBtnDisabled]}
             onPress={handleSubmit}
@@ -243,14 +246,10 @@ export default function UploadAdvanceReceiptScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.submitBtnText}>Enviar Datos de Pago</Text>
+              <Text style={styles.submitBtnText}>Enviar datos del pago</Text>
             )}
           </TouchableOpacity>
-
-          <Text style={styles.waitNote}>
-            ⏳ Una vez enviado, el técnico-delivery será notificado para salir tan pronto tu pago sea confirmado.
-          </Text>
-        </ScrollView>
+        </StickyFooter>
       </LinearGradient>
       </KeyboardAvoidingView>
     </>
@@ -285,10 +284,6 @@ function Field({ label, value, onChangeText, placeholder, keyboardType = 'defaul
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: 22, paddingBottom: 20 },
-  step: { fontSize: 12, color: '#5364ad', fontWeight: '600', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 },
-  title: { fontSize: 26, fontWeight: '800', color: '#17247a', marginBottom: 6 },
-  subtitle: { fontSize: 14, color: '#5364ad', lineHeight: 20 },
   scrollContent: { paddingHorizontal: 22, paddingBottom: 40 },
   infoCard: {
     backgroundColor: '#fff8e1',

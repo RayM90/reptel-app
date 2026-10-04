@@ -15,6 +15,8 @@ import { ordersAPI } from '../../src/services/api'
 import { useToastStore } from '../../src/store/toast.store'
 import { useConfirm } from '../../src/hooks/useConfirm'
 import { usePaymentInfo, formatPaymentInfo } from '../../src/hooks/usePaymentInfo'
+import ScreenHeader from '../../src/components/ScreenHeader'
+import StickyFooter from '../../src/components/StickyFooter'
 
 type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFERENCIA' | 'BINANCE'
 
@@ -68,6 +70,8 @@ export default function AdvancePaymentScreen() {
 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
   const [loading, setLoading] = useState(false)
+  // Equipo y servicios en una línea; se despliegan con "Ver".
+  const [showDetails, setShowDetails] = useState(false)
   const showToast = useToastStore((state) => state.showToast)
   const confirmDialog = useConfirm()
   const { data: paymentSettings } = usePaymentInfo()
@@ -132,58 +136,12 @@ export default function AdvancePaymentScreen() {
         colors={['#ffffff', '#eef2ff', '#d5ddff', '#8fa5ff']}
         style={styles.container}
       >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>← Volver</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Pago Anticipado</Text>
-          <Text style={styles.subtitle}>Delivery + revisión del equipo</Text>
-        </View>
+        <ScreenHeader backLabel="← Volver" step="PASO 1 DE 2" title="Pago Anticipado" subtitle="Delivery + revisión del equipo" />
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-{/* Resumen del equipo */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🖥️ Equipo reportado</Text>
-            <View style={styles.deviceCard}>
-              <Text style={styles.deviceText}>
-                {device.type === 'LAPTOP' ? 'Laptop' : 'PC'} — {device.brand} {device.model}
-              </Text>
-              <Text style={styles.deviceSubtext}>
-                Color: {device.color} · Accesorios: {device.accessories}
-              </Text>
-            </View>
-          </View>
-
-          {/* Servicios/fallas seleccionados */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🔧 Servicios seleccionados</Text>
-            <View style={styles.deviceCard}>
-              {selectedItems.map((item) => (
-                <View key={item.id} style={styles.faultSummaryRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.faultSummaryName}>{item.name}</Text>
-                    {item.isCustom && (
-                      <Text style={styles.faultSummaryTag}>Personalizado</Text>
-                    )}
-                  </View>
-                  <Text style={styles.faultSummaryPrice}>
-                    {item.price > 0 ? `$${item.price}` : 'A evaluar'}
-                  </Text>
-                </View>
-              ))}
-              {totalEstimated && Number(totalEstimated) > 0 && (
-                <View style={styles.estimateTotalRow}>
-                  <Text style={styles.estimateTotalLabel}>Total estimado de reparación</Text>
-                  <Text style={styles.estimateTotalValue}>${totalEstimated}</Text>
-                </View>
-              )}
-              <Text style={styles.estimateNote}>Sujeto a confirmación del técnico</Text>
-            </View>
-          </View>
-
           {/* Desglose del pago anticipado */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>💰 Monto a pagar ahora</Text>
@@ -211,6 +169,60 @@ export default function AdvancePaymentScreen() {
             </View>
           </View>
 
+          {/* Equipo y servicios en una línea, desplegable */}
+          <TouchableOpacity style={[styles.deviceCard, styles.section]} onPress={() => setShowDetails((v) => !v)}>
+            <View style={styles.detailsToggleRow}>
+              <Text style={[styles.deviceSubtext, { flex: 1 }]}>
+                🖥️ {device.type === 'LAPTOP' ? 'Laptop' : 'PC'} {device.brand} {device.model} · {selectedItems.length}{' '}
+                {selectedItems.length === 1 ? 'servicio' : 'servicios'}
+              </Text>
+              <Text style={styles.estimateNote}>{showDetails ? 'Ocultar ▲' : 'Ver ▼'}</Text>
+            </View>
+          </TouchableOpacity>
+          {showDetails && (
+            <>
+              {/* Resumen del equipo */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>🖥️ Equipo reportado</Text>
+                <View style={styles.deviceCard}>
+                  <Text style={styles.deviceText}>
+                    {device.type === 'LAPTOP' ? 'Laptop' : 'PC'} — {device.brand} {device.model}
+                  </Text>
+                  <Text style={styles.deviceSubtext}>
+                    Color: {device.color} · Accesorios: {device.accessories}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Servicios/fallas seleccionados */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>🔧 Servicios seleccionados</Text>
+                <View style={styles.deviceCard}>
+                  {selectedItems.map((item) => (
+                    <View key={item.id} style={styles.faultSummaryRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.faultSummaryName}>{item.name}</Text>
+                        {item.isCustom && (
+                          <Text style={styles.faultSummaryTag}>Personalizado</Text>
+                        )}
+                      </View>
+                      <Text style={styles.faultSummaryPrice}>
+                        {item.price > 0 ? `$${item.price}` : 'A evaluar'}
+                      </Text>
+                    </View>
+                  ))}
+                  {totalEstimated && Number(totalEstimated) > 0 && (
+                    <View style={styles.estimateTotalRow}>
+                      <Text style={styles.estimateTotalLabel}>Total estimado de reparación</Text>
+                      <Text style={styles.estimateTotalValue}>${totalEstimated}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.estimateNote}>Sujeto a confirmación del técnico</Text>
+                </View>
+              </View>
+            </>
+          )}
+
           {/* Método de pago */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>💳 Método de pago</Text>
@@ -237,7 +249,9 @@ export default function AdvancePaymentScreen() {
             ))}
           </View>
 
-          {/* Botón confirmar */}
+        </ScrollView>
+
+        <StickyFooter>
           <TouchableOpacity
             style={[styles.confirmBtn, (!selectedMethod || loading) && styles.confirmBtnDisabled]}
             onPress={handleConfirm}
@@ -247,11 +261,11 @@ export default function AdvancePaymentScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.confirmBtnText}>
-                Confirmar y Pagar • ${TOTAL_ADVANCE}
+                Continuar · ${TOTAL_ADVANCE}
               </Text>
             )}
           </TouchableOpacity>
-        </ScrollView>
+        </StickyFooter>
       </LinearGradient>
       </KeyboardAvoidingView>
     </>
@@ -260,17 +274,9 @@ export default function AdvancePaymentScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: 22,
-    paddingBottom: 16,
-  },
-  backBtn: { marginBottom: 8 },
-  backText: { color: '#5364ad', fontSize: 14, fontWeight: '500' },
-  title: { fontSize: 26, fontWeight: '800', color: '#17247a', marginBottom: 2 },
-  subtitle: { fontSize: 14, color: '#5364ad' },
   scrollContent: { paddingHorizontal: 22, paddingBottom: 40 },
   section: { marginBottom: 24 },
+  detailsToggleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#17247a', marginBottom: 12 },
   deviceCard: {
     backgroundColor: '#fff',
@@ -369,7 +375,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
-    marginBottom: 20,
   },
   confirmBtnDisabled: { backgroundColor: '#c0c0c0' },
   confirmBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
