@@ -63,6 +63,11 @@ export const authAPI = {
     api.get('/api/auth/check-id-number', { params: { idNumber } }),
 }
 
+export const clientsAPI = {
+  getMe: () => api.get('/api/clients/me'),
+  updateMe: (data: Record<string, unknown>) => api.patch('/api/clients/me', data),
+}
+
 export const ordersAPI = {
   getAll: () => api.get('/api/orders'),
   getById: (id: string) => api.get(`/api/orders/${id}`),

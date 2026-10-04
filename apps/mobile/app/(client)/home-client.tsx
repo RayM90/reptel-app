@@ -102,6 +102,13 @@ export default function HomeClient() {
         {/* Barra superior con cerrar sesión */}
         <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
           <TouchableOpacity
+            onPress={() => router.push('/(client)/profile')}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={styles.logoutBtn}
+          >
+            <Text style={styles.logoutText}>👤 Mi perfil</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={handleLogout}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={styles.logoutBtn}
@@ -228,7 +235,7 @@ const styles = StyleSheet.create({
   },
   topBar: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     paddingHorizontal: 22,
   },
   logoutBtn: {
