@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 import PhoneInput from '../../components/PhoneInput'
+import IdNumberInput from '../../components/IdNumberInput'
 
 type StaffRole = 'TECHNICIAN_DELIVERY' | 'TECHNICIAN'
 
@@ -115,12 +116,7 @@ export default function CreateStaff() {
           </div>
           <div className="form-group">
             <label>Cédula</label>
-            <input
-              type="text"
-              value={idNumber}
-              onChange={(e) => setIdNumber(e.target.value)}
-              required
-            />
+            <IdNumberInput value={idNumber} onChange={setIdNumber} prefixes={['V', 'E']} maxDigits={8} required />
           </div>
           <div className="form-group">
             <label>Email</label>

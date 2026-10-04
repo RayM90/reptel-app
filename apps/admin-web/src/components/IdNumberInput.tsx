@@ -12,14 +12,16 @@ interface IdNumberInputProps {
   onChange: (value: string) => void
   required?: boolean
   disabled?: boolean
+  prefixes?: string[]
+  maxDigits?: number
 }
 
 // Cédula/RIF venezolano: select de prefijo (V/E persona natural, J/G jurídico
 // o gobierno) + input solo de dígitos, limitado a 9 (RIF es el caso más largo).
-export default function IdNumberInput({ value, onChange, required, disabled }: IdNumberInputProps) {
-  const knownPrefix = PREFIXES.find((p) => value.startsWith(`${p}-`))
-  const prefix = knownPrefix ?? PREFIXES[0]
-  const digits = knownPrefix ? value.slice(2) : value.replace(/\D/g, '').slice(0, MAX_DIGITS)
+export default function IdNumberInput({ value, onChange, required, disabled, prefixes = PREFIXES, maxDigits = MAX_DIGITS }: IdNumberInputProps) {
+  const knownPrefix = prefixes.find((p) => value.startsWith(`${p}-`))
+  const prefix = knownPrefix ?? prefixes[0]
+  const digits = knownPrefix ? value.slice(2) : value.replace(/\D/g, '').slice(0, maxDigits)
 
   const emit = (nextPrefix: string, nextDigits: string) => onChange(nextDigits ? `${nextPrefix}-${nextDigits}` : '')
 
@@ -32,7 +34,7 @@ export default function IdNumberInput({ value, onChange, required, disabled }: I
         required={required}
         disabled={disabled}
       >
-        {PREFIXES.map((p) => (
+        {prefixes.map((p) => (
           <option key={p} value={p}>{p}</option>
         ))}
       </select>
@@ -40,9 +42,9 @@ export default function IdNumberInput({ value, onChange, required, disabled }: I
         type="text"
         inputMode="numeric"
         value={digits}
-        maxLength={MAX_DIGITS}
+        maxLength={maxDigits}
         placeholder="12345678"
-        onChange={(e) => emit(prefix, e.target.value.replace(/\D/g, '').slice(0, MAX_DIGITS))}
+        onChange={(e) => emit(prefix, e.target.value.replace(/\D/g, '').slice(0, maxDigits))}
         required={required}
         disabled={disabled}
       />
