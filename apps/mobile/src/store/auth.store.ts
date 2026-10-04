@@ -32,6 +32,9 @@ interface AuthState {
 }
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+// Renovación en curso: si varias pantallas piden renovar a la vez (al abrir
+// la app), todas esperan la misma en vez de pedir tokens repetidos.
+let refreshInFlight: Promise<boolean> | null = null;
 const REFRESH_INTERVAL_MS = 55 * 60 * 1000;
 
 function scheduleRefresh(refreshFn: () => Promise<boolean>) {
@@ -71,28 +74,37 @@ export const useAuthStore = create<AuthState>()(
         set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
       },
 
-      refreshSession: async (): Promise<boolean> => {
-        const { refreshToken } = get();
-        if (!refreshToken) return false;
-        try {
-          const response = await api.post("/api/auth/refresh", { refreshToken });
-          const { token: newToken } = response.data.data;
-          set({ token: newToken });
-          console.log("✅ Token renovado automáticamente");
-          return true;
-        } catch (error: any) {
-          // Sin respuesta del servidor (red caída, WiFi cambiando): se conserva
-          // la sesión y se reintenta en 1 minuto, en vez de sacar al cliente.
-          if (!error?.response) {
-            console.log("⚠️ Sin conexión al renovar el token — reintento en 1 minuto");
-            if (refreshTimer) clearTimeout(refreshTimer);
-            refreshTimer = setTimeout(() => { get().refreshSession(); }, 60 * 1000);
+      refreshSession: (): Promise<boolean> => {
+        if (!refreshInFlight) {
+          refreshInFlight = renewToken().finally(() => {
+            refreshInFlight = null;
+          });
+        }
+        return refreshInFlight;
+
+        async function renewToken(): Promise<boolean> {
+          const { refreshToken } = get();
+          if (!refreshToken) return false;
+          try {
+            const response = await api.post("/api/auth/refresh", { refreshToken });
+            const { token: newToken } = response.data.data;
+            set({ token: newToken });
+            console.log("✅ Token renovado automáticamente");
+            return true;
+          } catch (error: any) {
+            // Sin respuesta del servidor (red caída, WiFi cambiando): se conserva
+            // la sesión y se reintenta en 1 minuto, en vez de sacar al cliente.
+            if (!error?.response) {
+              console.log("⚠️ Sin conexión al renovar el token — reintento en 1 minuto");
+              if (refreshTimer) clearTimeout(refreshTimer);
+              refreshTimer = setTimeout(() => { get().refreshSession(); }, 60 * 1000);
+              return false;
+            }
+            console.log("❌ No se pudo renovar el token — cerrando sesión");
+            get().logout();
+            router.replace('/welcome');
             return false;
           }
-          console.log("❌ No se pudo renovar el token — cerrando sesión");
-          get().logout();
-          router.replace('/welcome');
-          return false;
         }
       },
 

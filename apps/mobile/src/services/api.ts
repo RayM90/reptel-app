@@ -41,19 +41,28 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    console.error('API Error:', error.response?.data || error.message)
-    // Sesión vencida o cerrada: se limpia y se vuelve a la bienvenida. El
-    // login y el refresh manejan su propio 401.
+  async (error) => {
     const url: string = error.config?.url ?? ''
+    // Token vencido en una pantalla (por ejemplo al abrir la app, mientras
+    // la sesión todavía se está renovando): se renueva una vez y se repite
+    // el pedido. Solo si no se puede renovar se cierra la sesión. El login y
+    // el refresh manejan su propio 401.
     if (error.response?.status === 401 && !url.includes('/api/auth/')) {
       const { useAuthStore } = require('../store/auth.store')
-      if (useAuthStore.getState().isAuthenticated) {
-        useAuthStore.getState().logout()
+      const store = useAuthStore.getState()
+      if (store.isAuthenticated && store.refreshToken && !error.config._retried) {
+        error.config._retried = true
+        if (await store.refreshSession()) return api(error.config)
+        return Promise.reject(error)
+      }
+      if (store.isAuthenticated) {
+        store.logout()
         const { router } = require('expo-router')
         router.replace('/welcome')
       }
+      return Promise.reject(error)
     }
+    console.error('API Error:', error.response?.data || error.message)
     return Promise.reject(error)
   }
 )
