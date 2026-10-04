@@ -61,7 +61,7 @@ PhoneInput.DigitsInput = DigitsInput
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   digitsInput: {
-    flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 15,
+    flex: 1, minWidth: 0, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 15,
   },
   digitsInputFocused: { borderColor: '#5564ad', borderWidth: 1.5 },
 })

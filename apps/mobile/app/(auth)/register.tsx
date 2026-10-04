@@ -191,7 +191,7 @@ export default function RegisterScreen() {
 
               <Text style={styles.label}>Cédula / RIF</Text>
               <View style={styles.idRow}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <IdNumberInput value={idNumber} onChange={handleIdNumberChange} />
                 </View>
                 <TouchableOpacity
@@ -222,7 +222,7 @@ export default function RegisterScreen() {
                 <Text style={styles.label}>{isCompany ? "Razón social o nombre de la empresa" : "Nombre"}</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder={isCompany ? "Ej: Constructora ABC, C.A." : "Juan Pérez"}
+                  placeholder={isCompany ? "Ej: Constructora ABC, C.A." : "Juan"}
                   placeholderTextColor="#9ca3af"
                   value={nombre}
                   onChangeText={setNombre}
