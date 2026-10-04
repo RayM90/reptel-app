@@ -874,6 +874,11 @@ export const confirmAdvancePaymentInstallment = async (
 // ÓRDENES — ACTUALIZACIÓN
 // ─────────────────────────────────────────────
 
+const CANCELLABLE_STATUSES = new Set([
+  'PENDING_PAYMENT', 'RECEIVED', 'ON_THE_WAY', 'DIAGNOSING', 'WAITING_APPROVAL',
+  'APPROVED', 'REPAIRING', 'WAITING_EXTRA_PAYMENT', 'READY',
+])
+
 export const updateOrderStatus = async (
   id: string,
   status: string,
@@ -904,26 +909,55 @@ export const updateOrderStatus = async (
     throw new Error('Por esta vía solo se puede cancelar la orden — los demás cambios de estado salen de sus acciones propias')
   }
 
-  const order = await prisma.order.update({
-    where: { id },
-    data: {
-      status: status as any,
-      version: { increment: 1 },
-      ...(technicianId && { technicianId }),
-      statusHistory: {
-        create: {
-          status: status as any,
-          comment,
+  // Solo se cancela una orden activa: una entregada, ya cancelada, pagada o
+  // rechazada no vuelve atrás. El updateMany condicionado evita que dos
+  // cancelaciones simultáneas descuenten dos veces la carga del técnico.
+  const order = await prisma.$transaction(async (tx) => {
+    const updated = await tx.order.updateMany({
+      where: { id, status: { in: [...CANCELLABLE_STATUSES] as any } },
+      data: { status: 'CANCELLED', version: { increment: 1 } },
+    })
+    if (updated.count === 0) {
+      throw new Error('Esta orden ya no se puede cancelar (está entregada, pagada, rechazada o ya cancelada)')
+    }
+    await tx.orderStatusHistory.create({
+      data: { orderId: id, status: 'CANCELLED', comment, userId: actor?.id },
+    })
+
+    // Los repuestos cargados vuelven al stock, igual que al rechazar el
+    // presupuesto. Las mermas no vuelven: la pieza se dañó.
+    const current = await tx.order.findUniqueOrThrow({ where: { id }, select: { orderNumber: true } })
+    const partsToReturn = await tx.inventoryMovement.findMany({
+      where: { orderId: id, type: 'OUT', channel: 'SERVICIO_TECNICO', reversedAt: null, lossReportedAt: null },
+    })
+    for (const part of partsToReturn) {
+      await tx.product.update({ where: { id: part.productId }, data: { stock: { increment: part.quantity } } })
+      await tx.inventoryMovement.update({
+        where: { id: part.id },
+        data: { reversedAt: new Date(), reversedByUserId: actor?.id, awaitingClientPayment: false },
+      })
+      await tx.inventoryMovement.create({
+        data: {
+          productId: part.productId,
+          type: 'IN',
+          channel: 'SERVICIO_TECNICO',
+          quantity: part.quantity,
+          reason: `Reposición — orden ${current.orderNumber} cancelada`,
           userId: actor?.id,
+          orderId: id,
         },
+      })
+    }
+
+    return tx.order.findUniqueOrThrow({
+      where: { id },
+      include: {
+        client: true,
+        technician: { select: { id: true, name: true } },
+        device: true,
+        statusHistory: { orderBy: { createdAt: 'desc' } },
       },
-    },
-    include: {
-      client: true,
-      technician: { select: { id: true, name: true } },
-      device: true,
-      statusHistory: { orderBy: { createdAt: 'desc' } },
-    },
+    })
   })
 
   // DELIVERED ya no puede llegar por acá (ver guarda arriba) — la liberación
@@ -1840,6 +1874,18 @@ const settleExtraPaymentIfCovered = async (
 // adicional mientras se repara.
 // ─────────────────────────────────────────────
 
+// Estados en los que el técnico puede cargar, revertir o reportar merma de un
+// repuesto: mientras la orden está en revisión o en reparación. Con la orden
+// cobrada, entregada, cancelada o sin pago confirmado, el presupuesto y la
+// comisión ya no deben cambiar.
+const PARTS_EDITABLE_STATUSES = new Set(['DIAGNOSING', 'WAITING_APPROVAL', 'APPROVED', 'REPAIRING', 'WAITING_EXTRA_PAYMENT'])
+
+const assertPartsEditable = (status: string) => {
+  if (!PARTS_EDITABLE_STATUSES.has(status)) {
+    throw new Error('Los repuestos solo se pueden modificar mientras la orden está en revisión o en reparación')
+  }
+}
+
 export const useProductInOrder = async (
   orderId: string,
   productId: string,
@@ -1854,6 +1900,7 @@ export const useProductInOrder = async (
   if (order.technicianId !== actor.id) {
     throw new Error('Solo el técnico asignado a esta orden puede registrar repuestos')
   }
+  assertPartsEditable(order.status)
 
   return await prisma.$transaction(async (tx) => {
     const product = await tx.product.findUniqueOrThrow({ where: { id: productId } })
@@ -1943,6 +1990,7 @@ export const revertProductUsage = async (movementId: string, actorEmail: string)
 
   const order = await prisma.order.findUnique({ where: { id: movement.orderId } })
   if (!order) throw new Error('Orden no encontrada')
+  assertPartsEditable(order.status)
   if (order.technicianId !== actor.id) {
     throw new Error('Solo el técnico asignado a esta orden puede revertir este repuesto')
   }
@@ -2013,6 +2061,7 @@ export const reportPartLoss = async (movementId: string, actorEmail: string, des
 
   const order = await prisma.order.findUnique({ where: { id: movement.orderId } })
   if (!order) throw new Error('Orden no encontrada')
+  assertPartsEditable(order.status)
   if (order.technicianId !== actor.id) {
     throw new Error('Solo el técnico asignado a esta orden puede reportar esta merma')
   }
