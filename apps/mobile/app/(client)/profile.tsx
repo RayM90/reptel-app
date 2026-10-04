@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { Stack, useRouter, useFocusEffect } from 'expo-router'
+import { Stack, useFocusEffect } from 'expo-router'
 import { clientsAPI } from '../../src/services/api'
 import { useAuthStore } from '../../src/store/auth.store'
 import { useToastStore } from '../../src/store/toast.store'
@@ -30,15 +30,15 @@ const pickAddress = (a: any): AddressValues => ({
   addressBuilding: a?.addressBuilding ?? '',
 })
 
-// Perfil del cliente: edita nombre, apellido, celular y direcciones. La
-// cédula y el correo se muestran pero no se cambian aquí (el correo es su
-// usuario para entrar).
+// Perfil del cliente: se abre en solo lectura; con "Editar mis datos" se
+// habilitan nombre, apellido, celular y direcciones. La cédula y el correo se
+// muestran pero no se cambian aquí (el correo es su usuario para entrar).
 export default function ProfileScreen() {
-  const router = useRouter()
   const showToast = useToastStore((state) => state.showToast)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [idNumber, setIdNumber] = useState('')
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -54,33 +54,34 @@ export default function ProfileScreen() {
   const isCompany = /^[JG]-/.test(idNumber)
   const [idLetter, ...idRest] = idNumber.split('-')
 
-  useFocusEffect(
-    useCallback(() => {
-      setLoading(true)
-      clientsAPI
-        .getMe()
-        .then((res) => {
-          const c = res.data.data
-          setIdNumber(c.idNumber ?? '')
-          setEmail(c.email ?? '')
-          setName(c.name ?? '')
-          setLastName(c.lastName ?? '')
-          setPhone(c.phone ?? '')
-          setAddress(pickAddress(c))
-          const second = c.secondaryAddress
-          setHadSecondary(!!second)
-          setWantsSecondary(!!second)
-          if (second) {
-            const known = SECONDARY_LABELS.includes(second.label)
-            setSecondaryLabel(known ? second.label : 'Otro')
-            setSecondaryLabelOther(known ? '' : second.label)
-            setSecondaryAddress(pickAddress(second))
-          }
-        })
-        .catch((error: any) => showToast(error?.response?.data?.message || 'No se pudo cargar tu perfil', 'error'))
-        .finally(() => setLoading(false))
-    }, [])
-  )
+  const loadProfile = useCallback(() => {
+    setLoading(true)
+    setEditing(false)
+    clientsAPI
+      .getMe()
+      .then((res) => {
+        const c = res.data.data
+        setIdNumber(c.idNumber ?? '')
+        setEmail(c.email ?? '')
+        setName(c.name ?? '')
+        setLastName(c.lastName ?? '')
+        setPhone(c.phone ?? '')
+        setAddress(pickAddress(c))
+        const second = c.secondaryAddress
+        setHadSecondary(!!second)
+        setWantsSecondary(!!second)
+        if (second) {
+          const known = SECONDARY_LABELS.includes(second.label)
+          setSecondaryLabel(known ? second.label : 'Otro')
+          setSecondaryLabelOther(known ? '' : second.label)
+          setSecondaryAddress(pickAddress(second))
+        }
+      })
+      .catch((error: any) => showToast(error?.response?.data?.message || 'No se pudo cargar tu perfil', 'error'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useFocusEffect(loadProfile)
 
   const handleSave = async () => {
     if (!name.trim() || (!isCompany && !lastName.trim())) {
@@ -114,7 +115,8 @@ export default function ProfileScreen() {
       const fullName = [name.trim(), isCompany ? '' : lastName.trim()].filter(Boolean).join(' ')
       useAuthStore.setState((s) => ({ user: s.user ? { ...s.user, name: fullName } : s.user }))
       showToast('✅ Datos actualizados', 'success')
-      router.back()
+      setHadSecondary(wantsSecondary)
+      setEditing(false)
     } catch (error: any) {
       showToast(error?.response?.data?.message || 'No se pudieron guardar tus datos', 'error')
     } finally {
@@ -153,30 +155,45 @@ export default function ProfileScreen() {
                 <Text style={styles.hint}>Para cambiar tu cédula o correo, comunícate con RepTel (Soporte).</Text>
 
                 <Text style={styles.label}>{isCompany ? 'Razón social o nombre de la empresa' : 'Nombre'}</Text>
-                <TextInput style={styles.input} value={name} onChangeText={setName} autoCapitalize="words" />
+                <TextInput
+                  style={[styles.input, !editing && styles.inputLocked]}
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                  editable={editing}
+                />
 
                 {!isCompany && (
                   <>
                     <Text style={styles.label}>Apellido</Text>
-                    <TextInput style={styles.input} value={lastName} onChangeText={setLastName} autoCapitalize="words" />
+                    <TextInput
+                      style={[styles.input, !editing && styles.inputLocked]}
+                      value={lastName}
+                      onChangeText={setLastName}
+                      autoCapitalize="words"
+                      editable={editing}
+                    />
                   </>
                 )}
 
                 <Text style={styles.label}>Celular</Text>
-                <PhoneInput value={phone} onChange={setPhone} />
+                <PhoneInput value={phone} onChange={setPhone} disabled={!editing} />
 
                 <Text style={styles.sectionTitle}>Dirección de entrega</Text>
-                <AddressFields values={address} onChange={setAddress} />
+                <AddressFields values={address} onChange={setAddress} disabled={!editing} />
 
-                <TouchableOpacity style={styles.secondaryToggle} onPress={() => setWantsSecondary((prev) => !prev)}>
-                  <Text style={styles.secondaryToggleText}>
-                    {wantsSecondary ? '− Quitar segunda dirección' : '+ Agregar otra dirección (opcional)'}
-                  </Text>
-                </TouchableOpacity>
+                {editing && (
+                  <TouchableOpacity style={styles.secondaryToggle} onPress={() => setWantsSecondary((prev) => !prev)}>
+                    <Text style={styles.secondaryToggleText}>
+                      {wantsSecondary ? '− Quitar segunda dirección' : '+ Agregar otra dirección (opcional)'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
                 {wantsSecondary && (
                   <>
-                    <View style={styles.chipsRow}>
+                    {!editing && <Text style={styles.sectionTitle}>Otra dirección</Text>}
+                    <View style={styles.chipsRow} pointerEvents={editing ? 'auto' : 'none'}>
                       {SECONDARY_LABELS.map((l) => (
                         <TouchableOpacity
                           key={l}
@@ -194,9 +211,10 @@ export default function ProfileScreen() {
                         placeholderTextColor="#9ca3af"
                         value={secondaryLabelOther}
                         onChangeText={setSecondaryLabelOther}
+                        editable={editing}
                       />
                     )}
-                    <AddressFields values={secondaryAddress} onChange={setSecondaryAddress} />
+                    <AddressFields values={secondaryAddress} onChange={setSecondaryAddress} disabled={!editing} />
                   </>
                 )}
               </View>
@@ -204,13 +222,28 @@ export default function ProfileScreen() {
           )}
 
           <StickyFooter>
-            <TouchableOpacity
-              style={[styles.btnSave, (saving || loading) && styles.btnDisabled]}
-              onPress={handleSave}
-              disabled={saving || loading}
-            >
-              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnSaveText}>Guardar cambios</Text>}
-            </TouchableOpacity>
+            {editing ? (
+              <View style={styles.footerRow}>
+                <TouchableOpacity style={styles.btnCancel} onPress={loadProfile} disabled={saving}>
+                  <Text style={styles.btnCancelText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btnSave, { flex: 1 }, saving && styles.btnDisabled]}
+                  onPress={handleSave}
+                  disabled={saving}
+                >
+                  {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnSaveText}>Guardar cambios</Text>}
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.btnSave, loading && styles.btnDisabled]}
+                onPress={() => setEditing(true)}
+                disabled={loading}
+              >
+                <Text style={styles.btnSaveText}>✏️ Editar mis datos</Text>
+              </TouchableOpacity>
+            )}
           </StickyFooter>
         </LinearGradient>
       </KeyboardAvoidingView>
@@ -276,5 +309,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   btnDisabled: { opacity: 0.6 },
+  inputLocked: { backgroundColor: '#ffffff', borderColor: '#e4e7f2' },
+  footerRow: { flexDirection: 'row', gap: 10 },
+  btnCancel: {
+    borderRadius: 14,
+    minHeight: 48,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#17247a',
+    backgroundColor: '#fff',
+  },
+  btnCancelText: { color: '#17247a', fontSize: 16, fontWeight: '700' },
   btnSaveText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 })

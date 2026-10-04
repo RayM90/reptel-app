@@ -34,7 +34,7 @@ export default function AddressFields({ values, onChange, disabled }: AddressFie
         <View key={key} style={styles.fieldGroup}>
           <Text style={styles.label}>{label}</Text>
           <TextInput
-            style={[styles.input, focusedField === key && styles.inputFocused]}
+            style={[styles.input, focusedField === key && styles.inputFocused, disabled && styles.inputLocked]}
             value={values[key]}
             onChangeText={(text) => onChange({ ...values, [key]: text })}
             onFocus={() => setFocusedField(key)}
@@ -67,5 +67,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#d0d8ff', borderRadius: 12, padding: 13, fontSize: 15,
     color: '#1a1a6e', backgroundColor: '#f0f4ff',
   },
+  // Solo lectura (Mi perfil antes de tocar "Editar mis datos").
+  inputLocked: { backgroundColor: '#ffffff', borderColor: '#e4e7f2' },
   inputFocused: { borderColor: '#5564ad' },
 })
