@@ -20,7 +20,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth.store";
 import { useToastStore } from "../../src/store/toast.store";
-import { api } from "../../src/services/api";
+import { api, authAPI } from "../../src/services/api";
 
 const { width } = Dimensions.get("window");
 
@@ -41,12 +41,27 @@ export default function LoginScreen() {
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [verNewPassword, setVerNewPassword] = useState(false);
 
-  // "¿Olvidaste tu contraseña?" — sin flujo de Cognito propio (sin SES
-  // configurado), solo deja constancia para que un Admin resuelva a mano.
+  // "¿Olvidaste tu contraseña?" — Cognito envía un código al correo del
+  // cliente; con él y la nueva clave se completa el cambio sin el admin.
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotStep, setForgotStep] = useState<"email" | "code">("email");
   const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotMessage, setForgotMessage] = useState("");
+  const [forgotCode, setForgotCode] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotConfirm, setForgotConfirm] = useState("");
+  const [verForgotPassword, setVerForgotPassword] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
+
+  // r•••@gmail.com — para confirmar a dónde se envió el código.
+  const maskedEmail = forgotEmail.trim().replace(/^(.)[^@]*(@.*)$/, "$1•••$2");
+
+  const resetForgot = () => {
+    setShowForgotPassword(false);
+    setForgotStep("email");
+    setForgotCode("");
+    setForgotNewPassword("");
+    setForgotConfirm("");
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -122,19 +137,42 @@ export default function LoginScreen() {
   };
 
   const handleForgotPasswordSubmit = async () => {
-    if (!forgotEmail) {
+    if (!forgotEmail.trim()) {
       showToast("Por favor ingresa tu correo", "error");
       return;
     }
-
     try {
       setForgotLoading(true);
-      const response = await api.post("/api/auth/request-password-reset", {
-        email: forgotEmail,
-      });
-      setForgotMessage(response.data.message);
+      await authAPI.forgotPassword(forgotEmail.trim());
+      setForgotStep("code");
     } catch (error: any) {
-      setForgotMessage("No se pudo procesar la solicitud. Intenta de nuevo más tarde.");
+      showToast(error?.response?.data?.message || "No se pudo enviar el código. Intenta de nuevo más tarde.", "error");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleConfirmForgotPassword = async () => {
+    if (!/^\d{6}$/.test(forgotCode)) {
+      showToast("El código tiene 6 números", "error");
+      return;
+    }
+    if (forgotNewPassword.length < 8) {
+      showToast("La contraseña debe tener al menos 8 caracteres", "error");
+      return;
+    }
+    if (forgotNewPassword !== forgotConfirm) {
+      showToast("Las contraseñas no coinciden", "error");
+      return;
+    }
+    try {
+      setForgotLoading(true);
+      await authAPI.confirmForgotPassword(forgotEmail.trim(), forgotCode, forgotNewPassword);
+      showToast("✅ Contraseña actualizada. Ya puedes iniciar sesión.", "success");
+      setEmail(forgotEmail.trim());
+      resetForgot();
+    } catch (error: any) {
+      showToast(error?.response?.data?.message || "No se pudo cambiar la contraseña", "error");
     } finally {
       setForgotLoading(false);
     }
@@ -170,14 +208,16 @@ export default function LoginScreen() {
                 {requiresNewPassword
                   ? "Nueva contraseña"
                   : showForgotPassword
-                  ? "Restablecer contraseña"
+                  ? "Recuperar contraseña"
                   : "Portal Cliente"}
               </Text>
               <Text style={styles.roleSubtitle}>
                 {requiresNewPassword
                   ? "Debes establecer una nueva contraseña para continuar"
                   : showForgotPassword
-                  ? "Escribe tu email — un administrador te contactará para asignarte una contraseña temporal"
+                  ? forgotStep === "email"
+                    ? "Te enviaremos un código a tu correo"
+                    : "Escribe el código que llegó a tu correo"
                   : "Ingresa con tu cuenta para continuar"}
               </Text>
             </View>
@@ -237,9 +277,7 @@ export default function LoginScreen() {
                 </>
               ) : showForgotPassword ? (
                 <>
-                  {forgotMessage ? (
-                    <Text style={styles.successText}>{forgotMessage}</Text>
-                  ) : (
+                  {forgotStep === "email" ? (
                     <>
                       <Text style={styles.label}>Correo electrónico</Text>
                       <TextInput
@@ -262,20 +300,77 @@ export default function LoginScreen() {
                         {forgotLoading ? (
                           <ActivityIndicator color="#fff" />
                         ) : (
-                          <Text style={styles.btnText}>Solicitar restablecimiento</Text>
+                          <Text style={styles.btnText}>Enviar código</Text>
                         )}
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.successText}>
+                        ✓ Te enviamos un código a {maskedEmail}. Revisa también la carpeta de spam.
+                      </Text>
+
+                      <Text style={styles.label}>Código de 6 números</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="123456"
+                        placeholderTextColor="#9ca3af"
+                        value={forgotCode}
+                        onChangeText={(text) => setForgotCode(text.replace(/\D/g, "").slice(0, 6))}
+                        keyboardType="number-pad"
+                        maxLength={6}
+                      />
+
+                      <Text style={styles.label}>Nueva contraseña</Text>
+                      <View style={styles.inputRow}>
+                        <TextInput
+                          style={styles.inputFlex}
+                          placeholder="Mínimo 8 caracteres"
+                          placeholderTextColor="#9ca3af"
+                          value={forgotNewPassword}
+                          onChangeText={setForgotNewPassword}
+                          secureTextEntry={!verForgotPassword}
+                          autoCapitalize="none"
+                        />
+                        <TouchableOpacity style={styles.eyeBtn} onPress={() => setVerForgotPassword(!verForgotPassword)}>
+                          <Feather name={verForgotPassword ? "eye-off" : "eye"} size={20} color="#8a8fc0" />
+                        </TouchableOpacity>
+                      </View>
+
+                      <Text style={styles.label}>Confirmar contraseña</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Repite tu contraseña"
+                        placeholderTextColor="#9ca3af"
+                        value={forgotConfirm}
+                        onChangeText={setForgotConfirm}
+                        secureTextEntry={!verForgotPassword}
+                        autoCapitalize="none"
+                        returnKeyType="done"
+                        onSubmitEditing={handleConfirmForgotPassword}
+                      />
+
+                      <TouchableOpacity
+                        style={[styles.btnLogin, forgotLoading && styles.btnDisabled]}
+                        onPress={handleConfirmForgotPassword}
+                        disabled={forgotLoading}
+                      >
+                        {forgotLoading ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <Text style={styles.btnText}>Cambiar contraseña</Text>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity style={styles.btnRegister} onPress={handleForgotPasswordSubmit} disabled={forgotLoading}>
+                        <Text style={styles.btnRegisterText}>
+                          <Text style={styles.btnRegisterLink}>Reenviar código</Text>
+                        </Text>
                       </TouchableOpacity>
                     </>
                   )}
 
-                  <TouchableOpacity
-                    style={styles.btnRegister}
-                    onPress={() => {
-                      setShowForgotPassword(false);
-                      setForgotEmail("");
-                      setForgotMessage("");
-                    }}
-                  >
+                  <TouchableOpacity style={styles.btnRegister} onPress={resetForgot}>
                     <Text style={styles.btnRegisterText}>
                       <Text style={styles.btnRegisterLink}>← Volver al inicio de sesión</Text>
                     </Text>

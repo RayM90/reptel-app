@@ -61,6 +61,9 @@ api.interceptors.response.use(
 export const authAPI = {
   checkIdNumber: (idNumber: string) =>
     api.get('/api/auth/check-id-number', { params: { idNumber } }),
+  forgotPassword: (email: string) => api.post('/api/auth/forgot-password', { email }),
+  confirmForgotPassword: (email: string, code: string, newPassword: string) =>
+    api.post('/api/auth/confirm-forgot-password', { email, code, newPassword }),
 }
 
 export const clientsAPI = {
