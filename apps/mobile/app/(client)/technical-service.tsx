@@ -8,6 +8,8 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Feather } from '@expo/vector-icons'
 import { useToastStore } from '../../src/store/toast.store'
 import SelectField from '../../src/components/SelectField'
+import ScreenHeader from '../../src/components/ScreenHeader'
+import StickyFooter from '../../src/components/StickyFooter'
 import { DEVICE_BRANDS, BRAND_MODELS, DEVICE_COLORS } from '../../src/constants/venezuela'
 
 // ── Tipos ────────────────────────────────────────────────────────
@@ -260,17 +262,13 @@ export default function TechnicalServiceScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <Stack.Screen options={{ title: 'Servicio Técnico' }} />
+      <Stack.Screen options={{ headerShown: false }} />
       <LinearGradient
         colors={['#ffffff', '#eef2ff', '#d5ddff', '#8fa5ff']}
         style={{ flex: 1 }}
       >
+        <ScreenHeader backLabel="← Volver" title="Servicio Técnico" subtitle="Reporta tu equipo para diagnóstico y reparación" />
         <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
-
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Servicio Técnico</Text>
-            <Text style={styles.headerSubtitle}>Reporta tu equipo para diagnóstico y reparación</Text>
-          </View>
 
           {/* ── Datos del equipo ── */}
           <View style={styles.section}>
@@ -482,15 +480,18 @@ export default function TechnicalServiceScreen() {
             />
           </View>
 
-          <TouchableOpacity
-            style={styles.btnSave}
-            onPress={handleSubmit}
-          >
-            <Text style={styles.btnSaveText}>Continuar al pago →</Text>
-          </TouchableOpacity>
-
-          <View style={{ height: 40 }} />
+          <View style={{ height: 24 }} />
         </ScrollView>
+
+        <StickyFooter>
+          <TouchableOpacity style={styles.btnSave} onPress={handleSubmit}>
+            <Text style={styles.btnSaveText}>
+              {selectedItems.length > 0
+                ? `Continuar al pago · ${selectedItems.length} ${selectedItems.length === 1 ? 'falla' : 'fallas'}`
+                : 'Continuar al pago →'}
+            </Text>
+          </TouchableOpacity>
+        </StickyFooter>
       </LinearGradient>
     </KeyboardAvoidingView>
   )
@@ -498,9 +499,6 @@ export default function TechnicalServiceScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { padding: 20, paddingTop: 24 },
-  headerTitle: { color: '#17247a', fontSize: 22, fontWeight: 'bold' },
-  headerSubtitle: { color: '#5564ad', fontSize: 13, marginTop: 4 },
   section: { backgroundColor: '#ffffff', marginHorizontal: 16, marginBottom: 12, borderRadius: 12, padding: 16, elevation: 2 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#17247a', marginBottom: 4 },
   sectionHint: { fontSize: 12, color: '#888', marginBottom: 12 },
@@ -587,7 +585,7 @@ const styles = StyleSheet.create({
   totalNote: { fontSize: 12, color: '#888', marginTop: 4 },
   btnSave: {
     backgroundColor: '#17247a', borderRadius: 12, padding: 16,
-    marginHorizontal: 16, marginBottom: 12, alignItems: 'center', elevation: 2,
+    minHeight: 44, alignItems: 'center', elevation: 2,
   },
   btnDisabled: { backgroundColor: '#aaa' },
   btnSaveText: { color: '#fff', fontSize: 17, fontWeight: '700' },
