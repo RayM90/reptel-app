@@ -997,8 +997,17 @@ export const addOrderComment = async (orderId: string, actorEmail: string, comme
 // confirmAdvancePaymentInstallment). Se removió el salto de estado gratis;
 // este endpoint ahora solo permite corregir el monto del presupuesto,
 // sin tocar status ni budgetApproved.
-export const updateOrderBudget = async (id: string, budget: number) => {
+const BUDGET_LOCKED_STATUSES = new Set(['PAID_PENDING_DELIVERY', 'DELIVERED', 'CANCELLED', 'REJECTED_PENDING_PICKUP'])
+
+export const updateOrderBudget = async (id: string, budgetInput: number) => {
+  const budget = Number(budgetInput)
+  if (!Number.isFinite(budget) || budget < 0) {
+    throw new Error('El presupuesto debe ser un número mayor o igual a cero')
+  }
   const current = await prisma.order.findUniqueOrThrow({ where: { id }, select: { status: true } })
+  if (BUDGET_LOCKED_STATUSES.has(current.status)) {
+    throw new Error('No se puede cambiar el presupuesto de una orden pagada, entregada, rechazada o cancelada')
+  }
 
   return await prisma.order.update({
     where: { id },
@@ -1052,10 +1061,17 @@ export const submitDiagnosis = async (
   id: string,
   diagnosis: string,
   budget: number,
-  serviceCatalogId?: string
+  serviceCatalogId?: string,
+  actorEmail?: string
 ) => {
-  const current = await prisma.order.findUnique({ where: { id }, select: { status: true } })
+  const current = await prisma.order.findUnique({ where: { id }, select: { status: true, technicianId: true } })
   if (!current) throw new Error('Orden no encontrada')
+  if (actorEmail) {
+    const actor = await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true } })
+    if (!actor || actor.id !== current.technicianId) {
+      throw new Error('Solo el técnico asignado a esta orden puede registrar el diagnóstico')
+    }
+  }
   if (current.status !== 'DIAGNOSING') {
     throw new Error('El diagnóstico solo puede registrarse mientras el técnico está revisando el equipo')
   }
@@ -1148,6 +1164,9 @@ export const submitFinalPayment = async (
 
   if (!order) {
     throw new Error('Orden no encontrada')
+  }
+  if (order.status !== 'READY') {
+    throw new Error('El pago final solo se puede enviar cuando la reparación está lista')
   }
 
   const updatedOrder = await prisma.order.update({
@@ -2253,10 +2272,15 @@ export const submitCounterAdvanceInstallment = async (
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
-      advancePaymentSubmissions: { where: { status: { in: ['CONFIRMED', 'PENDING'] } } },
+      // Solo los abonos de la revisión: los del presupuesto se cuentan aparte.
+      advancePaymentSubmissions: { where: { status: { in: ['CONFIRMED', 'PENDING'] }, kind: 'REVISION' } },
     },
   })
   if (!order) throw new Error('Orden no encontrada')
+  assertCounterOrder(order)
+  if (order.status !== 'PENDING_PAYMENT') {
+    throw new Error('La revisión ya está pagada: este abono solo aplica a órdenes con el pago de revisión pendiente')
+  }
 
   if (amount == null || amount <= 0) {
     throw new Error('El monto del pago debe ser mayor a cero')

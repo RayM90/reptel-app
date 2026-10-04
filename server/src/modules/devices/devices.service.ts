@@ -1,7 +1,10 @@
 import prisma from '../../lib/prisma'
 
 export const getAllDevices = async () => {
+  // El listado nunca trae la contraseña del equipo: se consulta por orden,
+  // solo quien la atiende.
   return prisma.device.findMany({
+    omit: { devicePassword: true },
     include: {
       orders: {
         select: {

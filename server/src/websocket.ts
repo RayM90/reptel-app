@@ -1,6 +1,7 @@
 import { WebSocket } from 'ws'
 import type { IncomingMessage } from 'http'
 import { verifier } from './middleware/auth.middleware'
+import { isTokenRevoked } from './lib/tokenDenylist'
 
 let wssInstance: any = null
 
@@ -26,6 +27,11 @@ export const authenticateWsConnection = async (
     if (!token) return null
 
     const payload = await verifier.verify(token)
+    if (isTokenRevoked(payload.jti as string | undefined)) return null
+    // El canal en vivo difunde órdenes de todos los clientes: solo para el
+    // personal. La app del cliente consulta sus órdenes por la API REST.
+    const groups = (payload['cognito:groups'] as string[]) || []
+    if (!groups.some((g) => g === 'ADMIN' || g === 'TECHNICIAN' || g === 'TECHNICIAN_DELIVERY')) return null
     return {
       sub: payload.sub,
       email: payload.email as string,

@@ -495,12 +495,13 @@ export const submitDiagnosis = async (req: AuthRequest, res: Response): Promise<
       return
     }
 
-    if (budget === undefined) {
-      res.status(400).json({ success: false, message: 'El presupuesto (budget) es requerido' })
+    const budgetValue = Number(budget)
+    if (budget === undefined || budget === null || budget === '' || !Number.isFinite(budgetValue) || budgetValue < 0) {
+      res.status(400).json({ success: false, message: 'El presupuesto debe ser un número mayor o igual a cero' })
       return
     }
 
-    const order = await ordersService.submitDiagnosis(id, diagnosis, budget, serviceCatalogId)
+    const order = await ordersService.submitDiagnosis(id, diagnosis, budgetValue, serviceCatalogId, req.user?.email)
 
     broadcastOrderUpdate({
       type: 'ORDER_BUDGET_UPDATED',

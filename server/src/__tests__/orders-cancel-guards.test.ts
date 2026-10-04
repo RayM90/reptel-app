@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma'
-import { updateOrderStatus, useProductInOrder } from '../modules/orders/orders.service'
+import { updateOrderStatus, useProductInOrder, updateOrderBudget, submitDiagnosis } from '../modules/orders/orders.service'
+import { getAllDevices } from '../modules/devices/devices.service'
 
 // Cancelar solo órdenes activas (sin descontar dos veces la carga del técnico
 // y devolviendo los repuestos al stock) y repuestos solo en revisión/reparación.
@@ -72,5 +73,25 @@ describe('Órdenes — cancelación y repuestos según el estado', () => {
     const order = await newOrder('DELIVERED')
     await expect(useProductInOrder(order.id, productId, 1, techEmail)).rejects.toThrow(/solo se pueden modificar/)
     expect((await prisma.product.findUniqueOrThrow({ where: { id: productId } })).stock).toBe(10)
+  })
+
+  it('el presupuesto del admin no acepta negativos ni cambia en órdenes entregadas', async () => {
+    const open = await newOrder('WAITING_APPROVAL')
+    await expect(updateOrderBudget(open.id, -50)).rejects.toThrow(/mayor o igual a cero/)
+    const delivered = await newOrder('DELIVERED')
+    await expect(updateOrderBudget(delivered.id, 80)).rejects.toThrow(/No se puede cambiar el presupuesto/)
+  })
+
+  it('solo el técnico asignado registra el diagnóstico', async () => {
+    const order = await newOrder('DIAGNOSING')
+    await expect(submitDiagnosis(order.id, 'Pantalla', 40, undefined, 'otro-tecnico@test.com')).rejects.toThrow(/Solo el técnico asignado/)
+    const ok = await submitDiagnosis(order.id, 'Pantalla', 40, undefined, techEmail)
+    expect(ok.status).toBe('WAITING_APPROVAL')
+  })
+
+  it('el listado de equipos no incluye la contraseña del equipo', async () => {
+    const devices = await getAllDevices()
+    expect(devices.length).toBeGreaterThan(0)
+    expect(devices.every((d) => !('devicePassword' in d))).toBe(true)
   })
 })

@@ -52,6 +52,9 @@ describe('orders.service — actor en OrderStatusHistory', () => {
   })
 
   it('deja userId en null cuando no se pasa actorEmail (compatibilidad con llamadas existentes)', async () => {
+    // Una orden cancelada ya no se puede volver a cancelar: se reabre para
+    // probar de nuevo la cancelación, ahora sin actor.
+    await prisma.order.update({ where: { id: order.id }, data: { status: 'RECEIVED' } })
     await updateOrderStatus(order.id, 'CANCELLED', 'Sin actor')
 
     const history = await prisma.orderStatusHistory.findFirst({
