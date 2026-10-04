@@ -74,6 +74,7 @@ export default function Registro() {
   const [touched, setTouched] = useState<Record<string, boolean>>({})
   const [submitAttempted, setSubmitAttempted] = useState(false)
   const [activeClient, setActiveClient] = useState<Client | null>(null)
+  const [appAccess, setAppAccess] = useState<{ email: string; tempPassword: string } | null>(null)
   const isCompany = isCompanyIdPrefix(idNumber)
   const idDigits = idNumber.includes('-') ? idNumber.split('-')[1] ?? '' : ''
   const idDigitsIncomplete = idDigits.length > 0 && idDigits.length < 7
@@ -121,6 +122,7 @@ export default function Registro() {
     setForm(emptyForm)
     setClientError('')
     setActiveClient(null)
+    setAppAccess(null)
     setTouched({})
     setSubmitAttempted(false)
     setOrderForm(emptyOrderForm)
@@ -141,6 +143,15 @@ export default function Registro() {
     const missingPhone = !form.phone
     if (!missingName && !missingLastName && !missingPhone) return null
     return isCompany ? 'Razón social y teléfono son requeridos' : 'Nombre, apellido y teléfono son requeridos'
+  }
+
+  // Solo para clientes nuevos: el correo es su usuario en la app y la
+  // dirección se exige igual que en el registro de la app.
+  const newClientRequiredFieldsError = (): string | null => {
+    if (!form.email.trim()) return 'El correo es requerido — con él el cliente entrará a la app RepTel'
+    const address = [form.addressState, form.addressCity, form.addressNeighborhood, form.addressStreet, form.addressBuilding]
+    if (address.some((v) => !v.trim())) return 'La dirección debe estar completa (Estado, Municipio, Barrio/Urb., Calle y Edificio/Casa)'
+    return null
   }
 
   const handleSearch = async () => {
@@ -205,7 +216,7 @@ export default function Registro() {
       return
     }
 
-    const requiredError = clientRequiredFieldsError()
+    const requiredError = clientRequiredFieldsError() ?? newClientRequiredFieldsError()
     if (requiredError) {
       setClientError(requiredError)
       return
@@ -215,6 +226,7 @@ export default function Registro() {
     setClientError('')
     try {
       const response = await api.post('/api/clients', { ...form, idNumber: idNumber.trim() })
+      setAppAccess(response.data.tempPassword ? { email: form.email.trim(), tempPassword: response.data.tempPassword } : null)
       setActiveClient(response.data.data)
       setStep('sale')
     } catch (err: any) {
@@ -429,12 +441,12 @@ export default function Registro() {
                 {(touched.phone || submitAttempted) && phoneError && <p className="field-error">{phoneError}</p>}
               </div>
               <div className="form-group">
-                <label>Correo (opcional)</label>
+                <label>Correo</label>
                 <input type="email" value={form.email} disabled={!!clientExists && !isEditingClient}
                   onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div style={{ marginTop: 20, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
-                <span className="card-eyebrow">Dirección (opcional)</span>
+                <span className="card-eyebrow">Dirección</span>
               </div>
               <div className="form-group">
                 <label>Estado</label>
@@ -481,6 +493,15 @@ export default function Registro() {
       {step === 'sale' && activeClient && (
         <>
         <div className="card" style={{ maxWidth: 600 }}>
+          {appAccess && (
+            <p className="alert-success" style={{ lineHeight: 1.6 }}>
+              <strong>Cliente registrado.</strong> Se creó su acceso a la app RepTel.<br />
+              Entrégale estos datos:<br />
+              Correo: <strong>{appAccess.email}</strong><br />
+              Clave provisional: <strong style={{ fontSize: 18 }}>{appAccess.tempPassword}</strong><br />
+              Al entrar por primera vez, la app le pedirá crear su propia clave. Esta clave se muestra una sola vez.
+            </p>
+          )}
           <p><strong>Cliente:</strong> {formatFullName(activeClient.name, activeClient.lastName)} — {activeClient.phone}</p>
           <p><button className="btn btn-outline" onClick={resetAll}>← Buscar otro cliente</button></p>
         </div>
