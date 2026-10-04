@@ -3,3 +3,6 @@ node_modules
 .env
 
 /src/generated/prisma
+
+# Copias de la configuración de Cognito (scripts/translate-cognito-email.ts)
+scripts/userpool-backup-*.json
