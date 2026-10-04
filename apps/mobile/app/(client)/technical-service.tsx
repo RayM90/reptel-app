@@ -1,15 +1,17 @@
-import React, { useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native'
-import { useRouter, Stack } from 'expo-router'
+import { useRouter, Stack, useFocusEffect } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Feather } from '@expo/vector-icons'
 import { useToastStore } from '../../src/store/toast.store'
 import SelectField from '../../src/components/SelectField'
 import ScreenHeader from '../../src/components/ScreenHeader'
 import StickyFooter from '../../src/components/StickyFooter'
+import { isAddressComplete } from '../../src/components/AddressFields'
+import { clientsAPI } from '../../src/services/api'
 import { DEVICE_BRANDS, BRAND_MODELS, DEVICE_COLORS } from '../../src/constants/venezuela'
 
 // ── Tipos ────────────────────────────────────────────────────────
@@ -129,6 +131,29 @@ const DEVICE_TYPES = ['LAPTOP', 'PC']
 
 export default function TechnicalServiceScreen() {
   const router = useRouter()
+
+  // Sin dirección de entrega el técnico no sabe dónde retirar el equipo
+  // (clientes de mostrador antiguos): se pide completarla en Mi perfil.
+  const [missingAddress, setMissingAddress] = useState(false)
+  useFocusEffect(
+    useCallback(() => {
+      clientsAPI
+        .getMe()
+        .then((res) => {
+          const c = res.data.data
+          setMissingAddress(
+            !isAddressComplete({
+              addressState: c.addressState ?? '',
+              addressCity: c.addressCity ?? '',
+              addressNeighborhood: c.addressNeighborhood ?? '',
+              addressStreet: c.addressStreet ?? '',
+              addressBuilding: c.addressBuilding ?? '',
+            })
+          )
+        })
+        .catch(() => setMissingAddress(false))
+    }, [])
+  )
   const showToast = useToastStore((state) => state.showToast)
 
   // ── Datos del equipo ─────────────────────────────────────────────
@@ -268,7 +293,22 @@ export default function TechnicalServiceScreen() {
         style={{ flex: 1 }}
       >
         <ScreenHeader backLabel="← Volver" title="Servicio Técnico" subtitle="Reporta tu equipo para diagnóstico y reparación" />
-        <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+        {missingAddress && (
+          <View style={styles.addressWarning}>
+            <Text style={styles.addressWarningText}>
+              📍 <Text style={{ fontWeight: '700' }}>Falta tu dirección de entrega.</Text> El técnico la necesita para retirar tu
+              equipo. Agrégala en tu perfil para continuar.
+            </Text>
+            <TouchableOpacity style={styles.addressWarningBtn} onPress={() => router.push('/(client)/profile')}>
+              <Text style={styles.addressWarningBtnText}>Agregar mi dirección</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        <ScrollView
+          style={[styles.container, missingAddress && styles.blocked]}
+          pointerEvents={missingAddress ? 'none' : 'auto'}
+          keyboardShouldPersistTaps="handled"
+        >
 
           {/* ── Datos del equipo ── */}
           <View style={styles.section}>
@@ -484,7 +524,11 @@ export default function TechnicalServiceScreen() {
         </ScrollView>
 
         <StickyFooter>
-          <TouchableOpacity style={styles.btnSave} onPress={handleSubmit}>
+          <TouchableOpacity
+            style={[styles.btnSave, missingAddress && styles.btnDisabled]}
+            onPress={handleSubmit}
+            disabled={missingAddress}
+          >
             <Text style={styles.btnSaveText}>
               {selectedItems.length > 0
                 ? `Continuar al pago · ${selectedItems.length} ${selectedItems.length === 1 ? 'falla' : 'fallas'}`
@@ -588,5 +632,25 @@ const styles = StyleSheet.create({
     minHeight: 44, alignItems: 'center', elevation: 2,
   },
   btnDisabled: { backgroundColor: '#aaa' },
+  blocked: { opacity: 0.45 },
+  addressWarning: {
+    backgroundColor: '#fff8e1',
+    borderWidth: 1,
+    borderColor: '#ffe082',
+    borderRadius: 12,
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  addressWarningText: { fontSize: 13, color: '#7a6000', lineHeight: 19 },
+  addressWarningBtn: {
+    backgroundColor: '#17247a',
+    borderRadius: 12,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  addressWarningBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   btnSaveText: { color: '#fff', fontSize: 17, fontWeight: '700' },
 })
