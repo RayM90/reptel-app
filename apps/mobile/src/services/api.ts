@@ -43,6 +43,17 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     console.error('API Error:', error.response?.data || error.message)
+    // Sesión vencida o cerrada: se limpia y se vuelve a la bienvenida. El
+    // login y el refresh manejan su propio 401.
+    const url: string = error.config?.url ?? ''
+    if (error.response?.status === 401 && !url.includes('/api/auth/')) {
+      const { useAuthStore } = require('../store/auth.store')
+      if (useAuthStore.getState().isAuthenticated) {
+        useAuthStore.getState().logout()
+        const { router } = require('expo-router')
+        router.replace('/welcome')
+      }
+    }
     return Promise.reject(error)
   }
 )

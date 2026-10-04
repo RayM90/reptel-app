@@ -286,7 +286,8 @@ export const getOrdersByClient = async (clientId: string) => {
     orderBy: { receivedAt: 'desc' },
   })
 
-  return orders.map(({ inventoryMovements, technician, ...order }) => ({
+  // La comisión del técnico es interna: no se envía a la app del cliente.
+  return orders.map(({ inventoryMovements, technician, technicianCommission: _commission, ...order }) => ({
     ...order,
     // El cliente ve el contacto del técnico recién cuando el pago del
     // anticipo está confirmado — antes todavía no hay nada que coordinar.

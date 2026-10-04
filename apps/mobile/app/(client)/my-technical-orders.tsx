@@ -8,8 +8,8 @@ import {
   TextInput,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { Stack, useRouter } from 'expo-router'
-import { useState, useEffect, useCallback } from 'react'
+import { Stack, useRouter, useFocusEffect } from 'expo-router'
+import { useState, useCallback } from 'react'
 import { File, Paths } from 'expo-file-system'
 import * as Sharing from 'expo-sharing'
 import { ordersAPI, API_URL } from '../../src/services/api'
@@ -174,9 +174,13 @@ export default function MyTechnicalOrdersScreen() {
     }
   }, [])
 
-  useEffect(() => {
-    fetchOrders()
-  }, [fetchOrders])
+  // Se recarga cada vez que el cliente vuelve a esta pantalla (por ejemplo,
+  // después de pagar), para ver el estado al día.
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrders()
+    }, [fetchOrders])
+  )
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id))

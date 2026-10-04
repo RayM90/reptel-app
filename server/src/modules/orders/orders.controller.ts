@@ -379,7 +379,7 @@ export const getMyTechOrders = async (req: AuthRequest, res: Response): Promise<
     res.json({ success: true, data: orders })
   } catch (error) {
     console.error('ERROR GET MY TECH ORDERS:', error)
-    res.status(500).json({ success: false, message: 'Error al obtener tus órdenes', error: String(error) })
+    res.status(500).json({ success: false, message: 'Error al obtener tus órdenes' })
   }
 }
 
@@ -849,7 +849,7 @@ export const getMyTechnicianOrders = async (req: AuthRequest, res: Response): Pr
     res.json({ success: true, data: orders })
   } catch (error) {
     console.error('ERROR GET MY TECHNICIAN ORDERS:', error)
-    res.status(500).json({ success: false, message: 'Error al obtener tus órdenes', error: String(error) })
+    res.status(500).json({ success: false, message: 'Error al obtener tus órdenes' })
   }
 }
 // ─────────────────────────────────────────────

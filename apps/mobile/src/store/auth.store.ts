@@ -80,7 +80,15 @@ export const useAuthStore = create<AuthState>()(
           set({ token: newToken });
           console.log("✅ Token renovado automáticamente");
           return true;
-        } catch (error) {
+        } catch (error: any) {
+          // Sin respuesta del servidor (red caída, WiFi cambiando): se conserva
+          // la sesión y se reintenta en 1 minuto, en vez de sacar al cliente.
+          if (!error?.response) {
+            console.log("⚠️ Sin conexión al renovar el token — reintento en 1 minuto");
+            if (refreshTimer) clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(() => { get().refreshSession(); }, 60 * 1000);
+            return false;
+          }
           console.log("❌ No se pudo renovar el token — cerrando sesión");
           get().logout();
           router.replace('/welcome');
