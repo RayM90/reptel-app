@@ -1,4 +1,4 @@
-import { isValidVenezuelanPhone, isValidVenezuelanIdNumber, isCompanyIdNumber } from '../lib/venezuela'
+import { isValidVenezuelanPhone, isValidVenezuelanIdNumber, isCompanyIdNumber, isValidStaffIdNumber } from '../lib/venezuela'
 
 describe('isValidVenezuelanPhone', () => {
   it.each(['0412', '0414', '0416', '0424', '0426'])('acepta el prefijo %s + 7 dígitos', (prefix) => {
@@ -64,5 +64,14 @@ describe('isCompanyIdNumber', () => {
 
   it('false para E-', () => {
     expect(isCompanyIdNumber('E-12345678')).toBe(false)
+  })
+})
+
+describe('isValidStaffIdNumber', () => {
+  it.each(['V-1234567', 'V-12345678', 'E-12345678'])('acepta %s', (id) => {
+    expect(isValidStaffIdNumber(id)).toBe(true)
+  })
+  it.each(['J-123456789', 'G-12345678', 'V-123456789', 'V-123456', '12345678', 'v-12345678'])('rechaza %s', (id) => {
+    expect(isValidStaffIdNumber(id)).toBe(false)
   })
 })

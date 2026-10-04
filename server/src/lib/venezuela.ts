@@ -18,6 +18,11 @@ export const isValidVenezuelanIdNumber = (idNumber: string): boolean => {
   return /^[VEJG]-\d{7,9}$/.test(idNumber);
 };
 
+// Empleados: solo personas naturales (V/E) y cédula de 7 u 8 dígitos.
+export const isValidStaffIdNumber = (idNumber: string): boolean => {
+  return /^[VE]-\d{7,8}$/.test(idNumber);
+};
+
 // J- (jurídico/empresa) y G- (gobierno) no tienen apellido — se usa para
 // relajar la validación de lastName en clients.controller.ts.
 export const isCompanyIdNumber = (idNumber: string): boolean => {

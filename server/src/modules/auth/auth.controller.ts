@@ -6,7 +6,7 @@ import { translateCognitoError } from './auth.errors';
 import prisma from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { formatClientAddress, getPrimaryAddress } from '../../lib/clientAddress';
-import { isValidVenezuelanPhone, isValidVenezuelanIdNumber, isCompanyIdNumber } from '../../lib/venezuela';
+import { isValidVenezuelanPhone, isValidVenezuelanIdNumber, isCompanyIdNumber, isValidStaffIdNumber } from '../../lib/venezuela';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -270,8 +270,8 @@ export const createStaff = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    if (!isValidVenezuelanIdNumber(idNumber)) {
-      res.status(400).json({ message: 'La cédula debe tener el formato V-12345678 o E-12345678' });
+    if (!isValidStaffIdNumber(idNumber)) {
+      res.status(400).json({ message: 'La cédula del empleado debe tener el formato V-12345678 o E-12345678' });
       return;
     }
 

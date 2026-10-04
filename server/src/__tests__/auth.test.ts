@@ -115,6 +115,24 @@ describe('Auth — POST /api/auth/staff', () => {
     expect(res.body.message).toMatch(/cédula/i)
   })
 
+  it.each(['J-123456789', 'V-123456789'])('retorna 400 si la cédula del empleado es %s (solo V/E, máx. 8 dígitos)', async (idNumber) => {
+    const res = await request(app)
+      .post('/api/auth/staff')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        email: 'cedula-staff@reptel.com',
+        password: 'Passw0rd!',
+        name: 'Test',
+        lastName: 'Cedula',
+        idNumber,
+        role: 'TECHNICIAN',
+        phone: '04121234567',
+      })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/V-12345678 o E-12345678/)
+  })
+
   it('retorna 400 si la cédula ya pertenece a otro empleado (sin llegar a Cognito)', async () => {
     const res = await request(app)
       .post('/api/auth/staff')
