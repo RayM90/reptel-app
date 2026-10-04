@@ -2,6 +2,36 @@ import request from 'supertest'
 import app from '../app'
 import { authorize } from '../middleware/auth.middleware'
 import prisma from '../lib/prisma'
+import * as authService from '../modules/auth/auth.service'
+
+const fullAddress = {
+  addressState: 'Carabobo',
+  addressCity: 'Valencia',
+  addressNeighborhood: 'La Trigaleña',
+  addressStreet: 'Calle 5',
+  addressBuilding: 'Casa 12',
+}
+
+let cognitoCreateSpy: jest.SpyInstance
+let cognitoDeleteSpy: jest.SpyInstance
+
+beforeEach(() => {
+  // Nunca crear usuarios reales en Cognito desde los tests.
+  cognitoCreateSpy = jest.spyOn(authService, 'createClientCognitoAccount').mockResolvedValue(undefined)
+  cognitoDeleteSpy = jest.spyOn(authService, 'deleteCognitoUser').mockResolvedValue(undefined)
+})
+
+afterEach(() => {
+  jest.restoreAllMocks()
+})
+
+const uniqueEmail = (tag: string) => `cli-${tag}-${Date.now()}-${Math.floor(Math.random() * 1e4)}@reptel-test.com`
+
+const cleanupClient = async (clientId: string) => {
+  await prisma.user.deleteMany({ where: { clientId } })
+  await prisma.clientAddress.deleteMany({ where: { clientId } })
+  await prisma.client.delete({ where: { id: clientId } }).catch(() => {})
+}
 
 let adminToken: string
 
@@ -90,10 +120,11 @@ describe('Clients — persona natural vs. empresa (J-/G-)', () => {
     const res = await request(app)
       .post('/api/clients')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'Constructora Test, C.A.', idNumber, phone: '04121234567' })
+      .send({ name: 'Constructora Test, C.A.', idNumber, phone: '04121234567', email: uniqueEmail('j'), ...fullAddress })
 
     expect(res.status).toBe(201)
     expect(res.body.data.lastName).toBe('')
+    await cleanupClient(res.body.data.id)
   })
 
   it('POST /api/clients crea el cliente sin apellido cuando el prefijo es G- (gobierno) y guarda contactPerson', async () => {
@@ -101,11 +132,12 @@ describe('Clients — persona natural vs. empresa (J-/G-)', () => {
     const res = await request(app)
       .post('/api/clients')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'Alcaldía Test', idNumber, phone: '04121234567', contactPerson: 'Ana Pérez' })
+      .send({ name: 'Alcaldía Test', idNumber, phone: '04121234567', contactPerson: 'Ana Pérez', email: uniqueEmail('g'), ...fullAddress })
 
     expect(res.status).toBe(201)
     expect(res.body.data.lastName).toBe('')
     expect(res.body.data.contactPerson).toBe('Ana Pérez')
+    await cleanupClient(res.body.data.id)
   })
 })
 
@@ -114,10 +146,7 @@ describe('Clients — dirección vía ClientAddress', () => {
   const testIdNumber = `V-${String(Date.now()).slice(-7)}`
 
   afterAll(async () => {
-    if (createdClientId) {
-      await prisma.clientAddress.deleteMany({ where: { clientId: createdClientId } })
-      await prisma.client.delete({ where: { id: createdClientId } }).catch(() => {})
-    }
+    if (createdClientId) await cleanupClient(createdClientId)
   })
 
   it('POST /api/clients crea una fila ClientAddress principal y la API la devuelve aplanada', async () => {
@@ -129,6 +158,7 @@ describe('Clients — dirección vía ClientAddress', () => {
         lastName: 'DePrueba',
         idNumber: testIdNumber,
         phone: '04121234567',
+        email: uniqueEmail('addr'),
         addressState: 'Carabobo',
         addressCity: 'Valencia',
         addressNeighborhood: 'La Trigaleña',
@@ -169,5 +199,75 @@ describe('Clients — dirección vía ClientAddress', () => {
     expect(res.status).toBe(200)
     expect(res.body.data.addressCity).toBe('Naguanagua')
     expect(res.body.data.addresses).toBeUndefined() // no se filtra el array crudo en la respuesta
+  })
+})
+
+describe('Clients — registro de mostrador con acceso a la app', () => {
+  const created: string[] = []
+  afterAll(async () => {
+    for (const id of created) await cleanupClient(id)
+  })
+
+  it('retorna 400 si falta el correo', async () => {
+    const res = await request(app)
+      .post('/api/clients')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Sin', lastName: 'Correo', idNumber: `V-${String(Date.now()).slice(-8)}`, phone: '04121234567', ...fullAddress })
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/correo/i)
+    expect(cognitoCreateSpy).not.toHaveBeenCalled()
+  })
+
+  it('retorna 400 si la dirección está incompleta', async () => {
+    const { addressBuilding, ...partial } = fullAddress
+    const res = await request(app)
+      .post('/api/clients')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Dir', lastName: 'Incompleta', idNumber: `V-${String(Date.now()).slice(-8)}`, phone: '04121234567', email: uniqueEmail('dir'), ...partial })
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/dirección/i)
+    expect(cognitoCreateSpy).not.toHaveBeenCalled()
+  })
+
+  it('retorna 400 si el correo ya pertenece a una cuenta de la app, sin tocar Cognito', async () => {
+    const res = await request(app)
+      .post('/api/clients')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Correo', lastName: 'Usado', idNumber: `V-${String(Date.now()).slice(-8)}`, phone: '04121234567', email: 'admin@reptel.com', ...fullAddress })
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/ya pertenece a una cuenta/i)
+    expect(cognitoCreateSpy).not.toHaveBeenCalled()
+  })
+
+  it('crea Client + User vinculado y devuelve la clave provisional Reptel.NNNN', async () => {
+    const email = uniqueEmail('ok')
+    const res = await request(app)
+      .post('/api/clients')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Luis', lastName: 'Gómez', idNumber: `V-${String(Date.now()).slice(-8)}`, phone: '04125550011', email, ...fullAddress })
+
+    expect(res.status).toBe(201)
+    expect(res.body.tempPassword).toMatch(/^Reptel\.\d{4}$/)
+    created.push(res.body.data.id)
+
+    expect(cognitoCreateSpy).toHaveBeenCalledWith(email, 'Luis', 'Gómez', res.body.tempPassword)
+    const user = await prisma.user.findUnique({ where: { email } })
+    expect(user?.clientId).toBe(res.body.data.id)
+    expect(user?.role).toBe('CLIENT')
+  })
+
+  it('si falla la BD después de Cognito, borra el usuario de Cognito y no deja el cliente', async () => {
+    const email = uniqueEmail('rollback')
+    const idNumber = `V-${String(Date.now()).slice(-8)}`
+    jest.spyOn(prisma, '$transaction').mockRejectedValueOnce(new Error('falla simulada'))
+
+    const res = await request(app)
+      .post('/api/clients')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Roll', lastName: 'Back', idNumber, phone: '04121234567', email, ...fullAddress })
+
+    expect(res.status).toBe(500)
+    expect(cognitoDeleteSpy).toHaveBeenCalledWith(email)
+    expect(await prisma.client.findUnique({ where: { idNumber } })).toBeNull()
   })
 })

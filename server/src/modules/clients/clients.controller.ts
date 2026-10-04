@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import * as clientsService from './clients.service'
 import { isValidVenezuelanPhone, isValidVenezuelanIdNumber, isCompanyIdNumber } from '../../lib/venezuela'
 import { flattenClientAddresses } from '../../lib/clientAddress'
+import prisma from '../../lib/prisma'
 
 export const getClients = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -75,6 +76,20 @@ export const createClient = async (req: Request, res: Response): Promise<void> =
       })
       return
     }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res.status(400).json({ success: false, message: 'El correo es requerido — con él el cliente entrará a la app RepTel' })
+      return
+    }
+    const addressFields = [addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding]
+    if (addressFields.some((v) => !v || !String(v).trim())) {
+      res.status(400).json({ success: false, message: 'La dirección debe estar completa (Estado, Municipio, Barrio/Urb., Calle y Edificio/Casa)' })
+      return
+    }
+    const emailTaken = await prisma.user.findUnique({ where: { email } })
+    if (emailTaken) {
+      res.status(400).json({ success: false, message: 'Ese correo ya pertenece a una cuenta de la app. Usa otro correo.' })
+      return
+    }
     const existing = await clientsService.getClientByIdNumber(idNumber)
     if (existing) {
       res.status(400).json({
@@ -83,7 +98,7 @@ export const createClient = async (req: Request, res: Response): Promise<void> =
       })
       return
     }
-    const client = await clientsService.createClient({
+    const { client, tempPassword } = await clientsService.createClientWithAppUser({
       name,
       lastName: lastName || '',
       idNumber,
@@ -96,7 +111,7 @@ export const createClient = async (req: Request, res: Response): Promise<void> =
       addressStreet,
       addressBuilding,
     })
-    res.status(201).json({ success: true, data: flattenClientAddresses(client) })
+    res.status(201).json({ success: true, data: flattenClientAddresses(client), tempPassword })
   } catch (error) {
     console.error('ERROR CREATE CLIENT:', error)
     res.status(500).json({ success: false, message: 'Error al crear el cliente' })

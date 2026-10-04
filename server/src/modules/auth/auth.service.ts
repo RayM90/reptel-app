@@ -7,9 +7,11 @@ import {
   AdminConfirmSignUpCommand,
   AdminCreateUserCommand,
   AdminSetUserPasswordCommand,
+  AdminDeleteUserCommand,
   RevokeTokenCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 
+import { randomInt } from 'crypto';
 import prisma from '../../lib/prisma';
 import type { StructuredAddress } from '../../lib/clientAddress';
 
@@ -265,4 +267,37 @@ export const setTemporaryPassword = async (email: string, tempPassword: string) 
  */
 export const revokeRefreshToken = async (refreshToken: string) => {
   await client.send(new RevokeTokenCommand({ Token: refreshToken, ClientId: CLIENT_ID }));
+};
+
+// Clave provisional del cliente registrado en mostrador: fácil de dictar,
+// distinta por cliente y válida para la política del User Pool. Cognito la
+// marca como temporal, así que la app pide una nueva en el primer login.
+export const generateTempPassword = (): string => `Reptel.${String(randomInt(0, 10000)).padStart(4, '0')}`;
+
+export const createClientCognitoAccount = async (
+  email: string,
+  name: string,
+  lastName: string,
+  tempPassword: string
+): Promise<void> => {
+  await client.send(
+    new AdminCreateUserCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+      TemporaryPassword: tempPassword,
+      MessageAction: 'SUPPRESS',
+      UserAttributes: [
+        { Name: 'email', Value: email },
+        { Name: 'email_verified', Value: 'true' },
+        { Name: 'name', Value: `${name} ${lastName}`.trim() },
+      ],
+    })
+  );
+  await client.send(
+    new AdminAddUserToGroupCommand({ UserPoolId: USER_POOL_ID, Username: email, GroupName: 'CLIENT' })
+  );
+};
+
+export const deleteCognitoUser = async (email: string): Promise<void> => {
+  await client.send(new AdminDeleteUserCommand({ UserPoolId: USER_POOL_ID, Username: email }));
 };

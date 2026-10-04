@@ -1,4 +1,5 @@
 import prisma from '../../lib/prisma'
+import * as authService from '../auth/auth.service'
 
 export const getAllClients = async () => {
   return await prisma.client.findMany({
@@ -62,6 +63,45 @@ export const createClient = async (data: {
     },
     include: { addresses: true },
   })
+}
+
+type CreateClientData = Parameters<typeof createClient>[0]
+
+// Registro de mostrador: además del Client, crea su acceso a la app con una
+// clave provisional. Cognito va primero; si la BD falla después, se borra el
+// usuario de Cognito para no dejar una cuenta huérfana.
+export const createClientWithAppUser = async (data: CreateClientData & { email: string }) => {
+  const tempPassword = authService.generateTempPassword()
+  await authService.createClientCognitoAccount(data.email, data.name, data.lastName, tempPassword)
+  try {
+    const { addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding, ...clientFields } = data
+    const client = await prisma.$transaction(async (tx) => {
+      const created = await tx.client.create({
+        data: {
+          ...clientFields,
+          addresses: {
+            create: [{ label: 'Principal', isPrimary: true, addressState, addressCity, addressNeighborhood, addressStreet, addressBuilding }],
+          },
+        },
+        include: { addresses: true },
+      })
+      await tx.user.create({
+        data: {
+          email: data.email,
+          name: data.name,
+          role: 'CLIENT',
+          phone: data.phone,
+          password: '',
+          clientId: created.id,
+        },
+      })
+      return created
+    })
+    return { client, tempPassword }
+  } catch (error) {
+    await authService.deleteCognitoUser(data.email).catch(() => {})
+    throw error
+  }
 }
 
 export const updateClient = async (
