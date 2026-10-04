@@ -1,13 +1,16 @@
 // server/src/modules/auth/auth.routes.ts
 import { Router } from 'express';
-import { register, login, refresh, completeNewPassword, createStaff, requestPasswordReset, listPasswordResetRequests, resolvePasswordReset, logout } from './auth.controller';
+import { register, login, refresh, completeNewPassword, createStaff, requestPasswordReset, listPasswordResetRequests, resolvePasswordReset, logout, checkIdNumber } from './auth.controller';
 import { authenticate, authorize } from '../../middleware/auth.middleware';
-import { loginLimiter, registerLimiter, passwordResetLimiter } from '../../middleware/rateLimit.middleware';
+import { loginLimiter, registerLimiter, passwordResetLimiter, idCheckLimiter } from '../../middleware/rateLimit.middleware';
 
 const router = Router();
 
 // Registro de usuario — endpoint público, pero el controller solo permite role: CLIENT
 router.post('/register', registerLimiter, register);
+
+// Verificar cédula antes de registrarse en la app — público.
+router.get('/check-id-number', idCheckLimiter, checkIdNumber);
 
 // Reset de contraseña mediado por Admin — público, mensaje siempre genérico
 router.post('/request-password-reset', passwordResetLimiter, requestPasswordReset);

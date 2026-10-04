@@ -37,6 +37,16 @@ export const registerLimiter = rateLimit({
   message: tooMany,
 })
 
+// Verificar cédula al crear cuenta — público; limitado para que no sirva
+// para recorrer cédulas en masa.
+export const idCheckLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: tooMany,
+})
+
 // "Olvidé mi contraseña": evita inundar al admin con solicitudes.
 export const passwordResetLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,

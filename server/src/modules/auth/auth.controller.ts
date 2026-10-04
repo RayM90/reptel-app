@@ -300,6 +300,23 @@ export const createStaff = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
+// Paso previo del registro en la app: solo dice si la cédula está libre,
+// sin devolver datos del cliente — es la misma información que ya revela
+// el error "Ya existe un cliente con esa cédula" de register.
+export const checkIdNumber = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const idNumber = String(req.query.idNumber ?? '');
+    if (!isValidVenezuelanIdNumber(idNumber)) {
+      res.status(400).json({ message: 'La cédula/RIF debe tener el formato V-12345678, E-12345678, J-123456789 o G-123456789' });
+      return;
+    }
+    const existing = await prisma.client.findUnique({ where: { idNumber }, select: { id: true } });
+    res.status(200).json({ success: true, data: { available: !existing } });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Error al verificar la cédula' });
+  }
+};
+
 // Mensaje idéntico se devuelva o no la cuenta exista — evita que este
 // endpoint público sirva para enumerar qué emails están registrados.
 const GENERIC_RESET_MESSAGE = 'Si el correo existe en el sistema, un administrador se pondrá en contacto para restablecer tu contraseña.';
