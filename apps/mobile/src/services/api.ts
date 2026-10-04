@@ -58,6 +58,11 @@ api.interceptors.response.use(
   }
 )
 
+export const authAPI = {
+  checkIdNumber: (idNumber: string) =>
+    api.get('/api/auth/check-id-number', { params: { idNumber } }),
+}
+
 export const ordersAPI = {
   getAll: () => api.get('/api/orders'),
   getById: (id: string) => api.get(`/api/orders/${id}`),

@@ -18,7 +18,7 @@ import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useToastStore } from "../../src/store/toast.store";
-import { api } from "../../src/services/api";
+import { api, authAPI } from "../../src/services/api";
 import PhoneInput from "../../src/components/PhoneInput";
 import IdNumberInput, { isCompanyIdPrefix } from "../../src/components/IdNumberInput";
 import EmailAutocompleteInput from "../../src/components/EmailAutocompleteInput";
@@ -68,7 +68,35 @@ export default function RegisterScreen() {
 
   const isCompany = isCompanyIdPrefix(idNumber);
 
+  // La cédula se verifica antes de habilitar el resto del formulario.
+  const [idCheck, setIdCheck] = useState<"idle" | "checking" | "available" | "taken">("idle");
+  const formEnabled = idCheck === "available";
+
+  const handleIdNumberChange = (value: string) => {
+    setIdNumber(value);
+    setIdCheck("idle");
+  };
+
+  const handleVerifyIdNumber = async () => {
+    if (!idNumber) {
+      showToast("Escribe tu cédula para verificarla", "error");
+      return;
+    }
+    setIdCheck("checking");
+    try {
+      const res = await authAPI.checkIdNumber(idNumber);
+      setIdCheck(res.data.data.available ? "available" : "taken");
+    } catch (error: any) {
+      setIdCheck("idle");
+      showToast(error?.response?.data?.message || "No se pudo verificar la cédula", "error");
+    }
+  };
+
   const handleRegister = async () => {
+    if (!formEnabled) {
+      showToast("Primero verifica tu cédula", "error");
+      return;
+    }
     if (!idNumber || !nombre || !correo || !telefono || !password || !confirmar) {
       showToast("Por favor completa todos los campos", "error");
       return;
@@ -162,160 +190,188 @@ export default function RegisterScreen() {
             <View style={styles.form}>
 
               <Text style={styles.label}>Cédula / RIF</Text>
-              <IdNumberInput value={idNumber} onChange={setIdNumber} />
-
-              <Text style={styles.label}>{isCompany ? "Razón social o nombre de la empresa" : "Nombre"}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={isCompany ? "Ej: Constructora ABC, C.A." : "Juan Pérez"}
-                placeholderTextColor="#9ca3af"
-                value={nombre}
-                onChangeText={setNombre}
-                autoCapitalize="words"
-                returnKeyType="next"
-              />
-
-              {!isCompany && (
-                <>
-                  <Text style={styles.label}>Apellido</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Pérez"
-                    placeholderTextColor="#9ca3af"
-                    value={apellido}
-                    onChangeText={setApellido}
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                  />
-                </>
+              <View style={styles.idRow}>
+                <View style={{ flex: 1 }}>
+                  <IdNumberInput value={idNumber} onChange={handleIdNumberChange} />
+                </View>
+                <TouchableOpacity
+                  style={[styles.btnVerify, idCheck === "checking" && styles.btnDisabled]}
+                  onPress={handleVerifyIdNumber}
+                  disabled={idCheck === "checking"}
+                >
+                  {idCheck === "checking" ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnVerifyText}>Verificar</Text>}
+                </TouchableOpacity>
+              </View>
+              {idCheck === "idle" && <Text style={styles.passwordHint}>Primero verifica tu cédula para continuar.</Text>}
+              {idCheck === "available" && (
+                <Text style={styles.idOk}>✓ Cédula disponible. Completa tus datos.</Text>
+              )}
+              {idCheck === "taken" && (
+                <View style={styles.idTaken}>
+                  <Text style={styles.idTakenTitle}>Esta cédula ya tiene una cuenta en RepTel.</Text>
+                  <Text style={styles.idTakenText}>
+                    Inicia sesión con tu correo. Si te registraste en la tienda, usa la clave provisional que te dieron.
+                  </Text>
+                  <TouchableOpacity style={[styles.btnRegister, { marginTop: 10 }]} onPress={() => router.replace("/(auth)/login")}>
+                    <Text style={styles.btnText}>Iniciar sesión</Text>
+                  </TouchableOpacity>
+                </View>
               )}
 
-              {isCompany && (
-                <>
-                  <Text style={styles.label}>Persona de contacto (opcional)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Quién recibe la entrega"
-                    placeholderTextColor="#9ca3af"
-                    value={contactPerson}
-                    onChangeText={setContactPerson}
-                    autoCapitalize="words"
-                  />
-                </>
-              )}
-
-              <Text style={styles.label}>Correo electrónico</Text>
-              <EmailAutocompleteInput value={correo} onChange={setCorreo} />
-
-              <Text style={styles.label}>Teléfono</Text>
-              <PhoneInput value={telefono} onChange={setTelefono} />
-
-              <Text style={styles.sectionTitle}>Dirección de entrega</Text>
-              <AddressFields values={address} onChange={setAddress} />
-
-              <TouchableOpacity
-                style={styles.secondaryToggle}
-                onPress={() => setWantsSecondary((prev) => !prev)}
-              >
-                <Text style={styles.secondaryToggleText}>
-                  {wantsSecondary ? "− Quitar segunda dirección" : "+ Agregar otra dirección (opcional)"}
-                </Text>
-              </TouchableOpacity>
-
-              {wantsSecondary && (
-                <>
-                  <View style={styles.chipsRow}>
-                    {SECONDARY_LABELS.map((label) => (
-                      <TouchableOpacity
-                        key={label}
-                        style={[styles.labelChip, secondaryLabel === label && styles.labelChipActive]}
-                        onPress={() => setSecondaryLabel(label)}
-                      >
-                        <Text style={[styles.labelChipText, secondaryLabel === label && styles.labelChipTextActive]}>
-                          {label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  {secondaryLabel === "Otro" && (
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Nombre de esta dirección"
-                      placeholderTextColor="#9ca3af"
-                      value={secondaryLabelOther}
-                      onChangeText={setSecondaryLabelOther}
-                    />
-                  )}
-                  <AddressFields values={secondaryAddress} onChange={setSecondaryAddress} />
-                </>
-              )}
-
-              {/* Contraseña con ojito */}
-              <Text style={styles.label}>Contraseña</Text>
-              <View style={styles.inputRow}>
+              <View pointerEvents={formEnabled ? "auto" : "none"} style={!formEnabled && styles.formDisabled}>
+                <Text style={styles.label}>{isCompany ? "Razón social o nombre de la empresa" : "Nombre"}</Text>
                 <TextInput
-                  style={styles.inputFlex}
-                  placeholder="Mínimo 8 caracteres"
+                  style={styles.input}
+                  placeholder={isCompany ? "Ej: Constructora ABC, C.A." : "Juan Pérez"}
                   placeholderTextColor="#9ca3af"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!verPassword}
-                  autoCapitalize="none"
+                  value={nombre}
+                  onChangeText={setNombre}
+                  autoCapitalize="words"
                   returnKeyType="next"
                 />
-                <TouchableOpacity
-                  style={styles.eyeBtn}
-                  onPress={() => setVerPassword(!verPassword)}
-                >
-                  <Feather
-                    name={verPassword ? "eye-off" : "eye"}
-                    size={20}
-                    color="#8a8fc0"
-                  />
-                </TouchableOpacity>
-              </View>
 
-              {/* Confirmar contraseña con ojito */}
-              <Text style={styles.label}>Confirmar contraseña</Text>
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={styles.inputFlex}
-                  placeholder="Repite tu contraseña"
-                  placeholderTextColor="#9ca3af"
-                  value={confirmar}
-                  onChangeText={setConfirmar}
-                  secureTextEntry={!verConfirmar}
-                  autoCapitalize="none"
-                  returnKeyType="done"
-                />
-                <TouchableOpacity
-                  style={styles.eyeBtn}
-                  onPress={() => setVerConfirmar(!verConfirmar)}
-                >
-                  <Feather
-                    name={verConfirmar ? "eye-off" : "eye"}
-                    size={20}
-                    color="#8a8fc0"
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {/* Hint contraseña */}
-              <Text style={styles.passwordHint}>
-                La contraseña debe tener mayúscula, minúscula, número y símbolo (!@#$...)
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.btnRegister, loading && styles.btnDisabled]}
-                onPress={handleRegister}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.btnText}>Crear cuenta</Text>
+                {!isCompany && (
+                  <>
+                    <Text style={styles.label}>Apellido</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Pérez"
+                      placeholderTextColor="#9ca3af"
+                      value={apellido}
+                      onChangeText={setApellido}
+                      autoCapitalize="words"
+                      returnKeyType="next"
+                    />
+                  </>
                 )}
-              </TouchableOpacity>
+
+                {isCompany && (
+                  <>
+                    <Text style={styles.label}>Persona de contacto (opcional)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Quién recibe la entrega"
+                      placeholderTextColor="#9ca3af"
+                      value={contactPerson}
+                      onChangeText={setContactPerson}
+                      autoCapitalize="words"
+                    />
+                  </>
+                )}
+
+                <Text style={styles.label}>Correo electrónico</Text>
+                <EmailAutocompleteInput value={correo} onChange={setCorreo} />
+
+                <Text style={styles.label}>Teléfono</Text>
+                <PhoneInput value={telefono} onChange={setTelefono} />
+
+                <Text style={styles.sectionTitle}>Dirección de entrega</Text>
+                <AddressFields values={address} onChange={setAddress} />
+
+                <TouchableOpacity
+                  style={styles.secondaryToggle}
+                  onPress={() => setWantsSecondary((prev) => !prev)}
+                >
+                  <Text style={styles.secondaryToggleText}>
+                    {wantsSecondary ? "− Quitar segunda dirección" : "+ Agregar otra dirección (opcional)"}
+                  </Text>
+                </TouchableOpacity>
+
+                {wantsSecondary && (
+                  <>
+                    <View style={styles.chipsRow}>
+                      {SECONDARY_LABELS.map((label) => (
+                        <TouchableOpacity
+                          key={label}
+                          style={[styles.labelChip, secondaryLabel === label && styles.labelChipActive]}
+                          onPress={() => setSecondaryLabel(label)}
+                        >
+                          <Text style={[styles.labelChipText, secondaryLabel === label && styles.labelChipTextActive]}>
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {secondaryLabel === "Otro" && (
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Nombre de esta dirección"
+                        placeholderTextColor="#9ca3af"
+                        value={secondaryLabelOther}
+                        onChangeText={setSecondaryLabelOther}
+                      />
+                    )}
+                    <AddressFields values={secondaryAddress} onChange={setSecondaryAddress} />
+                  </>
+                )}
+
+                {/* Contraseña con ojito */}
+                <Text style={styles.label}>Contraseña</Text>
+                <View style={styles.inputRow}>
+                  <TextInput
+                    style={styles.inputFlex}
+                    placeholder="Mínimo 8 caracteres"
+                    placeholderTextColor="#9ca3af"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!verPassword}
+                    autoCapitalize="none"
+                    returnKeyType="next"
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeBtn}
+                    onPress={() => setVerPassword(!verPassword)}
+                  >
+                    <Feather
+                      name={verPassword ? "eye-off" : "eye"}
+                      size={20}
+                      color="#8a8fc0"
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Confirmar contraseña con ojito */}
+                <Text style={styles.label}>Confirmar contraseña</Text>
+                <View style={styles.inputRow}>
+                  <TextInput
+                    style={styles.inputFlex}
+                    placeholder="Repite tu contraseña"
+                    placeholderTextColor="#9ca3af"
+                    value={confirmar}
+                    onChangeText={setConfirmar}
+                    secureTextEntry={!verConfirmar}
+                    autoCapitalize="none"
+                    returnKeyType="done"
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeBtn}
+                    onPress={() => setVerConfirmar(!verConfirmar)}
+                  >
+                    <Feather
+                      name={verConfirmar ? "eye-off" : "eye"}
+                      size={20}
+                      color="#8a8fc0"
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Hint contraseña */}
+                <Text style={styles.passwordHint}>
+                  La contraseña debe tener mayúscula, minúscula, número y símbolo (!@#$...)
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.btnRegister, loading && styles.btnDisabled]}
+                  onPress={handleRegister}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.btnText}>Crear cuenta</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
 
               <TouchableOpacity
                 style={styles.btnLogin}
@@ -438,6 +494,38 @@ const styles = StyleSheet.create({
     marginTop: 22,
   },
   btnDisabled: { opacity: 0.6 },
+  idRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  btnVerify: {
+    backgroundColor: "#1a1a6e",
+    borderRadius: 12,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnVerifyText: { color: "#ffffff", fontSize: 14, fontWeight: "700" },
+  idOk: {
+    marginTop: 8,
+    fontSize: 12,
+    color: "#1E7A3D",
+    backgroundColor: "#E3F3E9",
+    borderWidth: 1,
+    borderColor: "#1E7A3D",
+    borderRadius: 10,
+    padding: 10,
+    overflow: "hidden",
+  },
+  idTaken: {
+    marginTop: 8,
+    backgroundColor: "#FBE9E7",
+    borderWidth: 1,
+    borderColor: "#B3261E",
+    borderRadius: 10,
+    padding: 10,
+  },
+  idTakenTitle: { fontSize: 13, fontWeight: "700", color: "#B3261E", marginBottom: 2 },
+  idTakenText: { fontSize: 12, color: "#B3261E", lineHeight: 17 },
+  formDisabled: { opacity: 0.42 },
   btnText: {
     color: "#ffffff",
     fontSize: 16,
