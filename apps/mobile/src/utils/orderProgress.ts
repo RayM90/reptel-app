@@ -160,3 +160,12 @@ export const getOrderProgress = (order: ProgressOrder): ProgressStep[] => {
 // del técnico es información interna del taller y no se le muestra al cliente.
 export const clientHistoryComment = (comment: string): string =>
   comment.replace(/\s*Comisión del técnico:[\s\S]*$/, '').trim()
+
+// Para la barrita de la tarjeta: en qué paso va la orden y cuántos tiene su
+// camino (9 en una orden de la app con reparación; menos en mostrador o si
+// el presupuesto se rechaza).
+export const getProgressSummary = (order: ProgressOrder): { current: number; total: number } => {
+  const steps = getOrderProgress(order)
+  const currentIdx = steps.findIndex((s) => s.state === 'current')
+  return { current: currentIdx === -1 ? steps.length : currentIdx + 1, total: steps.length }
+}

@@ -21,6 +21,7 @@ import { getOrderProgress, clientHistoryComment, CLIENT_STATUS_LABEL } from '../
 import ContactCard from '../../src/components/ContactCard'
 import BudgetDecision from '../../src/components/BudgetDecision'
 import { usePaymentInfo } from '../../src/hooks/usePaymentInfo'
+import { getAdvanceStatus } from '../../src/utils/advancePayment'
 
 // El backend guarda el método de pago con el enum de Prisma (MOBILE_PAYMENT,
 // TRANSFER, BINANCE), pero la pantalla de pago espera los literales que usa
@@ -470,25 +471,7 @@ export default function MyTechnicalOrdersScreen() {
 
                       {/* Anticipo — solo mientras está pendiente de completarse */}
                       {status === 'PENDING_PAYMENT' && (() => {
-                        // Orden de mostrador (sin delivery): solo se cobra la
-                        // revisión, y se paga en el local — no desde la app.
-                        const isCounterOrder = order.deliveryAmount == null
-                        const total = isCounterOrder
-                          ? Number(order.revisionAmount ?? 15)
-                          : Number(order.deliveryAmount) + Number(order.revisionAmount ?? 15)
-                        const submissions = order.advancePaymentSubmissions ?? []
-                        // "contado" cuenta PENDING + CONFIRMED — se usa para el restante,
-                        // así el cliente nunca puede enviar de más aunque haya abonos sin
-                        // revisar. "confirmado" es solo lo ya aprobado — es lo que se
-                        // muestra en el título para no dar a entender que ya está pagado
-                        // cuando en realidad sigue pendiente de revisión.
-                        const contado = submissions
-                          .filter((s) => s.status !== 'REJECTED')
-                          .reduce((sum, s) => sum + Number(s.amount), 0)
-                        const confirmado = submissions
-                          .filter((s) => s.status === 'CONFIRMED')
-                          .reduce((sum, s) => sum + Number(s.amount), 0)
-                        const restante = Math.max(0, total - contado)
+                        const { isCounterOrder, total, confirmed: confirmado, remaining: restante, submissions } = getAdvanceStatus(order)
 
                         return (
                           <View style={styles.advanceCard}>
