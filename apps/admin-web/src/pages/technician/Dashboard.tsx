@@ -7,6 +7,7 @@ import { POLL_INTERVAL_MS } from '../../config/constants'
 import { getStatusBadge, badgeClassName } from '../../utils/statusBadge'
 import { formatFullName } from '../../utils/formatName'
 import { formatClientAddress } from '../admin/dashboard.types'
+import { useConfirm } from '../../hooks/useConfirm'
 
 type OrderStatus =
   | 'PENDING_PAYMENT'
@@ -182,13 +183,19 @@ export default function TechnicianDashboard() {
     }
   }
 
+  // Evita doble envío en las acciones de repuestos (agregar, revertir, merma).
+  const [partBusy, setPartBusy] = useState<string | null>(null)
+  const confirm = useConfirm()
+
   const handleAddPart = async (orderId: string) => {
+    if (partBusy) return
     const productId = partsProductId[orderId]
     const quantity = Number(partsQuantity[orderId])
     if (!productId || !Number.isInteger(quantity) || quantity <= 0) {
       showToast('Elegí un producto y una cantidad válida', 'error')
       return
     }
+    setPartBusy(orderId)
     try {
       await api.post(`/api/orders/${orderId}/parts`, { productId, quantity })
       showToast('✅ Repuesto registrado, presupuesto actualizado', 'success')
@@ -199,10 +206,20 @@ export default function TechnicianDashboard() {
       fetchData(true)
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'Error al registrar el repuesto', 'error')
+    } finally {
+      setPartBusy(null)
     }
   }
 
   const handleRevertPart = async (orderId: string, movementId: string) => {
+    if (partBusy) return
+    const ok = await confirm({
+      title: '¿Revertir este repuesto?',
+      message: 'Vuelve al inventario y se descuenta del presupuesto. Úsalo si se cargó por error.',
+      confirmLabel: 'Revertir',
+    })
+    if (!ok) return
+    setPartBusy(movementId)
     try {
       await api.delete(`/api/orders/${orderId}/parts/${movementId}`)
       showToast('Repuesto revertido — stock y presupuesto restaurados', 'success')
@@ -211,6 +228,8 @@ export default function TechnicianDashboard() {
       fetchData(true)
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'Error al revertir el repuesto', 'error')
+    } finally {
+      setPartBusy(null)
     }
   }
 
@@ -223,6 +242,14 @@ export default function TechnicianDashboard() {
       showToast('Describe qué pasó con el repuesto antes de reportar la merma', 'error')
       return
     }
+    if (partBusy) return
+    const ok = await confirm({
+      title: '¿Confirmar la merma?',
+      message: 'El repuesto se da por dañado: no vuelve al inventario y no se le cobra al cliente.',
+      confirmLabel: 'Confirmar merma',
+    })
+    if (!ok) return
+    setPartBusy(movementId)
     try {
       await api.post(`/api/orders/${orderId}/parts/${movementId}/report-loss`, { description })
       showToast('✅ Merma reportada — no se le cobra al cliente', 'success')
@@ -233,6 +260,8 @@ export default function TechnicianDashboard() {
       fetchData(true)
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'Error al reportar la merma', 'error')
+    } finally {
+      setPartBusy(null)
     }
   }
 
@@ -834,8 +863,8 @@ export default function TechnicianDashboard() {
                             onChange={(e) => setPartsQuantity((prev) => ({ ...prev, [order.id]: e.target.value }))}
                           />
                         </div>
-                        <button className="btn btn-secondary" onClick={() => handleAddPart(order.id)}>
-                          Usar repuesto
+                        <button className="btn btn-secondary" disabled={partBusy !== null} onClick={() => handleAddPart(order.id)}>
+                          {partBusy === order.id ? 'Registrando…' : 'Usar repuesto'}
                         </button>
                       </div>
 
@@ -867,7 +896,7 @@ export default function TechnicianDashboard() {
                                     <td data-label="Quién">{p.user ? `${p.user.name} ${p.user.lastName ?? ''}`.trim() : '—'}</td>
                                     <td data-label="Fecha">{new Date(p.createdAt).toLocaleString('es-VE')}</td>
                                     <td data-label="Acciones">
-                                      <button className="btn btn-danger" onClick={() => handleRevertPart(order.id, p.id)}>
+                                      <button className="btn btn-danger" disabled={partBusy !== null} onClick={() => handleRevertPart(order.id, p.id)}>
                                         Revertir
                                       </button>{' '}
                                       <button className="btn btn-outline" onClick={() => setLossFormOpenFor(lossFormOpenFor === p.id ? null : p.id)}>
@@ -881,7 +910,7 @@ export default function TechnicianDashboard() {
                                             value={lossDescriptionText[p.id] || ''}
                                             onChange={(e) => setLossDescriptionText((prev) => ({ ...prev, [p.id]: e.target.value }))}
                                           />
-                                          <button className="btn btn-danger" onClick={() => handleReportLoss(order.id, p.id)}>
+                                          <button className="btn btn-danger" disabled={partBusy !== null} onClick={() => handleReportLoss(order.id, p.id)}>
                                             Confirmar
                                           </button>
                                         </div>

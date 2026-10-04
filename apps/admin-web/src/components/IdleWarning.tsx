@@ -31,7 +31,7 @@ export default function IdleWarning() {
   }
 
   return (
-    <div className="modal-overlay">
+    <div className="modal-overlay" style={{ zIndex: 1100 }}>
       <div className="modal-box" role="alertdialog" aria-modal="true" aria-labelledby="idle-title" aria-describedby="idle-desc">
         <h3 id="idle-title">¿Sigues ahí?</h3>
         <p id="idle-desc" className="form-hint" aria-live="polite">
