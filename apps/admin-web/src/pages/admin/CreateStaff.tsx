@@ -165,7 +165,8 @@ export default function CreateStaff() {
       </div>
 
       <div className="card" style={{ maxWidth: 500, marginTop: 32 }}>
-        <h2>Solicitudes de restablecimiento</h2>
+        <h2>Solicitudes de clave de los trabajadores</h2>
+        <p className="form-hint">Llegan cuando un trabajador toca «¿Olvidaste tu contraseña?» en el login del panel.</p>
         {resetRequests.length === 0 ? (
           <p>No hay solicitudes pendientes</p>
         ) : (
