@@ -11,6 +11,10 @@ router.get('/search', authenticate, authorize('ADMIN'), clientsController.search
 router.get('/', authenticate, authorize('ADMIN'), clientsController.getClients)
 
 // Obtener cliente por ID
+// Perfil propio del cliente (app) — debe ir antes de '/:id'.
+router.get('/me', authenticate, authorize('CLIENT'), clientsController.getMyProfile)
+router.patch('/me', authenticate, authorize('CLIENT'), clientsController.updateMyProfile)
+
 router.get('/:id', authenticate, authorize('ADMIN'), clientsController.getClient)
 
 // Obtener cliente por número de cédula

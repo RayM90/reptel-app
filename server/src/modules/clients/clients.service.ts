@@ -168,6 +168,50 @@ export const updateClient = async (
   return await prisma.client.findUnique({ where: { id }, include: { addresses: true } })
 }
 
+type AddressInput = {
+  addressState: string
+  addressCity: string
+  addressNeighborhood: string
+  addressStreet: string
+  addressBuilding: string
+}
+
+export type OwnProfileData = AddressInput & {
+  name: string
+  lastName: string
+  phone: string
+  // undefined: no se toca; null: se quita; objeto: se crea o actualiza.
+  secondaryAddress?: (AddressInput & { label: string }) | null
+}
+
+// El cliente edita sus propios datos desde la app. Cédula y correo no se
+// tocan (el correo es su usuario de Cognito).
+export const updateOwnProfile = async (clientId: string, data: OwnProfileData) => {
+  const { secondaryAddress, name, lastName, phone, ...primary } = data
+  await prisma.$transaction(async (tx) => {
+    await tx.client.update({ where: { id: clientId }, data: { name, lastName, phone } })
+
+    const current = await tx.clientAddress.findFirst({ where: { clientId, isPrimary: true } })
+    if (current) await tx.clientAddress.update({ where: { id: current.id }, data: primary })
+    else await tx.clientAddress.create({ data: { clientId, label: 'Principal', isPrimary: true, ...primary } })
+
+    if (secondaryAddress !== undefined) {
+      const second = await tx.clientAddress.findFirst({ where: { clientId, isPrimary: false } })
+      if (secondaryAddress === null) {
+        if (second) await tx.clientAddress.delete({ where: { id: second.id } })
+      } else if (second) {
+        await tx.clientAddress.update({ where: { id: second.id }, data: secondaryAddress })
+      } else {
+        await tx.clientAddress.create({ data: { clientId, isPrimary: false, ...secondaryAddress } })
+      }
+    }
+
+    // El User vinculado duplica name/lastName/phone (ver updateClient).
+    await tx.user.updateMany({ where: { clientId }, data: { name, lastName, phone } })
+  })
+  return await prisma.client.findUnique({ where: { id: clientId }, include: { addresses: true } })
+}
+
 export const searchClients = async (query: string) => {
   return await prisma.client.findMany({
     where: {

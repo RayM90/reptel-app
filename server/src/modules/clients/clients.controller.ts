@@ -3,6 +3,7 @@ import * as clientsService from './clients.service'
 import { isValidVenezuelanPhone, isValidVenezuelanIdNumber, isCompanyIdNumber } from '../../lib/venezuela'
 import { flattenClientAddresses } from '../../lib/clientAddress'
 import prisma from '../../lib/prisma'
+import { AuthRequest } from '../../middleware/auth.middleware'
 
 export const getClients = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -164,5 +165,73 @@ export const searchClients = async (req: Request, res: Response): Promise<void> 
   } catch (error) {
     console.error('ERROR SEARCH CLIENTS:', error)
     res.status(500).json({ success: false, message: 'Error al buscar clientes' })
+  }
+}
+
+const ADDRESS_KEYS = ['addressState', 'addressCity', 'addressNeighborhood', 'addressStreet', 'addressBuilding'] as const
+const isBlank = (v: unknown) => !v || !String(v).trim()
+
+// Validación del perfil que el cliente edita desde la app.
+export const validateOwnProfile = (body: any, idNumber: string): string | null => {
+  if (isBlank(body.name)) return 'El nombre es requerido'
+  if (!isCompanyIdNumber(idNumber) && isBlank(body.lastName)) return 'El apellido es requerido'
+  if (!body.phone || !isValidVenezuelanPhone(body.phone)) return 'El teléfono debe ser un número venezolano válido (04XX + 7 dígitos)'
+  if (ADDRESS_KEYS.some((k) => isBlank(body[k])))
+    return 'La dirección debe estar completa (Estado, Municipio, Barrio/Urb., Calle y Edificio/Casa)'
+  const second = body.secondaryAddress
+  if (second && (isBlank(second.label) || ADDRESS_KEYS.some((k) => isBlank(second[k]))))
+    return 'La segunda dirección debe tener nombre y los 5 campos completos'
+  return null
+}
+
+const ownClientId = async (req: AuthRequest): Promise<string | null> => {
+  const user = await prisma.user.findUnique({ where: { email: req.user!.email }, select: { clientId: true } })
+  return user?.clientId ?? null
+}
+
+export const getMyProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const clientId = await ownClientId(req)
+    const client = clientId ? await prisma.client.findUnique({ where: { id: clientId }, include: { addresses: true } }) : null
+    if (!client) {
+      res.status(404).json({ success: false, message: 'No se encontró tu perfil de cliente' })
+      return
+    }
+    res.json({ success: true, data: flattenClientAddresses(client) })
+  } catch (error) {
+    console.error('ERROR GET MY PROFILE:', error)
+    res.status(500).json({ success: false, message: 'Error al obtener tu perfil' })
+  }
+}
+
+export const updateMyProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const clientId = await ownClientId(req)
+    const client = clientId ? await prisma.client.findUnique({ where: { id: clientId }, select: { idNumber: true } }) : null
+    if (!clientId || !client) {
+      res.status(404).json({ success: false, message: 'No se encontró tu perfil de cliente' })
+      return
+    }
+    const error = validateOwnProfile(req.body, client.idNumber)
+    if (error) {
+      res.status(400).json({ success: false, message: error })
+      return
+    }
+    const b = req.body
+    const updated = await clientsService.updateOwnProfile(clientId, {
+      name: String(b.name).trim(),
+      lastName: isCompanyIdNumber(client.idNumber) ? '' : String(b.lastName).trim(),
+      phone: b.phone,
+      addressState: b.addressState,
+      addressCity: b.addressCity,
+      addressNeighborhood: b.addressNeighborhood,
+      addressStreet: b.addressStreet,
+      addressBuilding: b.addressBuilding,
+      secondaryAddress: b.secondaryAddress,
+    })
+    res.json({ success: true, data: flattenClientAddresses(updated!) })
+  } catch (error) {
+    console.error('ERROR UPDATE MY PROFILE:', error)
+    res.status(500).json({ success: false, message: 'Error al guardar tu perfil' })
   }
 }
